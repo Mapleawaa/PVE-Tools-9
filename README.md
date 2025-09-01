@@ -6,8 +6,8 @@
 [![Shell Script](https://img.shields.io/badge/Shell-Script-4EAA25?logo=gnu-bash&logoColor=white)](https://www.gnu.org/software/bash/)
 [![Proxmox VE](https://img.shields.io/badge/Proxmox-VE%209.0-E57000?logo=proxmox&logoColor=white)](https://www.proxmox.com/)
 [![Debian](https://img.shields.io/badge/Debian-13%20(Trixie)-A81D33?logo=debian&logoColor=white)](https://www.debian.org/)
-[![GitHub stars](https://img.shields.io/github/stars/yourusername/PVE-Tools?style=social)](https://github.com/yourusername/PVE-Tools/stargazers)
-[![GitHub forks](https://img.shields.io/github/forks/yourusername/PVE-Tools?style=social)](https://github.com/yourusername/PVE-Tools/network/members)
+[![GitHub stars](https://img.shields.io/github/stars/yourusername/PVE-Tools?style=social)](https://github.com/Mapleawaa/PVE-Tools-9/stargazers)
+[![GitHub forks](https://img.shields.io/github/forks/yourusername/PVE-Tools?style=social)](https://github.com/Mapleawaa/PVE-Tools-9/network/members)
 
 **🌍 Language / 语言选择**
 
