@@ -69,7 +69,7 @@ PVE Tools 9 是专为 Proxmox VE 9.0 设计的一键配置工具，基于 Debian
 
 ```bash
 # 1. 下载脚本
-wget https://raw.githubusercontent.com/yourusername/PVE-Tools/main/PVE-Tools.sh
+wget https://raw.githubusercontent.com/Mapleawaa/PVE-Tools-9/main/PVE-Tools.sh
 
 # 2. 添加执行权限
 chmod +x PVE-Tools.sh
@@ -182,7 +182,7 @@ PVE Tools 9 is a one-click configuration tool designed specifically for Proxmox 
 
 ```bash
 # 1. Download script
-wget https://raw.githubusercontent.com/yourusername/PVE-Tools/main/PVE-Tools.sh
+wget https://raw.githubusercontent.com/Mapleawaa/PVE-Tools-9/main/PVE-Tools.sh
 
 # 2. Add execute permission
 chmod +x PVE-Tools.sh
