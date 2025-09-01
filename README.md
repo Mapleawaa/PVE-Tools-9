@@ -298,6 +298,7 @@ SOFTWARE.
 ### 💡 Inspiration
 
 - 感谢 PVE 社区的各位大佬分享的配置经验 / Thanks to PVE community experts for sharing configuration experiences
+- 感谢 代码参考 https://zhichao.org/posts/e0fe08
 - 参考了众多开源项目的最佳实践 / Referenced best practices from numerous open source projects
 
 ### 🎨 Design & UI
