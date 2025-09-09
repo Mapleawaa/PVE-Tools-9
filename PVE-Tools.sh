@@ -16,32 +16,26 @@ NC='\033[0m' # No Color
 
 # 日志函数
 log_info() {
-    echo -e "${GREEN}[✓]${NC} $1"
     echo -e "${GREEN}[$(date +'%Y-%m-%d %H:%M:%S')] [INFO]${NC} $1" | tee -a /var/log/pve-tools.log
 }
 
 log_warn() {
-    echo -e "${YELLOW}[⚠]${NC} $1"
     echo -e "${YELLOW}[$(date +'%Y-%m-%d %H:%M:%S')] [WARN]${NC} $1" | tee -a /var/log/pve-tools.log
 }
 
 log_error() {
-    echo -e "${RED}[✗]${NC} $1"
     echo -e "${RED}[$(date +'%Y-%m-%d %H:%M:%S')] [ERROR]${NC} $1" | tee -a /var/log/pve-tools.log >&2
 }
 
 log_step() {
-    echo -e "${CYAN}[✓]${NC} $1"
     echo -e "${CYAN}[$(date +'%Y-%m-%d %H:%M:%S')] [STEP]${NC} $1" | tee -a /var/log/pve-tools.log
 }
 
 log_success() {
-    echo -e "${GREEN}[✓]${NC} $1"
     echo -e "${GREEN}[$(date +'%Y-%m-%d %H:%M:%S')] [SUCCESS]${NC} $1" | tee -a /var/log/pve-tools.log
 }
 
 log_tips(){
-    echo -e "${MAGENTA}[Tips]${NC} $1"
     echo -e "${MAGENTA}[$(date +'%Y-%m-%d %H:%M:%S')] [TIPS]${NC} $1" | tee -a /var/log/pve-tools.log
 }
 
