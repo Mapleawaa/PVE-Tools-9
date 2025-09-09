@@ -67,6 +67,28 @@ check_root() {
     fi
 }
 
+# 检查调试模式
+check_debug_mode() {
+    for arg in "$@"; do
+        if [[ "$arg" == "--debug" ]]; then
+            log_warn "🚨 警告：您正在使用调试模式！"
+            log_warn "🚨 此模式将跳过 PVE 系统版本检测"
+            log_warn "🚨 仅在开发和测试环境中使用"
+            log_warn "🚨 在非 PVE (Debian 系) 系统上使用可能导致系统损坏"
+            echo -e "${YELLOW}您确定要继续吗？输入 'yes' 确认，其他任意键退出: ${NC}"
+            read -r confirm
+            if [[ "$confirm" != "yes" ]]; then
+                log_info "已取消操作，退出脚本"
+                exit 0
+            fi
+            DEBUG_MODE=true
+            log_success "已启用调试模式"
+            return
+        fi
+    done
+    DEBUG_MODE=false
+}
+
 # 检查是否安装依赖软件包
 check_packages() {
     # 程序依赖的软件包: `sudo` `curl`
@@ -77,12 +99,21 @@ check_packages() {
             log_tips "请使用以下命令安装：apt install -y $pkg"
             exit 1
         fi
-}
+    done
+ }
+    
 
 
 
 # 检查 PVE 版本
 check_pve_version() {
+    # 如果在调试模式下，跳过 PVE 版本检测
+    if [[ "$DEBUG_MODE" == "true" ]]; then
+        log_warn "⚠️  调试模式：跳过 PVE 版本检测"
+        log_tips "请注意：您正在非 PVE 系统上运行此脚本，某些功能可能无法正常工作"
+        return
+    fi
+    
     if ! command -v pveversion &> /dev/null; then
         log_error "咦？这里好像不是 PVE 环境呢 🤔"
         log_warn "请在 Proxmox VE 系统上运行此脚本"
@@ -1343,6 +1374,7 @@ quick_setup() {
 # 主程序
 main() {
     check_root
+    check_debug_mode "$@"
     check_pve_version
     
     while true; do

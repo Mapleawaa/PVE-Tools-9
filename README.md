@@ -117,6 +117,8 @@ sudo ./PVE-Tools.sh
 13. 🐙 添加 ceph-quincy 源 - 为 PVE 7/8 添加 Ceph 源
 14. 🗑️ 卸载 Ceph - 完全移除 Ceph 组件
 
+> 💡 **调试模式**: 开发者和高级用户可以使用 `sudo ./PVE-Tools.sh --debug` 命令启动调试模式。此模式将跳过 PVE 系统检测，但会显示严重警告，因为在此模式下在非 PVE 系统上运行可能导致系统损坏。
+
 #### 一键配置（推荐新用户）
 
 ```bash
@@ -323,6 +325,8 @@ After running the script, you will see a menu with the following options:
 12. 🐙 Add ceph-squid Source - Add Ceph source for PVE 8/9
 13. 🐙 Add ceph-quincy Source - Add Ceph source for PVE 7/8
 14. 🗑️ Remove Ceph - Completely remove Ceph components
+
+> 💡 **Debug Mode**: Developers and advanced users can use `sudo ./PVE-Tools.sh --debug` to start debug mode. This mode will skip PVE system detection but will display a severe warning as running in this mode on non-PVE systems may cause system damage.
 
 #### One-Click Setup (Recommended for new users)
 
