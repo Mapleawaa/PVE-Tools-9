@@ -7,9 +7,9 @@
 [![Proxmox VE](https://img.shields.io/badge/Proxmox-VE%209.0-E57000?logo=proxmox&logoColor=white)](https://www.proxmox.com/)
 [![Debian](https://img.shields.io/badge/Debian-13%20(Trixie)-A81D33?logo=debian&logoColor=white)](https://www.debian.org/)
 
-**🌍 Language / 语言选择**
+**🌍 语言选择**
 
-[🇺🇸 English](#english) | [🇨🇳 中文](#中文)
+[🇺🇸 English](./README-EN.md) | [🇨🇳 中文](./README.md)
 
 ---
 ```
@@ -26,8 +26,16 @@
 </div>
 
 ---
-
-## 中文
+### 开门见山
+#### 中国大陆网络
+```
+bash <(curl -sSL https://ghfast.top/github.com/Mapleawaa/PVE-Tools-9/blob/main/PVE-Tools.sh)
+```
+#### 国际网络
+```
+bash <(curl -sSL https://github.com/Mapleawaa/PVE-Tools-9/blob/main/PVE-Tools.sh)
+```
+---
 
 ### 📖 项目简介
 
@@ -35,15 +43,11 @@ PVE Tools 9 是专为 Proxmox VE 9.0 设计的一键配置工具，基于 Debian
 
 <div align="center">
 
-## 🎉 最新更新 (2025年9月9日)
+**脚本如果使用出现问题请直接发issue，我下课了会看并且修复**
+**如有好点子欢迎 PR！**
 
-修复了 issue#4 的建议
-```
- - 删除了在PVE Shell自带的终端无法显示的Emoji
- - 修复了一键命令函数导致的截断问题
- - 修复了原先的日志等级，加入时间戳并且写入日志方便后期排查问题
- - 修复了添加传感器信息导致的CPU图示丢失问题
-```
+更新日志
+
 </div>
 
 ### ✨ 主要特性
@@ -111,7 +115,7 @@ sudo ./PVE-Tools.sh
 8. 🔧 硬件直通配置 - 配置 PCI 设备直通
 9. ⚙️ CPU 电源模式 - 调整 CPU 性能模式
 10. 🌡️ 温度监控设置 - 添加温度监控功能
-11. 🗑️ 温度监控移除 - 移除温度监控功能
+11. 🗑️ 移除温度监控 - 移除温度监控功能
 12. 🐙 添加 ceph-squid 源 - 为 PVE 8/9 添加 Ceph 源
 13. 🐙 添加 ceph-quincy 源 - 为 PVE 7/8 添加 Ceph 源
 14. 🗑️ 卸载 Ceph - 完全移除 Ceph 组件
@@ -131,9 +135,9 @@ sudo ./PVE-Tools.sh
 #### 🚀 更换软件源
 
 - **Debian 源**: 使用 DEB822 格式配置清华大学镜像
-- **企业源**: 自动注释付费企业源
+- **企业源**: 自动注释 PVE 企业源（需付费）
 - **Ceph 源**: 配置 Ceph 存储镜像源
-- **无订阅源**: 添加免费版本专用源
+- **无订阅源**: 添加适用于社区版的免费源
 - **CT 模板源**: 加速容器模板下载
 
 #### 🚫 删除订阅弹窗
@@ -167,7 +171,7 @@ sudo ./PVE-Tools.sh
 
 #### ⚙️ CPU 电源模式
 
-支持多种 CPU 性能模式:
+支持多种 CPU 性能模式：
 - **Performance**: 高性能模式（默认）
 - **Powersave**: 节能模式
 - **Ondemand**: 按需调频模式
@@ -215,13 +219,13 @@ sudo ./PVE-Tools.sh
 
 #### 常见问题
 
-**Q: 脚本提示"不是 PVE 环境"？**
-A: 请确保在 Proxmox VE 系统上运行此脚本。
+**Q: 脚本提示"不是 PVE 环境"?**
+A: 请确保您在 Proxmox VE 系统上运行此脚本。
 
-**Q: 换源后更新失败？**
+**Q: 换源后更新失败?**
 A: 请检查网络连接，或尝试重新运行换源功能。
 
-**Q: 删除弹窗后仍然出现？**
+**Q: 删除弹窗后仍然出现?**
 A: 请清除浏览器缓存或使用无痕模式访问。
 
 #### 获取帮助
@@ -233,218 +237,9 @@ A: 请清除浏览器缓存或使用无痕模式访问。
 
 ---
 
-## English
+## 📄 开源协议
 
-### 📖 Project Description
-
-PVE Tools 9 is a one-click configuration tool designed specifically for Proxmox VE 9.0, based on Debian 13 (Trixie) system. This tool aims to simplify the initial configuration process of PVE, providing a friendly user interface and secure operation experience.
-
-<div align="center">
-
-## 🎉 Latest Update (September 2025)
-
-We've just completed a major feature update! PVE-Tools-9 now includes more powerful features:
-
-- 🔧 **Hardware Passthrough** - Easy setup of PCI device passthrough
-- ⚙️ **CPU Power Modes** - Flexible adjustment of CPU performance and power saving
-- 🌡️ **Temperature Monitoring** - Real-time display of CPU and disk temperatures
-- 🐙 **Ceph Storage Support** - Support for multiple Ceph version sources
-- 🗑️ **Ceph Removal** - Complete removal of Ceph components
-
-These new features greatly enhance the management and monitoring capabilities of PVE systems!
-
-</div>
-
-### ✨ Key Features
-
-- 🚀 **One-Click Source Change** - Automatically configure Tsinghua University mirror sources for faster downloads
-- 🚫 **Remove Subscription Popup** - Completely eliminate annoying subscription reminders
-- 💾 **Storage Optimization** - Intelligently merge local and local-lvm storage
-- 🔄 **Swap Management** - Optional Swap partition removal to free up more space
-- 📦 **System Updates** - Safe system upgrades and cleanup
-- 📊 **System Monitoring** - Real-time system status display
-- 🔧 **Hardware Passthrough** - Easy configuration of PCI device passthrough
-- ⚙️ **CPU Power Management** - Flexible adjustment of CPU performance modes
-- 🌡️ **Temperature Monitoring** - Real-time display of CPU and disk temperatures
-- 🐙 **Ceph Support** - Support for ceph-squid and ceph-quincy sources
-- 🎨 **Beautiful Interface** - Colorful output and friendly user interaction
-- 🛡️ **Safe Backup** - Automatic backup of important files before operations
-
-### 🎯 Supported Functions
-
-| Function | Description | Recommendation |
-|----------|-------------|----------------|
-| 🚀 Change Sources | Configure Tsinghua mirrors for Debian, PVE, Ceph | ⭐⭐⭐⭐⭐ |
-| 🚫 Remove Popup | Remove "No valid subscription" reminder popup | ⭐⭐⭐⭐⭐ |
-| 💾 Merge Storage | Merge local and local-lvm (suitable for small disks) | ⭐⭐⭐ |
-| 🔄 Remove Swap | Free up Swap space for system use | ⭐⭐⭐ |
-| 📦 System Update | Update system packages to latest version | ⭐⭐⭐⭐ |
-| 📊 System Info | View PVE system running status | ⭐⭐⭐⭐ |
-| 🔧 Hardware Passthrough | Configure PCI device passthrough | ⭐⭐⭐⭐ |
-| ⚙️ CPU Power Mode | Adjust CPU performance modes (power/save/performance) | ⭐⭐⭐ |
-| 🌡️ Temperature Monitoring | Real-time display of CPU and disk temperatures | ⭐⭐⭐⭐ |
-| 🐙 Ceph Sources | Support for ceph-squid and ceph-quincy sources | ⭐⭐⭐ |
-| 🗑️ Ceph Removal | Completely remove Ceph components | ⭐⭐ |
-
-### 🚀 Quick Start
-
-#### System Requirements
-
-- ✅ Proxmox VE 9.0 or higher
-- ✅ Debian 13 (Trixie) base system
-- ✅ Root privileges
-- ✅ Network connection
-
-#### Installation & Usage
-
-```bash
-# 1. Download script
-wget https://raw.githubusercontent.com/Mapleawaa/PVE-Tools-9/main/PVE-Tools.sh
-
-# 2. Add execute permission
-chmod +x PVE-Tools.sh
-
-# 3. Run script
-sudo ./PVE-Tools.sh
-```
-
-After running the script, you will see a menu with the following options:
-
-1. 🚀 Change Sources - Configure Tsinghua University mirror sources
-2. 🚫 Remove Popup - Remove subscription reminder
-3. 💾 Merge Storage - Merge local and local-lvm
-4. 🔄 Remove Swap - Free up Swap space
-5. 📦 System Update - Update system packages
-6. 📊 System Info - View system status
-7. ⚡ One-Click Setup - Automatically change sources, remove popup, and update system
-8. 🔧 Hardware Passthrough - Configure PCI device passthrough
-9. ⚙️ CPU Power Mode - Adjust CPU performance mode
-10. 🌡️ Temperature Monitoring - Add temperature monitoring
-11. 🗑️ Remove Temperature Monitoring - Remove temperature monitoring
-12. 🐙 Add ceph-squid Source - Add Ceph source for PVE 8/9
-13. 🐙 Add ceph-quincy Source - Add Ceph source for PVE 7/8
-14. 🗑️ Remove Ceph - Completely remove Ceph components
-
-> 💡 **Debug Mode**: Developers and advanced users can use `sudo ./PVE-Tools.sh --debug` to start debug mode. This mode will skip PVE system detection but will display a severe warning as running in this mode on non-PVE systems may cause system damage.
-
-#### One-Click Setup (Recommended for new users)
-
-```bash
-# Run directly and select option 7 for one-click configuration
-sudo ./PVE-Tools.sh
-# Then input 7 to select one-click configuration
-```
-
-### 📋 Detailed Function Description
-
-#### 🚀 Change Software Sources
-
-- **Debian Sources**: Configure Tsinghua University mirrors using DEB822 format
-- **Enterprise Sources**: Automatically comment out paid enterprise sources
-- **Ceph Sources**: Configure Ceph storage mirror sources
-- **No-Subscription Sources**: Add free version dedicated sources
-- **CT Template Sources**: Accelerate container template downloads
-
-#### 🚫 Remove Subscription Popup
-
-Automatically modify the `proxmoxlib.js` file to completely remove the "No valid subscription" popup reminder.
-
-#### 💾 Storage Management
-
-**Merge local and local-lvm**:
-- Suitable for small capacity system disks
-- Automatic configuration backup
-- Safe LVM operations
-
-**Remove Swap Partition**:
-- Free up Swap space for system use
-- Suitable for memory-rich environments
-- Automatically modify fstab configuration
-
-#### 🔧 Hardware Passthrough Configuration
-
-**Enable Hardware Passthrough**:
-- Automatically detect CPU type (Intel/AMD)
-- Configure IOMMU settings
-- Add VFIO driver modules
-- Set GPU and audio device blacklists
-
-**Disable Hardware Passthrough**:
-- Restore original GRUB configuration
-- Remove VFIO related settings
-- Delete blacklist configurations
-
-#### ⚙️ CPU Power Modes
-
-Support multiple CPU performance modes:
-- **Performance**: High performance mode (default)
-- **Powersave**: Power saving mode
-- **Ondemand**: On-demand frequency scaling mode
-- **Conservative**: Conservative frequency scaling mode
-- **Schedutil**: Load-optimized mode
-
-#### 🌡️ Temperature Monitoring
-
-**Add Temperature Monitoring**:
-- Install lm-sensors, nvme-cli and other tools
-- Automatically detect hardware sensors
-- Modify PVE Web UI to display CPU/motherboard/disk temperatures
-- Support NVME and SATA disk temperature display
-
-**Remove Temperature Monitoring**:
-- Restore original PVE Web UI files
-- Remove related tools and configurations
-
-#### 🐙 Ceph Storage Support
-
-**Add ceph-squid Source**:
-- For PVE 8/9
-- Configure Tsinghua University mirror source
-
-**Add ceph-quincy Source**:
-- For PVE 7/8
-- Configure Tsinghua University mirror source
-
-**Remove Ceph**:
-- Stop all Ceph services
-- Remove Ceph related packages
-- Clean up configuration files and data
-
-### ⚠️ Important Notes
-
-- 🔒 **Permission Requirements**: Must run with root privileges
-- 💾 **Data Backup**: Configuration files are automatically backed up before important operations
-- 🌐 **Network Requirements**: Source changing function requires stable network connection
-- ⚡ **Memory Requirements**: Ensure sufficient memory before removing Swap
-- 🔧 **Hardware Passthrough**: Requires hardware support for IOMMU/VT-d features
-- 🌡️ **Temperature Monitoring**: Requires hardware support for sensor detection
-- 🐙 **Ceph Features**: Please select the appropriate Ceph source according to your PVE version
-
-### 🐛 Troubleshooting
-
-#### Common Issues
-
-**Q: Script shows "Not a PVE environment"?**
-A: Please ensure running this script on a Proxmox VE system.
-
-**Q: Update fails after changing sources?**
-A: Please check network connection or try running the source change function again.
-
-**Q: Popup still appears after removal?**
-A: Please clear browser cache or use incognito mode to access.
-
-#### Getting Help
-
-If you encounter problems, please:
-1. 📋 Check script execution logs
-2. 🔍 Verify system environment meets requirements
-3. 💬 Submit issues on GitHub Issues
-
----
-
-## 📄 License
-
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+本项目采用 MIT 协议发布，详见 [LICENSE](LICENSE) 文件。
 
 ```
 MIT License
@@ -470,42 +265,39 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
 
-## 🙏 Special Thanks
+## 🙏 特别感谢
 
-### 🌟 Contributors
+### 🌟 贡献者
 
-- **Maple** - 项目创建者和主要维护者 / Project Creator & Main Maintainer
-- **Community Contributors** - 感谢所有提供反馈和建议的用户 / Thanks to all users who provided feedback and suggestions
-- **xiangfeidexiaohuo** - 感谢这位开发者提供的传感器监控思路。 / Thanks to this developer for providing sensor monitoring ideas.
+- **Maple** - 项目创建者和主要维护者
+- **社区贡献者** - 感谢所有提供反馈和建议的用户
+- **xiangfeidexiaohuo** - 感谢他提供的传感器监控思路
 
+### 🏛️ 相关组织与项目
 
-### 🏛️ Organizations & Projects
+- **[清华大学 TUNA 镜像站](https://mirrors.tuna.tsinghua.edu.cn/)** - 提供优质的镜像源服务
+- **[Proxmox VE 官方](https://www.proxmox.com/)** - 优秀的虚拟化平台
+- **[Debian 官方](https://www.debian.org/)** - 稳定可靠的系统基础
 
-- **[Tsinghua University TUNA](https://mirrors.tuna.tsinghua.edu.cn/)** - 提供优质的镜像源服务 / Providing excellent mirror source services
-- **[Proxmox VE](https://www.proxmox.com/)** - 优秀的虚拟化平台 / Excellent virtualization platform
-- **[Debian Project](https://www.debian.org/)** - 稳定可靠的操作系统基础 / Stable and reliable operating system foundation
+### 💡 灵感来源
 
-### 💡 Inspiration
+- 感谢 PVE 社区的各位大佬分享的配置经验
+- 感谢代码参考：https://zhichao.org/posts/e0fe08
+- 参考了众多开源项目的最佳实践
 
-- 感谢 PVE 社区的各位大佬分享的配置经验 / Thanks to PVE community experts for sharing configuration experiences
-- 感谢 代码参考 https://zhichao.org/posts/e0fe08
-- 参考了众多开源项目的最佳实践 / Referenced best practices from numerous open source projects
+### 🎨 设计与界面
 
-### 🎨 Design & UI
-
-- **ASCII Art** - 字符画设计灵感来源于社区创作 / ASCII art design inspired by community creations
-- **Color Scheme** - 配色方案参考了现代终端美学 / Color scheme references modern terminal aesthetics
+- **ASCII 字符画** - 字符画设计灵感来源于社区创作
+- **配色方案** - 配色参考了现代终端美学
 
 ---
 
 <div align="center">
 
-### 🌟 如果这个项目对您有帮助，请给个 Star ⭐
+### 🌟 如果这个项目对你有帮助，请给个 Star ⭐
 
-### 🌟 If this project helps you, please give it a Star ⭐
-
-**Made with ❤️ by AI Claude 4 && Qwen3**
-[**Qwen3** is the large language model series developed by Qwen team, Alibaba Cloud. ](https://github.com/QwenLM/Qwen3)
+**用 ❤️ 由 AI Claude 4 和 Qwen3 联合打造**
+[**Qwen3** 是阿里云 Qwen 团队开发的大语言模型系列](https://github.com/QwenLM/Qwen3)
 
 [![GitHub](https://img.shields.io/badge/GitHub-SovitxNetworks-181717?logo=github&logoColor=white)](https://github.com/Mapleawaa)
 
