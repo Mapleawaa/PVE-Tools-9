@@ -3,6 +3,7 @@
 # PVE 9.0 配置工具脚本
 # 支持换源、删除订阅弹窗、硬盘管理等功能
 # 适用于 Proxmox VE 9.0 (基于 Debian 13)
+# Auther:Maple 二次修改使用请不要删除此段注释
 
 # 颜色定义
 RED='\033[0;31m'
@@ -16,26 +17,44 @@ NC='\033[0m' # No Color
 # 日志函数
 log_info() {
     echo -e "${GREEN}[✓]${NC} $1"
+    echo -e "${GREEN}[$(date +'%Y-%m-%d %H:%M:%S')] [INFO]${NC} $1" | tee -a /var/log/pve-tools.log
 }
 
 log_warn() {
     echo -e "${YELLOW}[⚠]${NC} $1"
+    echo -e "${YELLOW}[$(date +'%Y-%m-%d %H:%M:%S')] [WARN]${NC} $1" | tee -a /var/log/pve-tools.log
 }
 
 log_error() {
     echo -e "${RED}[✗]${NC} $1"
+    echo -e "${RED}[$(date +'%Y-%m-%d %H:%M:%S')] [ERROR]${NC} $1" | tee -a /var/log/pve-tools.log >&2
 }
 
 log_step() {
-    echo -e "${CYAN}[🚀]${NC} $1"
+    echo -e "${CYAN}[✓]${NC} $1"
+    echo -e "${CYAN}[$(date +'%Y-%m-%d %H:%M:%S')] [STEP]${NC} $1" | tee -a /var/log/pve-tools.log
 }
 
 log_success() {
-    echo -e "${GREEN}[🎉]${NC} $1"
+    echo -e "${GREEN}[✓]${NC} $1"
+    echo -e "${GREEN}[$(date +'%Y-%m-%d %H:%M:%S')] [SUCCESS]${NC} $1" | tee -a /var/log/pve-tools.log
 }
 
 log_tips(){
-    echo -e "${MAGENTA}[💡]${NC} $1"
+    echo -e "${MAGENTA}[Tips]${NC} $1"
+    echo -e "${MAGENTA}[$(date +'%Y-%m-%d %H:%M:%S')] [TIPS]${NC} $1" | tee -a /var/log/pve-tools.log
+}
+
+# 进度指示函数
+show_progress() {
+    local message="$1"
+    echo -ne "${CYAN}[....]${NC} $message\033[0K\r"
+}
+
+update_progress() {
+    local message="$1"
+    echo -ne "${GREEN}[ OK ]${NC} $message\033[0K\r"
+    echo
 }
 
 # 显示横幅
@@ -51,7 +70,7 @@ show_banner() {
 ╚═╝       ╚═══╝  ╚══════╝       ╚═╝    ╚═════╝  ╚═════╝ ╚══════╝╚══════╝     ╚════╝ 
 EOF
     echo -e "${NC}"
-    echo -e "${YELLOW}                    🚀 PVE 9.0 一键配置神器 🚀${NC}"
+    echo -e "${YELLOW}                    PVE 9.0 一键配置神器${NC}"
     echo -e "${GREEN}                      让 PVE 配置变得简单快乐${NC}"
     echo -e "${CYAN}                        作者: Maple & Claude 4${NC}"
     echo
@@ -60,7 +79,7 @@ EOF
 # 检查是否为 root 用户
 check_root() {
     if [[ $EUID -ne 0 ]]; then
-        log_error "哎呀！需要超级管理员权限才能运行哦 🔐"
+        log_error "哎呀！需要超级管理员权限才能运行哦"
         echo -e "${YELLOW}请使用以下命令重新运行：${NC}"
         echo -e "${CYAN}sudo $0${NC}"
         exit 1
@@ -71,10 +90,10 @@ check_root() {
 check_debug_mode() {
     for arg in "$@"; do
         if [[ "$arg" == "--debug" ]]; then
-            log_warn "🚨 警告：您正在使用调试模式！"
-            log_warn "🚨 此模式将跳过 PVE 系统版本检测"
-            log_warn "🚨 仅在开发和测试环境中使用"
-            log_warn "🚨 在非 PVE (Debian 系) 系统上使用可能导致系统损坏"
+            log_warn "警告：您正在使用调试模式！"
+            log_warn "此模式将跳过 PVE 系统版本检测"
+            log_warn "仅在开发和测试环境中使用"
+            log_warn "在非 PVE (Debian 系) 系统上使用可能导致系统损坏"
             echo -e "${YELLOW}您确定要继续吗？输入 'yes' 确认，其他任意键退出: ${NC}"
             read -r confirm
             if [[ "$confirm" != "yes" ]]; then
@@ -95,7 +114,7 @@ check_packages() {
     local packages=("sudo" "curl")
     for pkg in "${packages[@]}"; do
         if ! command -v "$pkg" &> /dev/null; then
-            log_error "哎呀！需要安装 $pkg 软件包才能运行哦 🤔"
+            log_error "哎呀！需要安装 $pkg 软件包才能运行哦"
             log_tips "请使用以下命令安装：apt install -y $pkg"
             exit 1
         fi
@@ -109,19 +128,19 @@ check_packages() {
 check_pve_version() {
     # 如果在调试模式下，跳过 PVE 版本检测
     if [[ "$DEBUG_MODE" == "true" ]]; then
-        log_warn "⚠️  调试模式：跳过 PVE 版本检测"
+        log_warn "调试模式：跳过 PVE 版本检测"
         log_tips "请注意：您正在非 PVE 系统上运行此脚本，某些功能可能无法正常工作"
         return
     fi
     
     if ! command -v pveversion &> /dev/null; then
-        log_error "咦？这里好像不是 PVE 环境呢 🤔"
+        log_error "咦？这里好像不是 PVE 环境呢"
         log_warn "请在 Proxmox VE 系统上运行此脚本"
         exit 1
     fi
     
     local pve_version=$(pveversion | head -n1 | cut -d'/' -f2 | cut -d'-' -f1)
-    log_info "太好了！检测到 PVE 版本: ${GREEN}$pve_version${NC} ✨"
+    log_info "太好了！检测到 PVE 版本: ${GREEN}$pve_version${NC}"
 }
 
 # 备份文件
@@ -129,13 +148,13 @@ backup_file() {
     local file="$1"
     if [[ -f "$file" ]]; then
         cp "$file" "${file}.backup.$(date +%Y%m%d_%H%M%S)"
-        log_info "贴心备份完成: ${CYAN}$file${NC} 💾"
+        log_info "贴心备份完成: ${CYAN}$file${NC}"
     fi
 }
 
 # 换源功能
 change_sources() {
-    log_step "开始为您的 PVE 换上飞速源 🏃‍♂️💨"
+    log_step "开始为您的 PVE 换上飞速源"
     
     # 1. 更换 Debian 软件源 (DEB822 格式)
     log_info "正在配置 Debian 清华源..."
@@ -210,19 +229,19 @@ EOF
         sed -i 's|http://download.proxmox.com|https://mirrors.tuna.tsinghua.edu.cn/proxmox|g' /usr/share/perl5/PVE/APLInfo.pm
     fi
     
-    log_success "太棒了！所有源都换成飞速版本啦 🎯"
+    log_success "太棒了！所有源都换成飞速版本啦"
 }
 
 # 删除订阅弹窗
 remove_subscription_popup() {
-    log_step "正在消除那个烦人的订阅弹窗 🚫"
+    log_step "正在消除那个烦人的订阅弹窗"
     
     local js_file="/usr/share/javascript/proxmox-widget-toolkit/proxmoxlib.js"
     if [[ -f "$js_file" ]]; then
         backup_file "$js_file"
         sed -Ezi.bak "s/(Ext.Msg.show\(\{\s+title: gettext\('No valid sub)/void\(\{ \/\/\1/g" "$js_file"
         systemctl restart pveproxy.service
-        log_success "完美！再也不会有烦人的弹窗啦 🎉"
+        log_success "完美！再也不会有烦人的弹窗啦"
     else
         log_warn "咦？没找到弹窗文件，可能已经被处理过了"
     fi
@@ -230,13 +249,13 @@ remove_subscription_popup() {
 
 # 合并 local 与 local-lvm
 merge_local_storage() {
-    log_step "准备合并存储空间，让小硬盘发挥最大价值 💾"
-    log_warn "⚠️  重要提醒：此操作会删除 local-lvm，请确保重要数据已备份！"
+    log_step "准备合并存储空间，让小硬盘发挥最大价值"
+    log_warn "重要提醒：此操作会删除 local-lvm，请确保重要数据已备份！"
     
-    echo -e "${YELLOW}您确定要继续吗？这个操作不可逆哦 🤔${NC}"
+    echo -e "${YELLOW}您确定要继续吗？这个操作不可逆哦${NC}"
     read -p "输入 'yes' 确认继续，其他任意键取消: " -r
     if [[ ! $REPLY == "yes" ]]; then
-        log_info "明智的选择！操作已取消 👍"
+        log_info "明智的选择！操作已取消"
         return
     fi
     
@@ -255,19 +274,19 @@ merge_local_storage() {
     log_info "正在扩展文件系统..."
     resize2fs /dev/pve/root
     
-    log_success "存储合并完成！现在空间更充裕了 🎊"
-    log_warn "💡 温馨提示：请在 Web UI 中删除 local-lvm 存储配置，并编辑 local 存储勾选所有内容类型"
+    log_success "存储合并完成！现在空间更充裕了"
+    log_warn "温馨提示：请在 Web UI 中删除 local-lvm 存储配置，并编辑 local 存储勾选所有内容类型"
 }
 
 # 删除 Swap 分配给主分区
 remove_swap() {
-    log_step "准备释放 Swap 空间给系统使用 🔄"
-    log_warn "⚠️  注意：删除 Swap 后请确保内存充足！"
+    log_step "准备释放 Swap 空间给系统使用"
+    log_warn "注意：删除 Swap 后请确保内存充足！"
     
-    echo -e "${YELLOW}您确定要删除 Swap 分区吗？🤔${NC}"
+    echo -e "${YELLOW}您确定要删除 Swap 分区吗？${NC}"
     read -p "输入 'yes' 确认继续，其他任意键取消: " -r
     if [[ ! $REPLY == "yes" ]]; then
-        log_info "好的，操作已取消 👍"
+        log_info "好的，操作已取消"
         return
     fi
     
@@ -293,7 +312,7 @@ remove_swap() {
     log_info "正在扩展文件系统..."
     resize2fs /dev/mapper/pve-root
     
-    log_success "Swap 删除完成！系统空间更宽裕了 🎉"
+    log_success "Swap 删除完成！系统空间更宽裕了"
 }
 
 # 更新系统
@@ -309,7 +328,7 @@ update_system() {
     echo -e "${CYAN}正在清理不需要的软件包...${NC}"
     apt autoremove -y
     
-    log_success "系统更新完成！您的 PVE 现在是最新版本 ✨"
+    log_success "系统更新完成！您的 PVE 现在是最新版本"
 }
 
 # 暂停函数
@@ -327,7 +346,7 @@ enable_pass() {
     echo
     log_step "开启硬件直通..."
     if [ `dmesg | grep -e DMAR -e IOMMU|wc -l` = 0 ];then
-        log_error "您的硬件不支持直通！不如检查一下主板的BIOS设置？🤔"
+        log_error "您的硬件不支持直通！不如检查一下主板的BIOS设置？"
         pause
         return
     fi
@@ -361,7 +380,7 @@ EOF
         fi
         
         log_success "开启设置后需要重启系统，请准备就绪后重启宿主机"
-        log_tips "重启后才可以应用对内核引导的修改哦！命令是 reboot 😀"
+        log_tips "重启后才可以应用对内核引导的修改哦！命令是 reboot"
     else
         log_warn "您已经配置过!"
     fi
@@ -394,7 +413,7 @@ disable_pass() {
             sleep 1
         }
         log_success "关闭设置后需要重启系统，请准备就绪后重启宿主机。"
-        log_tips "重启后才可以应用对内核引导的修改哦！命令是 reboot 😀"
+        log_tips "重启后才可以应用对内核引导的修改哦！命令是 reboot"
         sleep 1
         update-grub
     fi
@@ -446,7 +465,8 @@ cpupower() {
         clear
         show_banner
         cat <<-EOF
-${YELLOW}              设置CPU电源模式${NC}
+--------------------------------------------
+             设置CPU电源模式
 ┌──────────────────────────────────────────┐
 
     1. 设置CPU模式 conservative  保守模式   [变身老年机]
@@ -464,7 +484,7 @@ EOF
         echo
         echo "部分CPU仅支持 performance 和 powersave 模式，只能选择这两项，其他模式无效不要选！"
         echo
-        echo "你的CPU支持 ${governors} 等模式"
+        echo "你的CPU支持 ${governors} 模式"
         echo
         echo -ne " 请选择: [ ]\b\b"
         read -t 60 cpupowerid
@@ -494,7 +514,7 @@ EOF
                 break
                 ;;
             *)
-                log_error "你的输入无效 ,请重新输入 ! 😠 你在干什么？"
+                log_error "你的输入无效 ,请重新输入 ! 你在干什么？"
                 pause
                 ;;
         esac
@@ -548,7 +568,7 @@ cpupower_del() {
         rm "$TEMP_CRONTAB_FILE"
     fi
 
-    log_success "已恢复系统默认电源设置！还是默认的好用吧 🤔"
+    log_success "已恢复系统默认电源设置！还是默认的好用吧"
 }
 #--------------设置CPU电源模式----------------
 
@@ -563,7 +583,7 @@ cpu_add() {
     echo pve版本$pvever
 
     # 判断是否已经执行过修改
-    [ ! -e $nodes.$pvever.bak ] || { log_warn "已经执行过修改，请勿重复执行 😡"; pause; return;}
+    [ ! -e $nodes.$pvever.bak ] || { log_warn "已经执行过修改，请勿重复执行"; pause; return;}
 
     # 先刷新下源
     log_step "更新软件包列表..."
@@ -1292,7 +1312,7 @@ EOF
     log_success "添加ceph-quincy源完成!"
 }
 #---------PVE7/8添加ceph-quincy源-----------
-# 暂时不添加，本程序专为PVE8/9设计
+# 待办
 #---------PVE7/8添加ceph-quincy源-----------
 #---------PVE一键卸载ceph-----------
 remove_ceph() {
@@ -1319,38 +1339,40 @@ remove_ceph() {
 
 # 显示系统信息
 show_system_info() {
-    log_step "为您展示系统运行状况 📊"
+    log_step "为您展示系统运行状况"
     echo
-    echo -e "${CYAN}🖥️  系统信息概览${NC}"
-    echo -e "${BLUE}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
-    echo -e "📋 PVE 版本: ${GREEN}$(pveversion | head -n1)${NC}"
-    echo -e "🔧 内核版本: ${GREEN}$(uname -r)${NC}"
-    echo -e "⚡ 系统负载: ${GREEN}$(uptime | awk -F'load average:' '{print $2}')${NC}"
-    echo -e "💾 内存使用: ${GREEN}$(free -h | grep Mem | awk '{print $3"/"$2}')${NC}"
-    echo -e "💿 磁盘使用:"
-    df -h | grep -E '^/dev/' | awk '{print "   📁 "$1" "$3"/"$2" ("$5")"}'
-    echo -e "${BLUE}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+    echo -e "${CYAN}系统信息概览${NC}"
+    echo -e "${BLUE}----------------------------------------${NC}"
+    echo -e "PVE 版本: ${GREEN}$(pveversion | head -n1)${NC}"
+    echo -e "内核版本: ${GREEN}$(uname -r)${NC}"
+    echo -e "系统负载: ${GREEN}$(uptime | awk -F'load average:' '{print $2}')${NC}"
+    echo -e "内存使用: ${GREEN}$(free -h | grep Mem | awk '{print $3"/"$2}')${NC}"
+    echo -e "磁盘使用:"
+    df -h | grep -E '^/dev/' | awk '{print "  "$1" "$3"/"$2" ("$5")"}'
+    echo -e "${BLUE}----------------------------------------${NC}"
 }
 
 # 主菜单
 show_menu() {
-    echo -e "${MAGENTA}🎯 请选择您需要的功能：${NC}"
+    echo -e "${MAGENTA}请选择您需要的功能：${NC}"
     echo
-    echo -e "${YELLOW}1.${NC} 🚀 更换软件源 ${GREEN}(强烈推荐，让下载飞起来)${NC}"
-    echo -e "${YELLOW}2.${NC} 🚫 删除订阅弹窗 ${GREEN}(告别烦人提醒)${NC}"
-    echo -e "${YELLOW}3.${NC} 💾 合并 local 与 local-lvm ${CYAN}(小硬盘救星)${NC}"
-    echo -e "${YELLOW}4.${NC} 🔄 删除 Swap 分区 ${CYAN}(释放更多空间)${NC}"
-    echo -e "${YELLOW}5.${NC} 📦 更新系统 ${GREEN}(保持最新状态)${NC}"
-    echo -e "${YELLOW}6.${NC} 📊 显示系统信息 ${BLUE}(查看运行状况)${NC}"
-    echo -e "${YELLOW}7.${NC} ⚡ 一键配置 ${MAGENTA}(换源+删弹窗+更新，懒人必选)${NC}"
-    echo -e "${YELLOW}8.${NC} 🔧 硬件直通配置 ${BLUE}(PCI设备直通设置)${NC}"
-    echo -e "${YELLOW}9.${NC} ⚙️  CPU电源模式 ${BLUE}(调整CPU性能模式)${NC}"
-    echo -e "${YELLOW}10.${NC} 🌡️  温度监控设置 ${BLUE}(CPU/硬盘温度显示)${NC}"
-    echo -e "${YELLOW}11.${NC} 🗑️  温度监控移除 ${BLUE}(移除温度监控功能)${NC}"
-    echo -e "${YELLOW}12.${NC} 🐱  添加ceph-squid源 ${BLUE}(PVE8/9专用)${NC}"
-    echo -e "${YELLOW}13.${NC} 🐕  添加ceph-quincy源 ${BLUE}(PVE7/8专用)${NC}"
-    echo -e "${YELLOW}14.${NC} 🗑️  卸载Ceph ${BLUE}(完全移除Ceph)${NC}"
-    echo -e "${YELLOW}0.${NC} 👋 退出脚本"
+    echo -e "${YELLOW}1.${NC} 更换软件源 ${GREEN}(强烈推荐，让下载飞起来)${NC}"
+    echo -e "${YELLOW}2.${NC} 删除订阅弹窗 ${GREEN}(告别烦人提醒)${NC} | ${RED}（谨慎操作）并且只能在SSH环境下使用否则会被截断${NC}"
+    echo -e "${YELLOW}3.${NC} 合并 local 与 local-lvm ${CYAN}(小硬盘救星)${NC}"
+    echo -e "${YELLOW}4.${NC} 删除 Swap 分区 ${CYAN}(释放更多空间)${NC}"
+    echo -e "${YELLOW}5.${NC} 更新系统 ${GREEN}(保持最新状态)${NC}"
+    echo -e "${YELLOW}6.${NC} 显示系统信息 ${BLUE}(查看运行状况)${NC}"
+    echo -e ""
+    echo -e "${YELLOW}7.${NC} 一键配置 ${MAGENTA}(换源+删弹窗+更新，懒人必选，推荐在SSH下使用)${NC}"
+    echo -e ""
+    echo -e "${YELLOW}8.${NC} 硬件直通配置 ${BLUE}(PCI设备直通设置)${NC}"
+    echo -e "${YELLOW}9.${NC} CPU电源模式 ${BLUE}(调整CPU性能模式)${NC}"
+    echo -e "${YELLOW}10.${NC} 温度监控设置 ${BLUE}(CPU/硬盘温度显示)${NC}"
+    echo -e "${YELLOW}11.${NC} 温度监控移除 ${BLUE}(移除温度监控功能)${NC}"
+    echo -e "${YELLOW}12.${NC} 添加ceph-squid源 ${BLUE}(PVE8/9专用)${NC}"
+    echo -e "${YELLOW}13.${NC} 添加ceph-quincy源 ${BLUE}(PVE7/8专用)${NC}"
+    echo -e "${YELLOW}14.${NC} 卸载Ceph ${BLUE}(完全移除Ceph)${NC}"
+    echo -e "${YELLOW}0.${NC} 退出脚本"
     echo
     echo -e "${CYAN}💡 小贴士：新装系统推荐选择 7 进行一键配置${NC}"
     echo
@@ -1359,7 +1381,7 @@ show_menu() {
 
 # 一键配置
 quick_setup() {
-    log_step "开始一键配置，坐和放宽，让我来搞定一切 🛠️"
+    log_step "开始一键配置，坐和放宽，让我来搞定一切"
     echo
     change_sources
     echo
@@ -1367,7 +1389,7 @@ quick_setup() {
     echo
     update_system
     echo
-    log_success "🎊 一键配置全部完成！您的 PVE 已经完美优化 🎊"
+    log_success "一键配置全部完成！您的 PVE 已经完美优化"
     echo -e "${CYAN}现在您可以愉快地使用 PVE 了！${NC}"
 }
 
@@ -1428,12 +1450,12 @@ main() {
                 remove_ceph
                 ;;
             0)
-                echo -e "${GREEN}感谢使用 PVE Tools！祝您使用愉快 🌟${NC}"
-                echo -e "${CYAN}再见！👋${NC}"
+                echo -e "${GREEN}感谢使用 PVE Tools！祝您使用愉快${NC}"
+                echo -e "${CYAN}再见！${NC}"
                 exit 0
                 ;;
             *)
-                log_error "哎呀，这个选项不存在呢 😅"
+                log_error "哎呀，这个选项不存在呢"
                 log_warn "请输入 0-14 之间的数字"
                 ;;
         esac
