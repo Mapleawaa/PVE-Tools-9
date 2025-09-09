@@ -26,7 +26,7 @@
 </div>
 
 ---
-### 开门见山
+### 🚪 开门见山
 #### 中国大陆网络
 ```
 bash <(curl -sSL https://ghfast.top/github.com/Mapleawaa/PVE-Tools-9/blob/main/PVE-Tools.sh)
@@ -47,7 +47,7 @@ PVE Tools 9 是专为 Proxmox VE 9.0 设计的一键配置工具，基于 Debian
 **如有好点子欢迎 PR！**
 
 更新日志
-
+[![Commits](https://img.shields.io/badge/Commits-查看提交历史-blue?style=flat-square&logo=github)](https://github.com/Mapleawaa/PVE-Tools-9/commits/)
 </div>
 
 ### ✨ 主要特性

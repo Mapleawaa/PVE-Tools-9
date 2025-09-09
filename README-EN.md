@@ -26,6 +26,17 @@
 </div>
 
 ---
+### 🚪 Let's get started right away
+#### 中国大陆网络
+```
+bash <(curl -sSL https://ghfast.top/github.com/Mapleawaa/PVE-Tools-9/blob/main/PVE-Tools.sh)
+```
+#### 国际网络
+```
+bash <(curl -sSL https://github.com/Mapleawaa/PVE-Tools-9/blob/main/PVE-Tools.sh)
+```
+
+---
 
 ### 📖 Project Description
 
@@ -36,6 +47,7 @@ PVE Tools 9 is a one-click configuration tool specifically designed for **Proxmo
 **If you encounter any issues while using the script, please open an issue directly. I will check and fix them during my free time.**
 **Suggestions and PRs are welcome!**
 
+[![Commits](https://img.shields.io/badge/Commits-ViewCommitHistory-blue?style=flat-square&logo=github)](https://github.com/Mapleawaa/PVE-Tools-9/commits/)
 </div>
 
 ### ✨ Key Features
