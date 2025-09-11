@@ -311,7 +311,7 @@ remove_swap() {
 
 # 更新系统
 update_system() {
-    log_step "开始更新系统，让 PVE 保持最新状态 📦"
+    log_step "开始更新系统，让 PVE 保持最新状态"
     
     echo -e "${CYAN}正在更新软件包列表...${NC}"
     apt update
@@ -1368,7 +1368,7 @@ show_menu() {
     echo -e "${YELLOW}14.${NC} 卸载Ceph ${BLUE}(完全移除Ceph)${NC}"
     echo -e "${YELLOW}0.${NC} 退出脚本"
     echo
-    echo -e "${CYAN}💡 小贴士：新装系统推荐选择 7 进行一键配置${NC}"
+    echo -e "${CYAN}小贴士：新装系统推荐选择 7 进行一键配置${NC}"
     echo
     echo -n -e "${GREEN}请输入您的选择 [0-14]: ${NC}"
 }
