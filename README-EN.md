@@ -21,7 +21,7 @@
 ╚═╝       ╚═══╝  ╚══════╝       ╚═╝    ╚═════╝  ╚═════╝ ╚══════╝╚══════╝     ╚════╝ 
 ```
 
-**🎯 One-click configuration tool to make PVE configuration simple and enjoyable**
+** Your next “one-script-to-rule-them-all” for PVE9 **
 
 </div>
 
@@ -80,6 +80,7 @@ PVE Tools 9 is a one-click configuration tool specifically designed for **Proxmo
 | 🌡️ Temperature Monitoring | Real-time display of CPU and disk temperatures | ⭐⭐⭐⭐ |
 | 🐙 Ceph Sources | Support for `ceph-squid` and `ceph-quincy` sources | ⭐⭐⭐ |
 | 🗑️ Ceph Removal | Completely remove Ceph components | ⭐⭐ |
+| 🐧 Kernel Management | Detect, download and switch system kernel versions | ⭐⭐⭐⭐ |
 
 ### 🚀 Quick Start
 
@@ -119,6 +120,7 @@ After running the script, you'll see a menu with the following options:
 12. 🐙 Add ceph-squid Source - Add Ceph source for PVE 8/9
 13. 🐙 Add ceph-quincy Source - Add Ceph source for PVE 7/8
 14. 🗑️ Remove Ceph - Completely remove Ceph components
+15. 🐧 Kernel Management - Detect, download and switch kernel versions
 
 > 💡 **Debug Mode**: For developers and advanced users, use `sudo ./PVE-Tools.sh --debug`. This mode skips PVE system detection but will display a warning, as running it on a non-PVE system may damage the system.
 
@@ -190,6 +192,23 @@ Supports multiple modes:
 - Restore original PVE Web UI files
 - Remove related tools and configurations
 
+#### 🐧 Kernel Management
+
+**Kernel Version Detection**:
+- Automatically detect current system kernel version
+- Display available kernel version list
+- Support PVE official kernels and test versions
+
+**Kernel Download & Installation**:
+- Download specified kernel versions from PVE official repository
+- Automatically handle dependencies and conflicts
+- Support kernel headers and development packages installation
+
+**Kernel Switching Configuration**:
+- Safe kernel switching mechanism
+- Automatically update GRUB boot configuration
+- Support multi-kernel boot option management
+
 #### 🐙 Ceph Storage Support
 
 **Add ceph-squid Source**:
@@ -227,6 +246,23 @@ A: Check your network or try re-running the source change function.
 
 **Q: Popup still appears after removal?**
 A: Clear browser cache or use incognito mode.
+
+#### Kernel Management FAQ
+
+**Q: Is kernel switching safe?**
+A: Yes, the script automatically backs up current kernel configuration and provides rollback options. We recommend testing in a non-production environment before switching.
+
+**Q: Which kernel versions are supported?**
+A: Supports all available kernel versions in PVE official repository, including stable and testing versions.
+
+**Q: Do I need to reboot after switching kernel?**
+A: Yes, you need to reboot the system for the new kernel to take effect.
+
+**Q: How to restore the original kernel?**
+A: Select the original kernel version from GRUB boot menu to restore.
+
+**Q: Will kernel switching affect my virtual machines?**
+A: It won't directly affect virtual machines, but the new kernel may provide better hardware compatibility and performance.
 
 #### Getting Help
 
