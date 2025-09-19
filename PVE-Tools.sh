@@ -1783,7 +1783,8 @@ show_menu() {
 
 # 一键配置
 quick_setup() {
-    log_step "开始一键配置，坐和放宽，让我来搞定一切"
+    log_step "开始一键配置"
+    log_step "天涯若比邻，海内存知己，坐和放宽，让我来搞定一切。"
     echo
     change_sources
     echo
@@ -1839,8 +1840,8 @@ select_mirror() {
 
 # 版本检查函数
 check_update() {
-    log_info "正在检查更新..."
-    echo -e "${YELLOW}正在检测网络连接，5秒超时... (按 C 键跳过)${NC}"
+    log_info "正在检查更新...下载版本文件...请等待5秒"
+    # echo -e "${YELLOW}正在检测网络连接，5秒超时... (按 C 键跳过)${NC}"
     
     # 下载版本文件的函数
     download_version_file() {
@@ -1919,14 +1920,16 @@ check_update() {
         echo -e "${GREEN}发现新版本！推荐更新哦，新增功能和修复BUG喵${NC}"
         echo -e "当前版本: ${YELLOW}$CURRENT_VERSION${NC}"
         echo -e "最新版本: ${GREEN}$remote_version${NC}"
-        echo -e "${YELLOW}更新内容：${NC}"
+        # echo -e "${YELLOW}更新内容：${NC}" 没有实际功能 不加也罢
         echo -e "$changelo----------------------------------------------${NC}"
         echo -e "${MAGENTA}请访问项目页面获取最新版本：${NC}"
         echo -e "${BLUE}https://github.com/Mapleawaa/PVE-Tools-9${NC}"
+        echo -e "${MAGENTA}或者试试重新执行一下一键脚本？${NC}"
+        echo -e "${BLUE} bash <(curl -sSL https://github.com/Mapleawaa/PVE-Tools-9/blob/main/PVE-Tools.sh) ${NC}"
         echo -e "${YELLOW}按回车键继续...${NC}"
         read -r
     else
-        log_success "当前已是最新版本 ($CURRENT_VERSION)"
+        log_success "当前已是最新版本 ($CURRENT_VERSION) 放心用吧"
     fi
 }
 
@@ -1996,7 +1999,7 @@ main() {
                 kernel_management_menu
                 ;;
             0)
-                echo -e "${GREEN}感谢使用 PVE Tools！祝您使用愉快${NC}"
+                echo -e "${GREEN}感谢使用,谢谢喵${NC}"
                 echo -e "${CYAN}再见！${NC}"
                 exit 0
                 ;;
