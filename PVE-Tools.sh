@@ -1838,6 +1838,7 @@ select_mirror() {
 # 版本检查函数
 check_update() {
     log_info "正在检查更新..."
+    echo -e "${YELLOW}正在检测网络连接，5秒超时... (按 C 键跳过)${NC}"
     
     # 下载版本文件的函数
     download_version_file() {
@@ -1851,8 +1852,34 @@ check_update() {
         fi
     }
     
+    # 设置超时和跳过检测
+    local timeout=5
+    local skip_detected=false
+    
+    # 使用后台进程检测用户输入
+    (
+        while (( timeout > 0 )); do
+            read -t 1 -n 1 key 2>/dev/null
+            if [[ "$key" == "c" || "$key" == "C" ]]; then
+                skip_detected=true
+                break
+            fi
+            ((timeout--))
+        done
+    ) &
+    
+    local timeout_pid=$!
+    
     # 尝试从GitHub下载版本文件
     remote_content=$(download_version_file "$VERSION_FILE_URL")
+    
+    # 等待超时检测进程结束
+    wait $timeout_pid 2>/dev/null
+    
+    if $skip_detected; then
+        log_warn "用户跳过版本检查"
+        return
+    fi
     
     # 如果下载失败，询问用户是否使用镜像源
     if [ -z "$remote_content" ]; then
