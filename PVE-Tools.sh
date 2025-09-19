@@ -5,6 +5,10 @@
 # 适用于 Proxmox VE 9.0 (基于 Debian 13)
 # Auther:Maple 二次修改使用请不要删除此段注释
 
+# 版本信息
+CURRENT_VERSION="1.9.0"
+VERSION_FILE_URL="https://raw.githubusercontent.com/Mapleawaa/PVE-Tools-9/main/VERSION"
+
 # 颜色定义
 RED='\033[0;31m'
 GREEN='\033[0;32m'
@@ -13,6 +17,12 @@ BLUE='\033[0;34m'
 CYAN='\033[0;36m'
 MAGENTA='\033[0;35m'
 NC='\033[0m' # No Color
+
+# 镜像源配置
+MIRROR_USTC="https://mirrors.ustc.edu.cn/proxmox/debian/pve"
+MIRROR_TUNA="https://mirrors.tuna.tsinghua.edu.cn/proxmox/debian/pve" 
+MIRROR_DEBIAN="https://deb.debian.org/debian"
+SELECTED_MIRROR=""
 
 # 日志函数
 log_info() {
@@ -392,7 +402,7 @@ remove_old_kernels() {
 # 内核管理主菜单
 kernel_management_menu() {
     while true; do
-        echo -e "\n${CYAN}=============== 内核管理菜单 ===============${NC}"
+        echo -e "\n${CYAN}--------------- 内核管理菜单 ---------------${NC}"
         echo -e "  ${GREEN}1${NC}. 显示当前内核信息"
         echo -e "  ${GREEN}2${NC}. 查看可用内核列表"
         echo -e "  ${GREEN}3${NC}. 安装新内核"
@@ -400,7 +410,7 @@ kernel_management_menu() {
         echo -e "  ${GREEN}5${NC}. 清理旧内核"
         echo -e "  ${GREEN}6${NC}. 重启系统应用新内核"
         echo -e "  ${GREEN}0${NC}. 返回主菜单"
-        echo -e "${CYAN}===========================================${NC}"
+        echo -e "${CYAN}--------------------------------------------${NC}"
         
         read -p "请选择操作 [0-6]: " choice
         
@@ -516,13 +526,32 @@ backup_file() {
 change_sources() {
     log_step "开始为您的 PVE 换上飞速源"
     
+    # 根据选择的镜像源确定URL
+    local debian_mirror=""
+    local pve_mirror=""
+    
+    case $SELECTED_MIRROR in
+        $MIRROR_USTC)
+            debian_mirror="https://mirrors.ustc.edu.cn/debian"
+            pve_mirror="$MIRROR_USTC"
+            ;;
+        $MIRROR_TUNA)
+            debian_mirror="https://mirrors.tuna.tsinghua.edu.cn/debian"
+            pve_mirror="$MIRROR_TUNA"
+            ;;
+        $MIRROR_DEBIAN)
+            debian_mirror="https://deb.debian.org/debian"
+            pve_mirror="$MIRROR_TUNA"
+            ;;
+    esac
+    
     # 1. 更换 Debian 软件源 (DEB822 格式)
-    log_info "正在配置 Debian 清华源..."
+    log_info "正在配置 Debian 镜像源..."
     backup_file "/etc/apt/sources.list.d/debian.sources"
     
-    cat > /etc/apt/sources.list.d/debian.sources << 'EOF'
+    cat > /etc/apt/sources.list.d/debian.sources << EOF
 Types: deb
-URIs: https://mirrors.tuna.tsinghua.edu.cn/debian
+URIs: $debian_mirror
 Suites: trixie trixie-updates trixie-backports
 Components: main contrib non-free non-free-firmware
 Signed-By: /usr/share/keyrings/debian-archive-keyring.gpg
@@ -560,12 +589,12 @@ EOF
     fi
     
     # 3. 更换 Ceph 源
-    log_info "正在配置 Ceph 清华源..."
+    log_info "正在配置 Ceph 镜像源..."
     if [[ -f "/etc/apt/sources.list.d/ceph.sources" ]]; then
         backup_file "/etc/apt/sources.list.d/ceph.sources"
-        cat > /etc/apt/sources.list.d/ceph.sources << 'EOF'
+        cat > /etc/apt/sources.list.d/ceph.sources << EOF
 Types: deb
-URIs: https://mirrors.tuna.tsinghua.edu.cn/proxmox/debian/ceph-squid
+URIs: $pve_mirror/debian/ceph-squid
 Suites: trixie
 Components: main
 Signed-By: /usr/share/keyrings/proxmox-archive-keyring.gpg
@@ -574,9 +603,9 @@ EOF
     
     # 4. 添加无订阅源
     log_info "正在添加免费版专用源..."
-    cat > /etc/apt/sources.list.d/pve-no-subscription.sources << 'EOF'
+    cat > /etc/apt/sources.list.d/pve-no-subscription.sources << EOF
 Types: deb
-URIs: https://mirrors.tuna.tsinghua.edu.cn/proxmox/debian/pve
+URIs: $pve_mirror/debian/pve
 Suites: trixie
 Components: pve-no-subscription
 Signed-By: /usr/share/keyrings/proxmox-archive-keyring.gpg
@@ -586,7 +615,7 @@ EOF
     log_info "正在加速 CT 模板下载..."
     if [[ -f "/usr/share/perl5/PVE/APLInfo.pm" ]]; then
         backup_file "/usr/share/perl5/PVE/APLInfo.pm"
-        sed -i 's|http://download.proxmox.com|https://mirrors.tuna.tsinghua.edu.cn/proxmox|g' /usr/share/perl5/PVE/APLInfo.pm
+        sed -i "s|http://download.proxmox.com|$pve_mirror|g" /usr/share/perl5/PVE/APLInfo.pm
     fi
     
     log_success "太棒了！所有源都换成飞速版本啦"
@@ -1735,7 +1764,7 @@ show_menu() {
     echo -e "${YELLOW}15.${NC} 内核管理 ${MAGENTA}(内核切换/更新/清理)${NC}"
     echo -e "${YELLOW}0.${NC} 退出脚本"
     echo
-    echo -e "${CYAN}💡 小贴士：新装系统推荐选择 7 进行一键配置${NC}"
+    echo -e "${CYAN}小贴士：新装系统推荐选择 7 进行一键配置${NC}"
     echo
     echo -n -e "${GREEN}请输入您的选择 [0-15]: ${NC}"
 }
@@ -1754,11 +1783,125 @@ quick_setup() {
     echo -e "${CYAN}现在您可以愉快地使用 PVE 了！${NC}"
 }
 
+# 镜像源选择函数
+select_mirror() {
+    while true; do
+        clear
+        show_banner
+        echo -e "先选择一下镜像源吧！"
+        echo -e "${CYAN}----------------- 镜像源选择 ------------------${NC}"
+        echo -e "请选择默认镜像源："
+        echo -e "  ${GREEN}1${NC}. 中科大镜像源"
+        echo -e "  ${GREEN}2${NC}. 清华Tuna镜像源"
+        echo -e "  ${GREEN}3${NC}. Debian默认源 ${YELLOW}非必要请勿使用本源${NC}"
+        echo -e "${CYAN}----------------------------------------------${NC}"
+        echo -e "${YELLOW}注意：选择后将作为后续所有软件源操作的基础${NC}"
+        echo
+        
+        read -p "请选择 [1-3]: " mirror_choice
+        
+        case $mirror_choice in
+            1)
+                SELECTED_MIRROR=$MIRROR_USTC
+                log_success "已选择中科大镜像源"
+                break
+                ;;
+            2)
+                SELECTED_MIRROR=$MIRROR_TUNA
+                log_success "已选择清华Tuna镜像源"
+                break
+                ;;
+            3)
+                SELECTED_MIRROR=$MIRROR_DEBIAN
+                log_success "已选择Debian默认源"
+                break
+                ;;
+            *)
+                log_error "无效选择，请重新输入"
+                echo -e "${YELLOW}按回车键继续...${NC}"
+                read -r
+                ;;
+        esac
+    done
+}
+
+# 版本检查函数
+check_update() {
+    log_info "正在检查更新..."
+    
+    # 下载版本文件的函数
+    download_version_file() {
+        local url="$1"
+        if command -v curl &> /dev/null; then
+            curl -s --connect-timeout 5 "$url" 2>/dev/null
+        elif command -v wget &> /dev/null; then
+            wget -q -O - --timeout=5 "$url" 2>/dev/null
+        else
+            echo ""
+        fi
+    }
+    
+    # 尝试从GitHub下载版本文件
+    remote_content=$(download_version_file "$VERSION_FILE_URL")
+    
+    # 如果下载失败，询问用户是否使用镜像源
+    if [ -z "$remote_content" ]; then
+        echo -e "${YELLOW}无法从GitHub获取更新信息${NC}"
+        echo -e "${MAGENTA}是否使用镜像源 (ghfast.top) 重新尝试？${NC}"
+        read -p "请输入 [y/N]: " use_mirror
+        
+        if [[ "$use_mirror" =~ ^[Yy]$ ]]; then
+            log_info "正在使用镜像源下载..."
+            mirror_url="https://ghfast.top/Mapleawaa/PVE-Tools-9/main/VERSION"
+            remote_content=$(download_version_file "$mirror_url")
+            
+            if [ -z "$remote_content" ]; then
+                log_warn "镜像源下载也失败了，跳过版本检查"
+                return
+            fi
+        else
+            log_warn "跳过版本检查"
+            return
+        fi
+    fi
+    
+    # 提取版本号和更新日志
+    remote_version=$(echo "$remote_content" | head -1 | tr -d '[:space:]')
+    changelog=$(echo "$remote_content" | tail -n +2)
+    
+    if [ -z "$remote_version" ]; then
+        log_warn "获取的版本信息格式不正确"
+        return
+    fi
+    
+    # 比较版本
+    if [ "$(printf '%s\n' "$remote_version" "$CURRENT_VERSION" | sort -V | tail -n1)" != "$CURRENT_VERSION" ]; then
+        echo -e "${YELLOW}----------------------------------------------${NC}"
+        echo -e "${GREEN}发现新版本！推荐更新哦，新增功能和修复BUG喵${NC}"
+        echo -e "当前版本: ${YELLOW}$CURRENT_VERSION${NC}"
+        echo -e "最新版本: ${GREEN}$remote_version${NC}"
+        echo -e "${YELLOW}更新内容：${NC}"
+        echo -e "$changelo----------------------------------------------${NC}"
+        echo -e "${MAGENTA}请访问项目页面获取最新版本：${NC}"
+        echo -e "${BLUE}https://github.com/Mapleawaa/PVE-Tools-9${NC}"
+        echo -e "${YELLOW}按回车键继续...${NC}"
+        read -r
+    else
+        log_success "当前已是最新版本 ($CURRENT_VERSION)"
+    fi
+}
+
 # 主程序
 main() {
     check_root
     check_debug_mode "$@"
     check_pve_version
+    
+    # 检查更新
+    check_update
+    
+    # 选择镜像源
+    select_mirror
     
     while true; do
         show_banner
