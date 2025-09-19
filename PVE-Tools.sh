@@ -75,8 +75,10 @@ show_banner() {
 EOF
     echo -e "${NC}"
     echo -e "${YELLOW}                    PVE 9.0 一键配置神器${NC}"
-    echo -e "${GREEN}                      让 PVE 配置变得简单快乐${NC}"
-    echo -e "${CYAN}                        作者: Maple & Claude 4${NC}"
+    echo -e "${GREEN}                     让 PVE 配置变得简单快乐${NC}"
+    echo -e "${CYAN}                      作者: Maple & Claude 4${NC}"
+    echo -e "                        当前版本: ${YELLOW}$CURRENT_VERSION${NC}"
+    echo -e "                        最新版本: ${GREEN}$remote_version${NC}"
     echo
 }
 
