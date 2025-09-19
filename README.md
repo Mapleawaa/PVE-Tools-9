@@ -30,6 +30,11 @@
 ---
 ### 🚪 开门见山
 #### 中国大陆网络
+
+<div style="padding: 10px; background-color: #fff3cd; border-left: 4px solid #ffc107; border-radius: 4px;">
+  <strong>⚠️ 警告：</strong> 请不要多次拉取文件，无论镜像站还是源站。否则会被服务器拒绝导致影响心情。
+</div>
+
 ```
 bash <(curl -sSL https://ghfast.top/github.com/Mapleawaa/PVE-Tools-9/blob/main/PVE-Tools.sh)
 ```
