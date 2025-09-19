@@ -517,8 +517,18 @@ sync_kernel_update() {
 backup_file() {
     local file="$1"
     if [[ -f "$file" ]]; then
-        cp "$file" "${file}.backup.$(date +%Y%m%d_%H%M%S)"
+        # 创建备份目录
+        local backup_dir="/etc/pve-tools-9-bak"
+        mkdir -p "$backup_dir"
+        
+        # 生成带时间戳的备份文件名
+        local filename=$(basename "$file")
+        local timestamp=$(date +%Y%m%d_%H%M%S)
+        local backup_path="${backup_dir}/${filename}.backup.${timestamp}"
+        
+        cp "$file" "$backup_path"
         log_info "贴心备份完成: ${CYAN}$file${NC}"
+        log_info "备份文件位置: ${CYAN}${backup_path}${NC}"
     fi
 }
 
