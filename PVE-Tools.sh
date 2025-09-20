@@ -6,7 +6,7 @@
 # Auther:Maple 二次修改使用请不要删除此段注释
 
 # 版本信息
-CURRENT_VERSION="1.9.0"
+CURRENT_VERSION="1.9.2-HotFix"
 VERSION_FILE_URL="https://raw.githubusercontent.com/Mapleawaa/PVE-Tools-9/main/VERSION"
 
 # 颜色定义
@@ -553,7 +553,7 @@ change_sources() {
             ;;
         $MIRROR_DEBIAN)
             debian_mirror="https://deb.debian.org/debian"
-            pve_mirror="$MIRROR_TUNA"
+            pve_mirror="https://ftp.debian.org/debian"
             ;;
     esac
     
@@ -606,7 +606,7 @@ EOF
         backup_file "/etc/apt/sources.list.d/ceph.sources"
         cat > /etc/apt/sources.list.d/ceph.sources << EOF
 Types: deb
-URIs: $pve_mirror/debian/ceph-squid
+URIs: $pve_mirror
 Suites: trixie
 Components: main
 Signed-By: /usr/share/keyrings/proxmox-archive-keyring.gpg
@@ -617,7 +617,7 @@ EOF
     log_info "正在添加免费版专用源..."
     cat > /etc/apt/sources.list.d/pve-no-subscription.sources << EOF
 Types: deb
-URIs: $pve_mirror/debian/pve
+URIs: $pve_mirror
 Suites: trixie
 Components: pve-no-subscription
 Signed-By: /usr/share/keyrings/proxmox-archive-keyring.gpg
