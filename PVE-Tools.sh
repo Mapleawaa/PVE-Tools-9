@@ -1840,69 +1840,46 @@ select_mirror() {
 
 # 版本检查函数
 check_update() {
-    log_info "正在检查更新...下载版本文件...请等待5秒"
-    # echo -e "${YELLOW}正在检测网络连接，5秒超时... (按 C 键跳过)${NC}"
+    log_info "正在检查更新..."
     
-    # 下载版本文件的函数
+    # 下载版本文件的函数（带超时）
     download_version_file() {
         local url="$1"
+        local timeout=10
+        
         if command -v curl &> /dev/null; then
-            curl -s --connect-timeout 5 "$url" 2>/dev/null
+            curl -s --connect-timeout $timeout --max-time $timeout "$url" 2>/dev/null
         elif command -v wget &> /dev/null; then
-            wget -q -O - --timeout=5 "$url" 2>/dev/null
+            wget -q -T $timeout -O - "$url" 2>/dev/null
         else
             echo ""
         fi
     }
     
-    # 设置超时和跳过检测
-    local timeout=5
-    local skip_detected=false
+    # 显示进度提示
+    echo -ne "${CYAN}[....]${NC} 正在检查更新...\033[0K\r"
     
-    # 使用后台进程检测用户输入
-    (
-        while (( timeout > 0 )); do
-            read -t 1 -n 1 key 2>/dev/null
-            if [[ "$key" == "c" || "$key" == "C" ]]; then
-                skip_detected=true
-                break
-            fi
-            ((timeout--))
-        done
-    ) &
-    
-    local timeout_pid=$!
-    
-    # 尝试从GitHub下载版本文件
+    # 首先尝试从GitHub下载版本文件
     remote_content=$(download_version_file "$VERSION_FILE_URL")
     
-    # 等待超时检测进程结束
-    wait $timeout_pid 2>/dev/null
-    
-    if $skip_detected; then
-        log_warn "用户跳过版本检查"
-        return
+    # 如果GitHub下载失败，自动尝试镜像源
+    if [ -z "$remote_content" ]; then
+        echo -ne "${YELLOW}[WARN]${NC} GitHub连接失败，尝试镜像源...\033[0K\r"
+        mirror_url="https://ghfast.top/Mapleawaa/PVE-Tools-9/main/VERSION"
+        remote_content=$(download_version_file "$mirror_url")
     fi
     
-    # 如果下载失败，询问用户是否使用镜像源
+    # 清除进度显示
+    echo -ne "\033[0K\r"
+    
+    # 如果所有下载都失败
     if [ -z "$remote_content" ]; then
-        echo -e "${YELLOW}无法从GitHub获取更新信息${NC}"
-        echo -e "${MAGENTA}是否使用镜像源 (ghfast.top) 重新尝试？${NC}"
-        read -p "请输入 [y/N]: " use_mirror
-        
-        if [[ "$use_mirror" =~ ^[Yy]$ ]]; then
-            log_info "正在使用镜像源下载..."
-            mirror_url="https://ghfast.top/Mapleawaa/PVE-Tools-9/main/VERSION"
-            remote_content=$(download_version_file "$mirror_url")
-            
-            if [ -z "$remote_content" ]; then
-                log_warn "镜像源下载也失败了，跳过版本检查"
-                return
-            fi
-        else
-            log_warn "跳过版本检查"
-            return
-        fi
+        log_warn "网络连接失败，跳过版本检查"
+        echo -e "${YELLOW}提示：您可以手动访问以下地址检查更新：${NC}"
+        echo -e "${BLUE}https://github.com/Mapleawaa/PVE-Tools-9${NC}"
+        echo -e "${YELLOW}按回车键继续...${NC}"
+        read -r
+        return
     fi
     
     # 提取版本号和更新日志
@@ -1920,12 +1897,11 @@ check_update() {
         echo -e "${GREEN}发现新版本！推荐更新哦，新增功能和修复BUG喵${NC}"
         echo -e "当前版本: ${YELLOW}$CURRENT_VERSION${NC}"
         echo -e "最新版本: ${GREEN}$remote_version${NC}"
-        # echo -e "${YELLOW}更新内容：${NC}" 没有实际功能 不加也罢
-        echo -e "$changelo----------------------------------------------${NC}"
+        echo -e "${YELLOW}更新内容：${NC}"
+        echo -e "$changelog"
+        echo -e "${YELLOW}----------------------------------------------${NC}"
         echo -e "${MAGENTA}请访问项目页面获取最新版本：${NC}"
         echo -e "${BLUE}https://github.com/Mapleawaa/PVE-Tools-9${NC}"
-        echo -e "${MAGENTA}或者试试重新执行一下一键脚本？${NC}"
-        echo -e "${BLUE} bash <(curl -sSL https://github.com/Mapleawaa/PVE-Tools-9/blob/main/PVE-Tools.sh) ${NC}"
         echo -e "${YELLOW}按回车键继续...${NC}"
         read -r
     else
