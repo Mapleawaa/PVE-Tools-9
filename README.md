@@ -323,7 +323,7 @@ SOFTWARE.
 - **[Proxmox VE 官方](https://www.proxmox.com/)** - 优秀的虚拟化平台
 - **[Debian 官方](https://www.debian.org/)** - 稳定可靠的系统基础
 - **[NodeSeek 论坛](https://www.nodeseek.com)** - 一个有效的主机信息聚集地，希望它能成长为一个有用的社群。
-- **[Linux.do 论坛](https://linux.dog/)** - 一个真诚、友善、团结、专业，共建你我引以为荣之社区。
+- **[Linux.do 论坛](https://linux.do/)** - 一个真诚、友善、团结、专业，共建你我引以为荣之社区。
 
 
 ### 💡 灵感来源
