@@ -540,6 +540,7 @@ change_sources() {
     
     # 根据选择的镜像源确定URL
     local debian_mirror=""
+    local debian_security_mirror=""
     local pve_mirror=""
     
     case $SELECTED_MIRROR in
@@ -553,9 +554,40 @@ change_sources() {
             ;;
         $MIRROR_DEBIAN)
             debian_mirror="https://deb.debian.org/debian"
+            debian_security_mirror="https://security.debian.org/debian-security"
             pve_mirror="https://ftp.debian.org/debian"
             ;;
     esac
+    
+    # 询问用户是否要更换安全更新源
+    log_info "安全更新源选择"
+    echo "  安全更新源包含重要的系统安全补丁，选择合适的源很重要："
+    echo "  1) 使用官方安全源 (推荐，更新最及时，但可能较慢)"
+    echo "  2) 使用镜像站安全源 (速度快，但可能有延迟)"
+    echo ""
+    
+    read -p "  请选择 [1-2] (默认: 1): " security_choice
+    security_choice=${security_choice:-1}
+    
+    if [[ "$security_choice" == "2" ]]; then
+        # 使用镜像站的安全源
+        case $SELECTED_MIRROR in
+            $MIRROR_USTC)
+                debian_security_mirror="https://mirrors.ustc.edu.cn/debian-security"
+                ;;
+            $MIRROR_TUNA)
+                debian_security_mirror="https://mirrors.tuna.tsinghua.edu.cn/debian-security"
+                ;;
+            $MIRROR_DEBIAN)
+                debian_security_mirror="https://security.debian.org/debian-security"
+                ;;
+        esac
+        log_info "将使用镜像站的安全更新源"
+    else
+        # 使用官方安全源
+        debian_security_mirror="https://security.debian.org/debian-security"
+        log_info "将使用官方安全更新源"
+    fi
     
     # 1. 更换 Debian 软件源 (DEB822 格式)
     log_info "正在配置 Debian 镜像源..."
@@ -570,20 +602,20 @@ Signed-By: /usr/share/keyrings/debian-archive-keyring.gpg
 
 # 默认注释了源码镜像以提高 apt update 速度，如有需要可自行取消注释
 # Types: deb-src
-# URIs: https://mirrors.tuna.tsinghua.edu.cn/debian
+# URIs: $debian_mirror
 # Suites: trixie trixie-updates trixie-backports
 # Components: main contrib non-free non-free-firmware
 # Signed-By: /usr/share/keyrings/debian-archive-keyring.gpg
 
 # 以下安全更新软件源包含了官方源与镜像站配置，如有需要可自行修改注释切换
 Types: deb
-URIs: https://security.debian.org/debian-security
+URIs: $debian_security_mirror
 Suites: trixie-security
 Components: main contrib non-free non-free-firmware
 Signed-By: /usr/share/keyrings/debian-archive-keyring.gpg
 
 # Types: deb-src
-# URIs: https://security.debian.org/debian-security
+# URIs: $debian_security_mirror
 # Suites: trixie-security
 # Components: main contrib non-free non-free-firmware
 # Signed-By: /usr/share/keyrings/debian-archive-keyring.gpg
