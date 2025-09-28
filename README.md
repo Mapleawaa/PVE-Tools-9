@@ -1,5 +1,8 @@
 # PVE Tools 9 🚀
 
+> [!WARNING]
+> 最新更新加入了 Proxmox 安全软件源，请尽快更新脚本到最新版本避免影响机器安全！
+
 <div align="center">
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
@@ -31,9 +34,8 @@
 ### 🚪 开门见山
 #### 中国大陆网络
 
-<div style="padding: 10px; background-color: #fff3cd; border-left: 4px solid #ffc107; border-radius: 4px;">
-  <strong>⚠️ 警告：</strong> 请不要多次拉取文件，无论镜像站还是源站。否则会被服务器拒绝导致影响心情。
-</div>
+> [!WARNING]
+> 请不要多次拉取文件，无论镜像站还是源站。否则会被服务器拒绝导致影响心情。
 
 ```
 bash <(curl -sSL https://ghfast.top/github.com/Mapleawaa/PVE-Tools-9/blob/main/PVE-Tools.sh)
@@ -316,6 +318,7 @@ SOFTWARE.
 - **社区贡献者** - 感谢所有提供反馈和建议的用户
 - **xiangfeidexiaohuo** - 感谢他提供的传感器监控思路
 - **你们** - 感谢屏幕面前的你，关注使用此项目，为此提供了莫大的贡献。
+[![Contributors](https://img.shields.io/github/contributors/yourname/yourrepo.svg?style=for-the-badge)](https://github.com/yourname/yourrepo/graphs/contributors)
 
 ### 🏛️ 相关组织与项目
 
@@ -323,7 +326,8 @@ SOFTWARE.
 - **[Proxmox VE 官方](https://www.proxmox.com/)** - 优秀的虚拟化平台
 - **[Debian 官方](https://www.debian.org/)** - 稳定可靠的系统基础
 - **[NodeSeek 论坛](https://www.nodeseek.com)** - 一个有效的主机信息聚集地，希望它能成长为一个有用的社群。
-- **[Linux.do 论坛](https://linux.dog/)** - 一个真诚、友善、团结、专业，共建你我引以为荣之社区。
+- **[Linux.do 论坛](https://linux.do/)** - 一个真诚、友善、团结、专业，共建你我引以为荣之社区。
+- **[IDC Flare 论坛](https://idcflare.com)** - 一个新的域名、主机等信息集散地。
 
 
 ### 💡 灵感来源
