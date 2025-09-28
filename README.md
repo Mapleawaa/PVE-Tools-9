@@ -1,7 +1,7 @@
 # PVE Tools 9 🚀
 
 > [!WARNING]
-> 最新更新加入了 Proxmox 安全软件源，请尽快更新脚本到最新版本避免影响机器安全！
+> 最新脚本版本3.0.0 加入了 Proxmox 安全软件源，请尽快更新脚本到最新版本避免影响机器安全！
 
 <div align="center">
 
@@ -44,6 +44,11 @@ bash <(curl -sSL https://ghfast.top/github.com/Mapleawaa/PVE-Tools-9/blob/main/P
 ```
 bash <(curl -sSL https://github.com/Mapleawaa/PVE-Tools-9/blob/main/PVE-Tools.sh)
 ```
+
+#### PVE7~8升级PVE9快捷工具
+新项目!! 快来看! 快速升级PVE9
+![PVE 8 Upgrade Helper](https://img.shields.io/badge/PVE%208%20Upgrade%20Helper-Quick%20Upgrade%20Tool-blue?style=for-the-badge&logo=proxmox&logoColor=white)
+
 ---
 
 ### 📖 项目简介
@@ -314,11 +319,9 @@ SOFTWARE.
 
 ### 🌟 贡献者
 
-- **Maple** - 项目创建者和主要维护者
-- **社区贡献者** - 感谢所有提供反馈和建议的用户
-- **xiangfeidexiaohuo** - 感谢他提供的传感器监控思路
-- **你们** - 感谢屏幕面前的你，关注使用此项目，为此提供了莫大的贡献。
-[![Contributors](https://img.shields.io/github/contributors/Mapleawaa/PVE-Tools-9.svg?style=for-the-badge)](https://github.com/Mapleawaa/PVE-Tools-9/graphs/contributors)
+<a href="https://github.com/Mapleawaa/PVE-Tools-9/graphs/contributors">
+  <img src="https://contrib.rocks/image?repo=Mapleawaa/PVE-Tools-9" />
+</a>
 
 ### 🏛️ 相关组织与项目
 
@@ -353,3 +356,4 @@ SOFTWARE.
 [![GitHub](https://img.shields.io/badge/GitHub-SovitxNetworks-181717?logo=github&logoColor=white)](https://github.com/Mapleawaa)
 
 </div>
+[![Star History Chart](https://api.star-history.com/svg?repos=Mapleawaa/PVE-Tools-9&type=Date)](https://www.star-history.com/#Mapleawaa/PVE-Tools-9&Date)
