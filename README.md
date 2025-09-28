@@ -356,4 +356,4 @@ SOFTWARE.
 [![GitHub](https://img.shields.io/badge/GitHub-SovitxNetworks-181717?logo=github&logoColor=white)](https://github.com/Mapleawaa)
 
 </div>
-![Star History Chart](https://api.star-history.com/svg?repos=Mapleawaa/PVE-Tools-9&type=Date)](https://www.star-history.com/#Mapleawaa/PVE-Tools-9&Date)
+<img src="https://api.star-history.com/svg?repos=Mapleawaa/PVE-Tools-9&type=Date)](https://www.star-history.com/#Mapleawaa/PVE-Tools-9&Date"> </img>
