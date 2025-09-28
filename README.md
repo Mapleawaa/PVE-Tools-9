@@ -318,7 +318,7 @@ SOFTWARE.
 - **社区贡献者** - 感谢所有提供反馈和建议的用户
 - **xiangfeidexiaohuo** - 感谢他提供的传感器监控思路
 - **你们** - 感谢屏幕面前的你，关注使用此项目，为此提供了莫大的贡献。
-[![Contributors](https://img.shields.io/github/contributors/yourname/yourrepo.svg?style=for-the-badge)](https://github.com/yourname/yourrepo/graphs/contributors)
+[![Contributors](https://img.shields.io/github/contributors/Mapleawaa/PVE-Tools-9.svg?style=for-the-badge)](https://github.com/Mapleawaa/PVE-Tools-9/graphs/contributors)
 
 ### 🏛️ 相关组织与项目
 
