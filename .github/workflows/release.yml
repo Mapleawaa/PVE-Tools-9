@@ -1,0 +1,74 @@
+name: Release to Main
+on:
+  push:
+    tags:
+      - 'v[0-9]+.[0-9]+.[0-9]+'
+      - 'v[0-9]+.[0-9]+.[0-9]+-stable'
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # 获取所有历史以生成changelog
+      
+      - name: Get version from tag
+        id: get_version
+        run: |
+          VERSION=${GITHUB_REF#refs/tags/v}
+          echo "VERSION=$VERSION" >> $GITHUB_OUTPUT
+          
+      - name: Update VERSION file
+        run: |
+          echo "${{ steps.get_version.outputs.VERSION }}" > VERSION
+          
+      - name: Update script version
+        run: |
+          sed -i "s/CURRENT_VERSION=\".*\"/CURRENT_VERSION=\"${{ steps.get_version.outputs.VERSION }}\"/" PVE-Tools.sh
+          
+      - name: Commit version changes
+        run: |
+          git config --local user.email "action@github.com"
+          git config --local user.name "GitHub Action"
+          git add VERSION PVE-Tools.sh
+          git commit -m "chore: update version to ${{ steps.get_version.outputs.VERSION }}" || echo "No changes to commit"
+          
+      - name: Push changes
+        uses: ad-m/github-push-action@master
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          branch: main
+          
+      - name: Generate release notes
+        id: release_notes
+        run: |
+          # 生成基于提交历史的发布说明
+          LATEST_TAG=$(git describe --tags --abbrev=0)
+          PREVIOUS_TAG=$(git describe --tags --abbrev=0 $(git rev-list --tags --skip=1 --max-count=1))
+          CHANGELOG=$(git log --pretty=format:"%h - %s (%an)" $PREVIOUS_TAG..$LATEST_TAG)
+          echo "CHANGELOG<<EOF" >> $GITHUB_OUTPUT
+          echo "$CHANGELOG" >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
+          
+      - name: Create GitHub Release
+        uses: actions/create-release@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tag_name: ${{ github.ref }}
+          release_name: Release ${{ github.ref }}
+          body: |
+            ## 版本 ${{ steps.get_version.outputs.VERSION }}
+            
+            自动发布
+            
+            ${{ steps.release_notes.outputs.CHANGELOG }}
+            
+            ## 安装方式
+            
+            ```bash
+            bash <(curl -sSL https://github.com/Mapleawaa/PVE-Tools-9/blob/main/PVE-Tools.sh)
+            ```
+          draft: false
+          prerelease: false

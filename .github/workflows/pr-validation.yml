@@ -1,0 +1,41 @@
+name: PR Validation
+on:
+  pull_request:
+    branches: [ main, beta ]
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Shellcheck
+        run: |
+          shellcheck -f gcc PVE-Tools.sh > shellcheck_results.txt || true
+          cat shellcheck_results.txt || true
+          if grep -q "error\|warning" shellcheck_results.txt; then
+            echo "Shellcheck found issues. Please fix them before merging."
+            exit 1
+          fi
+          
+      - name: Shell syntax check
+        run: |
+          bash -n PVE-Tools.sh
+          
+      - name: Version consistency check
+        run: |
+          SCRIPT_VERSION=$(grep "CURRENT_VERSION=" PVE-Tools.sh | cut -d'"' -f2)
+          VERSION_FILE_VERSION=$(cat VERSION 2>/dev/null)
+          if [ "$SCRIPT_VERSION" != "$VERSION_FILE_VERSION" ]; then
+            echo "Version inconsistency: script($SCRIPT_VERSION) != version file($VERSION_FILE_VERSION)"
+            exit 1
+          fi
+          
+      - name: Security scan
+        run: |
+          # 检查是否有潜在的安全问题
+          if grep -q "eval\|source" PVE-Tools.sh; then
+            echo "Potential security issues found: eval or source commands detected"
+          else
+            echo "No security issues detected"
+          fi
