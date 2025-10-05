@@ -6,17 +6,26 @@
 # Auther:Maple 二次修改使用请不要删除此段注释
 
 # 版本信息
-CURRENT_VERSION="3.0.0"
+CURRENT_VERSION="3.1.0"
 VERSION_FILE_URL="https://raw.githubusercontent.com/Mapleawaa/PVE-Tools-9/main/VERSION"
 
-# 颜色定义
+# 颜色定义 - 保持一致性
 RED='\033[0;31m'
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
 BLUE='\033[0;34m'
 CYAN='\033[0;36m'
 MAGENTA='\033[0;35m'
+WHITE='\033[1;37m'
+ORANGE='\033[0;33m'  # Alternative to YELLOW for warnings
 NC='\033[0m' # No Color
+
+# UI 界面一致性常量
+UI_BORDER="${CYAN}┌──────────────────────────────────────────┐${NC}"
+UI_DIVIDER="${CYAN}├──────────────────────────────────────────┤${NC}"
+UI_FOOTER="${CYAN}└──────────────────────────────────────────┘${NC}"
+UI_HEADER="${CYAN}----------------------------------------${NC}"
+UI_FOOTER_SHORT="${CYAN}----------------------------------------${NC}"
 
 # 镜像源配置
 MIRROR_USTC="https://mirrors.ustc.edu.cn/proxmox/debian/pve"
@@ -404,15 +413,18 @@ remove_old_kernels() {
 # 内核管理主菜单
 kernel_management_menu() {
     while true; do
-        echo -e "\n${CYAN}--------------- 内核管理菜单 ---------------${NC}"
-        echo -e "  ${GREEN}1${NC}. 显示当前内核信息"
-        echo -e "  ${GREEN}2${NC}. 查看可用内核列表"
-        echo -e "  ${GREEN}3${NC}. 安装新内核"
-        echo -e "  ${GREEN}4${NC}. 设置默认启动内核"
-        echo -e "  ${GREEN}5${NC}. 清理旧内核"
-        echo -e "  ${GREEN}6${NC}. 重启系统应用新内核"
-        echo -e "  ${GREEN}0${NC}. 返回主菜单"
-        echo -e "${CYAN}--------------------------------------------${NC}"
+        echo -e "\n${UI_BORDER}"
+        echo -e "${CYAN}│${NC} ${YELLOW}内核管理菜单${NC} ${CYAN}                                  │${NC}"
+        echo -e "${UI_DIVIDER}"
+        show_menu_option "1" "显示当前内核信息"
+        show_menu_option "2" "查看可用内核列表"
+        show_menu_option "3" "安装新内核"
+        show_menu_option "4" "设置默认启动内核"
+        show_menu_option "5" "清理旧内核"
+        show_menu_option "6" "重启系统应用新内核"
+        echo -e "${UI_DIVIDER}"
+        show_menu_option "0" "返回主菜单"
+        echo -e "${UI_FOOTER}"
         
         read -p "请选择操作 [0-6]: " choice
         
@@ -462,7 +474,7 @@ kernel_management_menu() {
         esac
         
         echo
-        read -p "按回车键继续..."
+        pause_function
     done
 }
 
@@ -764,8 +776,8 @@ update_system() {
     log_success "系统更新完成！您的 PVE 现在是最新版本"
 }
 
-# 暂停函数
-pause() {
+# 标准化暂停函数
+pause_function() {
     read -n 1 -p "按任意键继续... " input
     if [[ -n ${input} ]]; then
         echo -e "\b
@@ -780,7 +792,7 @@ enable_pass() {
     log_step "开启硬件直通..."
     if [ `dmesg | grep -e DMAR -e IOMMU|wc -l` = 0 ];then
         log_error "您的硬件不支持直通！不如检查一下主板的BIOS设置？"
-        pause
+        pause_function
         return
     fi
     if [ `cat /proc/cpuinfo|grep Intel|wc -l` = 0 ];then
@@ -826,7 +838,7 @@ disable_pass() {
     if [ `dmesg | grep -e DMAR -e IOMMU|wc -l` = 0 ];then
         log_error "您的硬件不支持直通！"
         log_tips "不如检查一下主板的BIOS设置？"
-        pause
+        pause_function
         return
     fi
     if [ `cat /proc/cpuinfo|grep Intel|wc -l` = 0 ];then
@@ -857,33 +869,32 @@ hw_passth() {
     while :; do
         clear
         show_banner
-        cat<<-EOF
-${YELLOW}              配置硬件直通${NC}
-┌──────────────────────────────────────────┐
-    1. 开启硬件直通
-    2. 关闭硬件直通
-├──────────────────────────────────────────┤
-    0. 返回
-└──────────────────────────────────────────┘
-EOF
-        echo -ne " 请选择: [ ]\b\b"
-        read -t 60 hwmenuid
+        echo -e "${UI_BORDER}"
+        echo -e "${CYAN}│${NC} ${YELLOW}配置硬件直通${NC} ${CYAN}                                  │${NC}"
+        echo -e "${UI_DIVIDER}"
+        show_menu_option "1" "开启硬件直通"
+        show_menu_option "2" "关闭硬件直通"
+        echo -e "${UI_DIVIDER}"
+        show_menu_option "0" "返回"
+        echo -e "${UI_FOOTER}"
+        read -p "请选择: [ ]" -n 1 hwmenuid
+        echo  # New line after input
         hwmenuid=${hwmenuid:-0}
         case "${hwmenuid}" in
             1)
                 enable_pass
-                pause
+                pause_function
                 ;;
             2)
                 disable_pass
-                pause
+                pause_function
                 ;;
             0)
                 break
                 ;;
             *)
                 log_error "无效选项!"
-                pause
+                pause_function
                 ;;
         esac
     done
@@ -897,30 +908,26 @@ cpupower() {
     while :; do
         clear
         show_banner
-        cat <<-EOF
---------------------------------------------
-             设置CPU电源模式
-┌──────────────────────────────────────────┐
-
-    1. 设置CPU模式 conservative  保守模式   [变身老年机]
-    2. 设置CPU模式 ondemand       按需模式  [默认]
-    3. 设置CPU模式 powersave      节能模式  [省电小能手]    
-    4. 设置CPU模式 performance   性能模式   [性能释放]
-    5. 设置CPU模式 schedutil      负载模式  [交给负载自动配置]
-
-    6. 恢复系统默认电源设置
-
-├──────────────────────────────────────────┤
-    0. 返回
-└──────────────────────────────────────────┘
-EOF
+        echo -e "${UI_BORDER}"
+        echo -e "${CYAN}│${NC} ${YELLOW}设置CPU电源模式${NC} ${CYAN}                               │${NC}"
+        echo -e "${UI_DIVIDER}"
+        echo -e "  ${GREEN}1${NC}. 设置CPU模式 conservative  保守模式   [变身老年机]"
+        echo -e "  ${GREEN}2${NC}. 设置CPU模式 ondemand       按需模式  [默认]"
+        echo -e "  ${GREEN}3${NC}. 设置CPU模式 powersave      节能模式  [省电小能手]"
+        echo -e "  ${GREEN}4${NC}. 设置CPU模式 performance   性能模式   [性能释放]"
+        echo -e "  ${GREEN}5${NC}. 设置CPU模式 schedutil      负载模式  [交给负载自动配置]"
+        echo -e ""
+        echo -e "  ${GREEN}6${NC}. 恢复系统默认电源设置"
+        echo -e "${UI_DIVIDER}"
+        show_menu_option "0" "返回"
+        echo -e "${UI_FOOTER}"
         echo
         echo "部分CPU仅支持 performance 和 powersave 模式，只能选择这两项，其他模式无效不要选！"
         echo
         echo "你的CPU支持 ${governors} 模式"
         echo
-        echo -ne " 请选择: [ ]\b\b"
-        read -t 60 cpupowerid
+        read -p "请选择: [ ]" -n 1 cpupowerid
+        echo  # New line after input
         cpupowerid=${cpupowerid:-2}
         case "${cpupowerid}" in
             1)
@@ -940,7 +947,7 @@ EOF
                 ;;
             6)
                 cpupower_del
-                pause
+                pause_function
                 break
                 ;;
             0)
@@ -948,7 +955,7 @@ EOF
                 ;;
             *)
                 log_error "你的输入无效 ,请重新输入 ! 你在干什么？"
-                pause
+                pause_function
                 ;;
         esac
         if [[ ${GOVERNOR} != "" ]]; then
@@ -956,11 +963,11 @@ EOF
                 echo "您选择的CPU模式：${GOVERNOR}"
                 echo
                 cpupower_add
-                pause
+                pause_function
             else
                 log_error "您的CPU不支持该模式！"
                 log_tips "现在暂时不会对你的系统造成影响，但是下次开机时，CPU模式会恢复为默认模式。"
-                pause
+                pause_function
             fi
         fi
     done
@@ -1016,7 +1023,7 @@ cpu_add() {
     echo pve版本$pvever
 
     # 判断是否已经执行过修改
-    [ ! -e $nodes.$pvever.bak ] || { log_warn "已经执行过修改，请勿重复执行"; pause; return;}
+    [ ! -e $nodes.$pvever.bak ] || { log_warn "已经执行过修改，请勿重复执行"; pause_function; return;}
 
     # 先刷新下源
     log_step "更新软件包列表..."
@@ -1058,7 +1065,7 @@ cpu_add() {
             log_tips "请检查你的硬件是否支持，或者尝试手动安装驱动。"
             log_tips "手动安装驱动方法：去制造商官网找驱动，然后手动安装。不会装驱动建议去问问AI"
             log_tips "猜你再找: https://claude.ai"
-            pause
+            pause_function
             return
         else
             for i in $drivers
@@ -1688,7 +1695,7 @@ pve9_ceph() {
     esac
     if [ ! $sver ];then
         log_error "版本不支持！"
-        pause
+        pause_function
         return
     fi
 
@@ -1725,7 +1732,7 @@ pve8_ceph() {
     esac
     if [ ! $sver ];then
         log_error "版本不支持！"
-        pause
+        pause_function
         return
     fi
 
@@ -2005,8 +2012,9 @@ EOF
 show_system_info() {
     log_step "为您展示系统运行状况"
     echo
-    echo -e "${CYAN}系统信息概览${NC}"
-    echo -e "${BLUE}----------------------------------------${NC}"
+    echo -e "${UI_BORDER}"
+    echo -e "${CYAN}│${NC} ${YELLOW}系统信息概览${NC} ${CYAN}                                  │${NC}"
+    echo -e "${UI_DIVIDER}"
     echo -e "PVE 版本: ${GREEN}$(pveversion | head -n1)${NC}"
     echo -e "内核版本: ${GREEN}$(uname -r)${NC}"
     echo -e "CPU 信息: ${GREEN}$(lscpu | grep 'Model name' | sed 's/Model name:[ \t]*//')${NC}"
@@ -2021,35 +2029,37 @@ show_system_info() {
     echo -e "网络接口:"
     ip -br addr show | awk '{print "  "$1" "$3}'
     echo -e "当前时间: ${GREEN}$(date)${NC}"
-    echo -e "${BLUE}----------------------------------------${NC}"
+    echo -e "${UI_FOOTER}"
 }
 
 # 主菜单
 show_menu() {
-    echo -e "${MAGENTA}请选择您需要的功能：${NC}"
-    echo
-    echo -e "${YELLOW}1.${NC} 更换软件源 ${GREEN}(强烈推荐，让下载飞起来)${NC}"
-    echo -e "${YELLOW}2.${NC} 删除订阅弹窗 ${GREEN}(告别烦人提醒)${NC} | ${RED}（谨慎操作）并且只能在SSH环境下使用否则会被截断${NC}"
-    echo -e "${YELLOW}3.${NC} 合并 local 与 local-lvm ${CYAN}(小硬盘救星)${NC}"
-    echo -e "${YELLOW}4.${NC} 删除 Swap 分区 ${CYAN}(释放更多空间)${NC}"
-    echo -e "${YELLOW}5.${NC} 更新系统 ${GREEN}(保持最新状态)${NC}"
-    echo -e "${YELLOW}6.${NC} 显示系统信息 ${BLUE}(查看运行状况)${NC}"
+    echo -e "${UI_BORDER}"
+    echo -e "${CYAN}│${NC} ${YELLOW}请选择您需要的功能：${NC} ${CYAN}                           │${NC}"
+    echo -e "${UI_DIVIDER}"
+    show_menu_option "1" "更换软件源 ${GREEN}(强烈推荐，让下载飞起来)${NC}"
+    show_menu_option "2" "删除订阅弹窗 ${GREEN}(告别烦人提醒)${NC} | ${RED}（谨慎操作）并且只能在SSH环境下使用否则会被截断${NC}"
+    show_menu_option "3" "合并 local 与 local-lvm ${CYAN}(小硬盘救星)${NC}"
+    show_menu_option "4" "删除 Swap 分区 ${CYAN}(释放更多空间)${NC}"
+    show_menu_option "5" "更新系统 ${GREEN}(保持最新状态)${NC}"
+    show_menu_option "6" "显示系统信息 ${BLUE}(查看运行状况)${NC}"
     echo -e ""
-    echo -e "${YELLOW}7.${NC} 一键配置 ${MAGENTA}(换源+删弹窗+更新，懒人必选，推荐在SSH下使用)${NC}"
+    show_menu_option "7" "一键配置 ${MAGENTA}(换源+删弹窗+更新，懒人必选，推荐在SSH下使用)${NC}"
     echo -e ""
-    echo -e "${YELLOW}8.${NC} 硬件直通配置 ${BLUE}(PCI设备直通设置)${NC}"
-    echo -e "${YELLOW}9.${NC} CPU电源模式 ${BLUE}(调整CPU性能模式)${NC}"
-    echo -e "${YELLOW}10.${NC} 温度监控设置 ${BLUE}(CPU/硬盘温度显示)${NC}"
-    echo -e "${YELLOW}11.${NC} 温度监控移除 ${BLUE}(移除温度监控功能)${NC}"
-    echo -e "${YELLOW}12.${NC} 添加ceph-squid源 ${BLUE}(PVE8/9专用)${NC}"
-    echo -e "${YELLOW}13.${NC} 添加ceph-quincy源 ${BLUE}(PVE7/8专用)${NC}"
-    echo -e "${YELLOW}14.${NC} 卸载Ceph ${BLUE}(完全移除Ceph)${NC}"
-    echo -e "${YELLOW}15.${NC} 内核管理 ${MAGENTA}(内核切换/更新/清理)${NC}"
+    show_menu_option "8" "硬件直通配置 ${BLUE}(PCI设备直通设置)${NC}"
+    show_menu_option "9" "CPU电源模式 ${BLUE}(调整CPU性能模式)${NC}"
+    show_menu_option "10" "温度监控设置 ${BLUE}(CPU/硬盘温度显示)${NC}"
+    show_menu_option "11" "温度监控移除 ${BLUE}(移除温度监控功能)${NC}"
+    show_menu_option "12" "添加ceph-squid源 ${BLUE}(PVE8/9专用)${NC}"
+    show_menu_option "13" "添加ceph-quincy源 ${BLUE}(PVE7/8专用)${NC}"
+    show_menu_option "14" "卸载Ceph ${BLUE}(完全移除Ceph)${NC}"
+    show_menu_option "15" "内核管理 ${MAGENTA}(内核切换/更新/清理)${NC}"
     echo -e ""
-    echo -e "${YELLOW}16.${NC} PVE8 升级到 PVE9 ${RED}(PVE8专用)${NC}"
+    show_menu_option "16" "PVE8 升级到 PVE9 ${RED}(PVE8专用)${NC}"
     echo -e ""
-    echo -e "${YELLOW}0.${NC} 退出脚本"
-    echo -e "${MAGENTA}520.${NC} 给作者点个Star吧，谢谢喵~ ${NC}"
+    show_menu_option "0" "退出脚本"
+    show_menu_option "520" "给作者点个Star吧，谢谢喵~ ${NC}"
+    echo -e "${UI_FOOTER}"
     echo
     echo -e "${CYAN}小贴士：新装系统推荐选择 7 进行一键配置${NC}"
     echo -n -e "${GREEN}请输入您的选择 [0-16]: ${NC}"
@@ -2070,19 +2080,39 @@ quick_setup() {
     echo -e "${CYAN}现在您可以愉快地使用 PVE 了！${NC}"
 }
 
+# 通用UI函数
+show_menu_header() {
+    local title="$1"
+    echo -e "${UI_BORDER}"
+    echo -e "${CYAN}│${NC} ${YELLOW}$title${NC} ${CYAN}│${NC}"
+    echo -e "${UI_DIVIDER}"
+}
+
+show_menu_footer() {
+    echo -e "${UI_FOOTER}"
+}
+
+show_menu_option() {
+    local num="$1"
+    local desc="$2"
+    local color="${3:-$GREEN}" # Default to green if no color specified
+    echo -e "  ${color}$num${NC}. $desc"
+}
+
 # 镜像源选择函数
 select_mirror() {
     while true; do
         clear
         show_banner
-        echo -e "先选择一下镜像源吧！"
-        echo -e "${CYAN}----------------- 镜像源选择 ------------------${NC}"
-        echo -e "请选择默认镜像源："
-        echo -e "  ${GREEN}1${NC}. 中科大镜像源"
-        echo -e "  ${GREEN}2${NC}. 清华Tuna镜像源"
-        echo -e "  ${GREEN}3${NC}. Debian默认源 ${YELLOW}非必要请勿使用本源${NC}"
-        echo -e "${CYAN}----------------------------------------------${NC}"
+        echo -e "${UI_BORDER}"
+        echo -e "${CYAN}│${NC} ${YELLOW}请选择镜像源${NC} ${CYAN}                                │${NC}"
+        echo -e "${UI_DIVIDER}"
+        show_menu_option "1" "中科大镜像源"
+        show_menu_option "2" "清华Tuna镜像源" 
+        show_menu_option "3" "Debian默认源 ${YELLOW}非必要请勿使用本源${NC}"
+        echo -e "${UI_DIVIDER}"
         echo -e "${YELLOW}注意：选择后将作为后续所有软件源操作的基础${NC}"
+        echo -e "${UI_FOOTER}"
         echo
         
         read -p "请选择 [1-3]: " mirror_choice
@@ -2105,8 +2135,7 @@ select_mirror() {
                 ;;
             *)
                 log_error "无效选择，请重新输入"
-                echo -e "${YELLOW}按回车键继续...${NC}"
-                read -r
+                pause_function
                 ;;
         esac
     done
@@ -2267,8 +2296,7 @@ main() {
         esac
         
         echo
-        echo -e "${YELLOW}按回车键返回主菜单...${NC}"
-        read -r
+        pause_function
     done
 }
 
