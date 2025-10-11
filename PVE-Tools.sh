@@ -2220,7 +2220,7 @@ show_menu_option() {
     local num="$1"
     local desc="$2"
     local color="${3:-$GREEN}" # Default to green if no color specified
-    printf "%b" "  ${color}%-3s${NC}. %s\\n" "$num" "$desc"
+    printf "  ${color}%-3s${NC}. %s\\n" "$num" "$desc"
 }
 
 # 镜像源选择函数
