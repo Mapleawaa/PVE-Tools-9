@@ -6,7 +6,7 @@
 # Auther:Maple 二次修改使用请不要删除此段注释
 
 # 版本信息
-CURRENT_VERSION="3.3.1"
+CURRENT_VERSION="4.0.0"
 VERSION_FILE_URL="https://raw.githubusercontent.com/Mapleawaa/PVE-Tools-9/main/VERSION"
 
 # 颜色定义 - 保持一致性
@@ -1962,16 +1962,17 @@ pve8_to_pve9_upgrade() {
     current_pve_version=$(pveversion | head -n1 | cut -d'/' -f2 | cut -d'-' -f1)
     log_info "更新后 PVE 版本: ${GREEN}$current_pve_version${NC}"
     
+    # PVE8.4 自带这个包，此处无需检查安装，apt 源无此包会报错。
     # 2. 安装和运行 pve8to9 检查工具
-    log_info "安装 pve8to9 升级检查工具..."
-    if ! apt install -y pve8to9; then
-        log_warn "pve8to9 工具安装失败，尝试手动安装..."
-        # 尝试手动添加 PVE 8 仓库安装 pve8to9
-        if ! apt install -y pve8to9; then
-            log_error "无法安装 pve8to9 检查工具,奇怪！请检查网络连接或源配置，或者前往作者的GitHub反馈issue.."
-            return 1
-        fi
-    fi
+    # log_info "安装 pve8to9 升级检查工具..."
+    # if ! apt install -y pve8to9; then
+    #     log_warn "pve8to9 工具安装失败，尝试手动安装..."
+    #     # 尝试手动添加 PVE 8 仓库安装 pve8to9
+    #     if ! apt install -y pve8to9; then
+    #         log_error "无法安装 pve8to9 检查工具,奇怪！请检查网络连接或源配置，或者前往作者的GitHub反馈issue.."
+    #         return 1
+    #     fi
+    # fi
     
     log_info "运行升级前检查..."
     echo -e "${CYAN}pve8to9 检查结果：${NC}"
@@ -2270,8 +2271,8 @@ select_mirror() {
 check_update() {
     log_info "正在检查更新..."
     
-    # 下载版本文件的函数（带超时）
-    download_version_file() {
+    # 下载文件的函数（带超时）
+    download_file() {
         local url="$1"
         local timeout=10
         
@@ -2288,13 +2289,13 @@ check_update() {
     echo -ne "[....] 正在检查更新...\033[0K\r"
     
     # 首先尝试从GitHub下载版本文件
-    remote_content=$(download_version_file "$VERSION_FILE_URL")
+    remote_content=$(download_file "$VERSION_FILE_URL")
     
     # 如果GitHub下载失败，自动尝试镜像源
     if [ -z "$remote_content" ]; then
         echo -ne "[WARN] GitHub连接失败，尝试镜像源...\033[0K\r"
         mirror_url="https://ghfast.top/Mapleawaa/PVE-Tools-9/main/VERSION"
-        remote_content=$(download_version_file "$mirror_url")
+        remote_content=$(download_file "$mirror_url")
     fi
     
     # 清除进度显示
@@ -2312,11 +2313,21 @@ check_update() {
     
     # 提取版本号和更新日志
     remote_version=$(echo "$remote_content" | head -1 | tr -d '[:space:]')
-    changelog=$(echo "$remote_content" | tail -n +2)
+    version_changelog=$(echo "$remote_content" | tail -n +2)
     
     if [ -z "$remote_version" ]; then
         log_warn "获取的版本信息格式不正确"
         return
+    fi
+    
+    # 尝试获取详细的更新日志
+    UPDATE_FILE_URL="https://raw.githubusercontent.com/Mapleawaa/PVE-Tools-9/main/UPDATE"
+    detailed_changelog=$(download_file "$UPDATE_FILE_URL")
+    
+    # 如果GitHub的UPDATE文件获取失败，尝试镜像源
+    if [ -z "$detailed_changelog" ]; then
+        mirror_update_url="https://ghfast.top/Mapleawaa/PVE-Tools-9/main/UPDATE"
+        detailed_changelog=$(download_file "$mirror_update_url")
     fi
     
     # 比较版本
@@ -2326,7 +2337,19 @@ check_update() {
         echo "当前版本: $CURRENT_VERSION"
         echo "最新版本: $remote_version"
         echo "更新内容："
-        echo "$changelog"
+        
+        # 如果获取到了详细的更新日志，则显示详细内容，否则显示从VERSION文件中获取的内容
+        if [ -n "$detailed_changelog" ]; then
+            echo "$detailed_changelog"
+        else
+            # 格式化显示版本文件中的更新内容
+            if [ -n "$version_changelog" ] && [ "$version_changelog" != "$remote_version" ]; then
+                echo "$version_changelog"
+            else
+                echo "  - 请查看项目页面获取详细更新内容"
+            fi
+        fi
+        
         echo "----------------------------------------------"
         echo "请访问项目页面获取最新版本："
         echo "https://github.com/Mapleawaa/PVE-Tools-9"
