@@ -2255,7 +2255,10 @@ quick_setup() {
 show_menu_header() {
     local title="$1"
     echo -e "${UI_BORDER}"
-    printf "${CYAN}│${NC} %-${#UI_BORDER-9}s ${CYAN}│${NC}\n" "$title"  # -9 accounts for the │, NC tags and padding
+    local border_length=50  # Fixed length of the border
+    local content_length=$(echo -n "$title" | wc -c)
+    local padding_length=$((border_length - 4 - content_length))  # 4 accounts for │ and NC tags
+    printf "${CYAN}│${NC} %s%*s ${CYAN}│${NC}\n" "$title" $padding_length ""
     echo -e "${UI_DIVIDER}"
 }
 
