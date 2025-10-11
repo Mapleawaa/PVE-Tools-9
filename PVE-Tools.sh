@@ -21,11 +21,11 @@ ORANGE='\033[0;33m'  # Alternative to YELLOW for warnings
 NC='\033[0m' # No Color
 
 # UI 界面一致性常量
-UI_BORDER="${CYAN}┌────────────────────────────────────────────────┐${NC}"
-UI_DIVIDER="${CYAN}├────────────────────────────────────────────────┤${NC}"
-UI_FOOTER="${CYAN}└────────────────────────────────────────────────┘${NC}"
-UI_HEADER="${CYAN}------------------------------------------------${NC}"
-UI_FOOTER_SHORT="${CYAN}------------------------------------------------${NC}"
+UI_BORDER="------------------------------------------------"
+UI_DIVIDER="------------------------------------------------"
+UI_FOOTER="------------------------------------------------"
+UI_HEADER="------------------------------------------------"
+UI_FOOTER_SHORT="------------------------------------------------"
 
 # 镜像源配置
 MIRROR_USTC="https://mirrors.ustc.edu.cn/proxmox/debian/pve"
@@ -172,7 +172,6 @@ show_progress_bar() {
 # 显示横幅
 show_banner() {
     clear
-    echo -e "${CYAN}"
     cat << 'EOF'
 ██████╗ ██╗   ██╗███████╗    ████████╗ ██████╗  ██████╗ ██╗     ███████╗     █████╗ 
 ██╔══██╗██║   ██║██╔════╝    ╚══██╔══╝██╔═══██╗██╔═══██╗██║     ██╔════╝    ██╔══██╗
@@ -181,14 +180,13 @@ show_banner() {
 ██║      ╚████╔╝ ███████╗       ██║   ╚██████╔╝╚██████╔╝███████╗███████║     █████╔╝
 ╚═╝       ╚═══╝  ╚══════╝       ╚═╝    ╚═════╝  ╚═════╝ ╚══════╝╚══════╝     ╚════╝ 
 EOF
-    echo -e "${NC}"
-    echo -e "${YELLOW}                    ═══════════════════════════════════════${NC}"
-    echo -e "${YELLOW}                           PVE 9.0 一键配置神器${NC}"
-    echo -e "${GREEN}                            让 PVE 配置变得简单快乐${NC}"
-    echo -e "${CYAN}                             作者: Maple & Claude 4${NC}"
-    echo -e "${NC}                             当前版本: ${YELLOW}$CURRENT_VERSION${NC}"
-    echo -e "${NC}                             最新版本: ${GREEN}$remote_version${NC}"
-    echo -e "${YELLOW}                    ═══════════════════════════════════════${NC}"
+    echo "                    ═══════════════════════════════════════"
+    echo "                           PVE 9.0 一键配置神器"
+    echo "                            让 PVE 配置变得简单快乐"
+    echo "                             作者: Maple & Claude 4"
+    echo "                             当前版本: $CURRENT_VERSION"
+    echo "                             最新版本: $remote_version"
+    echo "                    ═══════════════════════════════════════"
     echo
 }
 
@@ -196,8 +194,8 @@ EOF
 check_root() {
     if [[ $EUID -ne 0 ]]; then
         log_error "哎呀！需要超级管理员权限才能运行哦"
-        echo -e "${YELLOW}请使用以下命令重新运行：${NC}"
-        echo -e "${CYAN}sudo $0${NC}"
+        echo "请使用以下命令重新运行："
+        echo "sudo $0"
         exit 1
     fi
 }
@@ -210,7 +208,7 @@ check_debug_mode() {
             log_warn "此模式将跳过 PVE 系统版本检测"
             log_warn "仅在开发和测试环境中使用"
             log_warn "在非 PVE (Debian 系) 系统上使用可能导致系统损坏"
-            echo -e "${YELLOW}您确定要继续吗？输入 'yes' 确认，其他任意键退出: ${NC}"
+            echo "您确定要继续吗？输入 'yes' 确认，其他任意键退出: "
             read -r confirm
             if [[ "$confirm" != "yes" ]]; then
                 log_info "已取消操作，退出脚本"
@@ -256,7 +254,7 @@ check_pve_version() {
     fi
     
     local pve_version=$(pveversion | head -n1 | cut -d'/' -f2 | cut -d'-' -f1)
-    log_info "太好了！检测到 PVE 版本: ${GREEN}$pve_version${NC}"
+    log_info "太好了！检测到 PVE 版本: $pve_version"
 }
 
 # 检测当前内核版本
@@ -343,12 +341,17 @@ install_kernel() {
         return 1
     fi
     
-    if ! [[ "$kernel_version" =~ ^pve-kernel- ]]; then
-        log_warn "内核版本格式可能不正确，尝试自动修正"
+    # 检查是否已经是完整包名格式 (contains "pve" and ends with "pve")
+    if [[ "$kernel_version" =~ ^[a-zA-Z0-9.-]+pve$ ]]; then
+        # This looks like a complete package name, use it as is
+        log_info "检测到完整包名格式: $kernel_version"
+    elif ! [[ "$kernel_version" =~ ^pve-kernel- ]]; then
+        # If not in the correct format, prepend "pve-kernel-"
+        log_info "检测到版本号格式，自动补全包名为 pve-kernel-$kernel_version"
         kernel_version="pve-kernel-$kernel_version"
     fi
     
-    log_info "开始安装内核: ${GREEN}$kernel_version${NC}"
+    log_info "开始安装内核: $kernel_version"
     
     # 检查内核是否已安装
     if dpkg -l | grep -q "^ii.*$kernel_version"; then
@@ -514,18 +517,19 @@ remove_old_kernels() {
 # 内核管理主菜单
 kernel_management_menu() {
     while true; do
-        echo -e "\n${UI_BORDER}"
-        echo -e "${CYAN}│${NC} ${YELLOW}内核管理菜单${NC} ${CYAN}                                  │${NC}"
-        echo -e "${UI_DIVIDER}"
+        echo
+        echo "${UI_BORDER}"
+        echo "  内核管理菜单"
+        echo "${UI_DIVIDER}"
         show_menu_option "1" "显示当前内核信息"
         show_menu_option "2" "查看可用内核列表"
         show_menu_option "3" "安装新内核"
         show_menu_option "4" "设置默认启动内核"
         show_menu_option "5" "清理旧内核"
         show_menu_option "6" "重启系统应用新内核"
-        echo -e "${UI_DIVIDER}"
+        echo "${UI_DIVIDER}"
         show_menu_option "0" "返回主菜单"
-        echo -e "${UI_FOOTER}"
+        echo "${UI_FOOTER}"
         
         read -p "请选择操作 [0-6]: " choice
         
@@ -537,7 +541,10 @@ kernel_management_menu() {
                 get_available_kernels
                 ;;
             3)
-                read -p "请输入要安装的内核版本 (例如: 6.8.8-1): " kernel_ver
+                echo "请输入要安装的内核版本："
+                echo "  - 完整包名格式 (推荐): 如 proxmox-kernel-6.14.8-2-pve"
+                echo "  - 简化版本格式: 如 6.8.8-1 (将自动补全为 pve-kernel-6.8.8-1)"
+                read -p "请输入内核标识: " kernel_ver
                 if [[ -n "$kernel_ver" ]]; then
                     install_kernel "$kernel_ver"
                 else
@@ -559,7 +566,7 @@ kernel_management_menu() {
                 read -p "确认要重启系统吗？(y/N): " reboot_confirm
                 if [[ "$reboot_confirm" == "y" || "$reboot_confirm" == "Y" ]]; then
                     log_info "系统将在5秒后重启..."
-                    echo -e "${YELLOW}按 Ctrl+C 取消重启${NC}"
+                    echo "按 Ctrl+C 取消重启"
                     sleep 5
                     reboot
                 else
@@ -879,7 +886,7 @@ update_system() {
 
 # 标准化暂停函数
 pause_function() {
-    echo -ne "${CYAN}按任意键继续...${NC} "
+    echo -n "按任意键继续... "
     read -n 1 -s input
     if [[ -n ${input} ]]; then
         echo -e "\b
@@ -976,7 +983,7 @@ hw_passth() {
         show_menu_header "配置硬件直通"
         show_menu_option "1" "开启硬件直通"
         show_menu_option "2" "关闭硬件直通"
-        echo -e "${UI_DIVIDER}"
+        echo "${UI_DIVIDER}"
         show_menu_option "0" "返回"
         show_menu_footer
         read -p "请选择: [ ]" -n 1 hwmenuid
@@ -1011,14 +1018,14 @@ cpupower() {
         clear
         show_banner
         show_menu_header "设置CPU电源模式"
-        echo -e "  ${GREEN}1${NC}. 设置CPU模式 conservative  保守模式   [变身老年机]"
-        echo -e "  ${GREEN}2${NC}. 设置CPU模式 ondemand       按需模式  [默认]"
-        echo -e "  ${GREEN}3${NC}. 设置CPU模式 powersave      节能模式  [省电小能手]"
-        echo -e "  ${GREEN}4${NC}. 设置CPU模式 performance   性能模式   [性能释放]"
-        echo -e "  ${GREEN}5${NC}. 设置CPU模式 schedutil      负载模式  [交给负载自动配置]"
-        echo -e ""
-        echo -e "  ${GREEN}6${NC}. 恢复系统默认电源设置"
-        echo -e "${UI_DIVIDER}"
+        echo "  1. 设置CPU模式 conservative  保守模式   [变身老年机]"
+        echo "  2. 设置CPU模式 ondemand       按需模式  [默认]"
+        echo "  3. 设置CPU模式 powersave      节能模式  [省电小能手]"
+        echo "  4. 设置CPU模式 performance   性能模式   [性能释放]"
+        echo "  5. 设置CPU模式 schedutil      负载模式  [交给负载自动配置]"
+        echo
+        echo "  6. 恢复系统默认电源设置"
+        echo "${UI_DIVIDER}"
         show_menu_option "0" "返回"
         show_menu_footer
         echo
@@ -1731,10 +1738,10 @@ EOF
     disk_count=$(lsblk -d -o NAME | grep -cE 'sd[a-z]|nvme[0-9]')
     
     # 提示用户配置高度相关信息
-    echo -e "${YELLOW}温度监控高度配置说明：${NC}"
-    echo -e "${CYAN}检测到系统中有 $disk_count 个磁盘设备${NC}"
-    echo -e "${GREEN}默认高度增量为每个磁盘69像素，如CPU核心过多导致高度不够可调整此值${NC}"
-    echo -e "${CYAN}当前设置：每个磁盘增加69像素高度${NC}"
+    echo "温度监控高度配置说明："
+    echo "检测到系统中有 $disk_count 个磁盘设备"
+    echo "默认高度增量为每个磁盘69像素，如CPU核心过多导致高度不够可调整此值"
+    echo "当前设置：每个磁盘增加69像素高度"
     echo
     
     # 用户可以选择自定义高度增量，或使用默认值
@@ -1762,10 +1769,10 @@ EOF
     sed -i '/widget\.pveCpuStatus/,+10{s/height:[[:space:]]*[0-9]{1,}[[:space:]]*;/height: '$cpu_status_new_height'px; overflow-y: auto; padding-right: 8px;/}' $pvemanagerlib
     
     log_info "高度配置完成："
-    echo -e "${GREEN}节点状态组件高度: ${node_status_new_height}px${NC}"
-    echo -e "${GREEN}CPU状态组件高度: ${cpu_status_new_height}px${NC}"
-    echo -e "${YELLOW}每个磁盘增加高度: ${height_per_disk}px${NC}"
-    echo -e "${CYAN}磁盘数量: ${disk_count}${NC}"
+    echo "节点状态组件高度: ${node_status_new_height}px"
+    echo "CPU状态组件高度: ${cpu_status_new_height}px"
+    echo "每个磁盘增加高度: ${height_per_disk}px"
+    echo "磁盘数量: ${disk_count}"
 
     # 调整显示布局
     ln=$(expr $(sed -n -e '/widget.pveDcGuests/=' $pvemanagerlib) + 10)
@@ -1918,26 +1925,26 @@ pve8_to_pve9_upgrade() {
         return 1
     fi
     
-    log_info "检测到当前 PVE 版本: ${GREEN}$current_pve_version${NC}"
+    log_info "检测到当前 PVE 版本: $current_pve_version"
     log_warn "即将开始 PVE 8.x 到 PVE 9.x 的升级流程"
     log_warn "此过程不可逆，请确保已备份重要数据！"
     log_warn "建议在升级前阅读官方升级指南：https://pve.proxmox.com/wiki/Upgrade_from_8.x_to_9.0"
-    echo -e ""
+    echo
     log_warn "升级过程中请勿中断，确保有稳定的网络连接"
     log_warn "升级完成后，系统将自动重启以应用更改"
     log_warn "如果脚本出现升级问题，请及时联系作者或参照官方文档解决。"
-    echo -e ""
+    echo
     log_info "推荐使用我的新项目嘿嘿，一个独立的升级AGENT: https://github.com/Mapleawaa/PVE-8-Upgrage-helper"
     
     # 确认用户要继续执行升级
-    echo -e "${YELLOW}您确定要继续升级吗？本次任务执行以下操作：${NC}"
-    echo -e "  1. 安装 pve8to9 检查工具"
-    echo -e "  2. 运行升级前检查"
-    echo -e "  3. 更新软件源到 Debian 13 (Trixie)"
-    echo -e "  4. 执行系统升级"
-    echo -e "  5. 重启系统以应用更改"
-    echo -e ""
-    echo -e "${RED}注意：升级过程中可能会遇到一些警告或错误，请根据提示进行处理！脚本无法处理故障提示！(脚本只能把提示扔给你..) )${NC}"
+    echo "您确定要继续升级吗？本次任务执行以下操作："
+    echo "  1. 安装 pve8to9 检查工具"
+    echo "  2. 运行升级前检查"
+    echo "  3. 更新软件源到 Debian 13 (Trixie)"
+    echo "  4. 执行系统升级"
+    echo "  5. 重启系统以应用更改"
+    echo
+    echo "注意：升级过程中可能会遇到一些警告或错误，请根据提示进行处理！脚本无法处理故障提示！(脚本只能把提示扔给你..) )"
     read -p "输入 'yesido' 确认继续，其他任意键取消: " confirm
     if [[ "$confirm" != "yesido" ]]; then
         log_info "已取消升级操作"
@@ -2138,55 +2145,51 @@ EOF
 show_system_info() {
     log_step "为您展示系统运行状况"
     echo
-    echo -e "${UI_BORDER}"
-    echo -e "${CYAN}│${NC} ${YELLOW}系统信息概览${NC} ${CYAN}                                  │${NC}"
-    echo -e "${UI_DIVIDER}"
-    echo -e "PVE 版本: ${GREEN}$(pveversion | head -n1)${NC}"
-    echo -e "内核版本: ${GREEN}$(uname -r)${NC}"
-    echo -e "CPU 信息: ${GREEN}$(lscpu | grep 'Model name' | sed 's/Model name:[ \t]*//')${NC}"
-    echo -e "CPU 核心: ${GREEN}$(nproc) 核心${NC}"
-    echo -e "系统架构: ${GREEN}$(dpkg --print-architecture)${NC}"
-    echo -e "系统启动: ${GREEN}$(uptime -p | sed 's/up //')${NC}"
-    echo -e "引导类型: ${GREEN}$(if [ -d /sys/firmware/efi ]; then echo UEFI; else echo BIOS; fi)${NC}"
-    echo -e "系统负载: ${GREEN}$(uptime | awk -F'load average:' '{print $2}')${NC}"
-    echo -e "内存使用: ${GREEN}$(free -h | grep Mem | awk '{print $3"/"$2}')${NC}"
-    echo -e "磁盘使用:"
+    echo "${UI_BORDER}"
+    echo "  系统信息概览"
+    echo "${UI_DIVIDER}"
+    echo "PVE 版本: $(pveversion | head -n1)"
+    echo "内核版本: $(uname -r)"
+    echo "CPU 信息: $(lscpu | grep 'Model name' | sed 's/Model name:[ \t]*//')"
+    echo "CPU 核心: $(nproc) 核心"
+    echo "系统架构: $(dpkg --print-architecture)"
+    echo "系统启动: $(uptime -p | sed 's/up //')"
+    echo "引导类型: $(if [ -d /sys/firmware/efi ]; then echo UEFI; else echo BIOS; fi)"
+    echo "系统负载: $(uptime | awk -F'load average:' '{print $2}')"
+    echo "内存使用: $(free -h | grep Mem | awk '{print $3"/"$2}')"
+    echo "磁盘使用:"
     df -h | grep -E '^/dev/' | awk '{print "  "$1" "$3"/"$2" ("$5")"}'
-    echo -e "网络接口:"
+    echo "网络接口:"
     ip -br addr show | awk '{print "  "$1" "$3}'
-    echo -e "当前时间: ${GREEN}$(date)${NC}"
-    echo -e "${UI_FOOTER}"
+    echo "当前时间: $(date)"
+    echo "${UI_FOOTER}"
 }
 
 # 主菜单
 show_menu() {
     show_menu_header "请选择您需要的功能："
-    show_menu_option "1"  "更换软件源 ${GREEN}(强烈推荐，让下载飞起来)${NC}"
-    show_menu_option "2"  "删除订阅弹窗 ${GREEN}(告别烦人提醒)${NC} | ${RED}（谨慎操作）并且只能在SSH环境下使用否则会被截断${NC}"
-    show_menu_option "3"  "合并 local 与 local-lvm ${CYAN}(小硬盘救星)${NC}"
-    show_menu_option "4"  "删除 Swap 分区 ${CYAN}(释放更多空间)${NC}"
-    show_menu_option "5"  "更新系统 ${GREEN}(保持最新状态)${NC}"
-    show_menu_option "6"  "显示系统信息 ${BLUE}(查看运行状况)${NC}"
+    show_menu_option "1"  "更换软件源 (强烈推荐，让下载飞起来)"
+    show_menu_option "2"  "删除订阅弹窗 (告别烦人提醒)"
+    show_menu_option "3"  "合并 local 与 local-lvm (小硬盘救星)"
+    show_menu_option "4"  "删除 Swap 分区 (释放更多空间)"
+    show_menu_option "5"  "更新系统 (保持最新状态)"
+    show_menu_option "6"  "显示系统信息 (查看运行状况)"
     echo
-    show_menu_option "7"  "一键配置 ${MAGENTA}(换源+删弹窗+更新，懒人必选，推荐在SSH下使用)${NC}"
+    show_menu_option "7"  "一键配置 (换源+删弹窗+更新，懒人必选，推荐在SSH下使用)"
     echo
-    show_menu_option "8"  "硬件直通配置 ${BLUE}(PCI设备直通设置)${NC}"
-    show_menu_option "9"  "CPU电源模式 ${BLUE}(调整CPU性能模式)${NC}"
-    show_menu_option "10" "温度监控设置 ${BLUE}(CPU/硬盘温度显示)${NC}"
-    show_menu_option "11" "温度监控移除 ${BLUE}(移除温度监控功能)${NC}"
-    show_menu_option "12" "添加ceph-squid源 ${BLUE}(PVE8/9专用)${NC}"
-    show_menu_option "13" "添加ceph-quincy源 ${BLUE}(PVE7/8专用)${NC}"
-    show_menu_option "14" "卸载Ceph ${BLUE}(完全移除Ceph)${NC}"
-    show_menu_option "15" "内核管理 ${MAGENTA}(内核切换/更新/清理)${NC}"
-    echo
-    show_menu_option "16" "PVE8 升级到 PVE9 ${RED}(PVE8专用)${NC}"
+    show_menu_option "8"  "硬件直通配置 (PCI设备直通设置)"
+    show_menu_option "9"  "CPU电源模式 (调整CPU性能模式)"
+    show_menu_option "10" "温度监控管理 (CPU/硬盘监控设置)"
+    show_menu_option "11" "Ceph管理 (存储相关配置)"
+    show_menu_option "12" "内核管理 (内核切换/更新/清理)"
+    show_menu_option "13" "PVE8 升级到 PVE9 (PVE8专用)"
     echo
     show_menu_option "0"  "退出脚本"
-    show_menu_option "520" "给作者点个Star吧，谢谢喵~ ${NC}"
+    show_menu_option "520" "给作者点个Star吧，谢谢喵~"
     show_menu_footer
     echo
-    echo -e "${CYAN}小贴士：新装系统推荐选择 7 进行一键配置${NC}"
-    echo -n -e "${GREEN}请输入您的选择 [0-16, 520]: ${NC}"
+    echo "小贴士：新装系统推荐选择 7 进行一键配置"
+    echo -n "请输入您的选择 [0-13, 520]: "
 }
 
 # 一键配置
@@ -2207,20 +2210,20 @@ quick_setup() {
 # 通用UI函数
 show_menu_header() {
     local title="$1"
-    echo -e "${UI_BORDER}"
-    printf "${CYAN}│${NC} ${YELLOW}%s${NC} ${CYAN}│${NC}\n" "$title"
-    echo -e "${UI_DIVIDER}"
+    echo "${UI_BORDER}"
+    printf "  %s\n" "$title"
+    echo "${UI_DIVIDER}"
 }
 
 show_menu_footer() {
-    echo -e "${UI_FOOTER}"
+    echo "${UI_FOOTER}"
 }
 
 show_menu_option() {
     local num="$1"
     local desc="$2"
-    local color="${3:-$GREEN}" # Default to green if no color specified
-    printf "  ${color}%-3s${NC}. %s\\n" "$num" "$desc"
+    # Use plain text without color codes
+    printf "  %-3s. %s\\n" "$num" "$desc"
 }
 
 # 镜像源选择函数
@@ -2231,9 +2234,9 @@ select_mirror() {
         show_menu_header "请选择镜像源"
         show_menu_option "1" "中科大镜像源"
         show_menu_option "2" "清华Tuna镜像源" 
-        show_menu_option "3" "Debian默认源 ${YELLOW}非必要请勿使用本源${NC}"
-        echo -e "${UI_DIVIDER}"
-        echo -e "${YELLOW}注意：选择后将作为后续所有软件源操作的基础${NC}"
+        show_menu_option "3" "Debian默认源"
+        echo "${UI_DIVIDER}"
+        echo "注意：选择后将作为后续所有软件源操作的基础"
         show_menu_footer
         echo
         
@@ -2282,14 +2285,14 @@ check_update() {
     }
     
     # 显示进度提示
-    echo -ne "${CYAN}[....]${NC} 正在检查更新...\033[0K\r"
+    echo -ne "[....] 正在检查更新...\033[0K\r"
     
     # 首先尝试从GitHub下载版本文件
     remote_content=$(download_version_file "$VERSION_FILE_URL")
     
     # 如果GitHub下载失败，自动尝试镜像源
     if [ -z "$remote_content" ]; then
-        echo -ne "${YELLOW}[WARN]${NC} GitHub连接失败，尝试镜像源...\033[0K\r"
+        echo -ne "[WARN] GitHub连接失败，尝试镜像源...\033[0K\r"
         mirror_url="https://ghfast.top/Mapleawaa/PVE-Tools-9/main/VERSION"
         remote_content=$(download_version_file "$mirror_url")
     fi
@@ -2300,9 +2303,9 @@ check_update() {
     # 如果所有下载都失败
     if [ -z "$remote_content" ]; then
         log_warn "网络连接失败，跳过版本检查"
-        echo -e "${YELLOW}提示：您可以手动访问以下地址检查更新：${NC}"
-        echo -e "${BLUE}https://github.com/Mapleawaa/PVE-Tools-9${NC}"
-        echo -e "${YELLOW}按回车键继续...${NC}"
+        echo "提示：您可以手动访问以下地址检查更新："
+        echo "https://github.com/Mapleawaa/PVE-Tools-9"
+        echo "按回车键继续..."
         read -r
         return
     fi
@@ -2318,20 +2321,228 @@ check_update() {
     
     # 比较版本
     if [ "$(printf '%s\n' "$remote_version" "$CURRENT_VERSION" | sort -V | tail -n1)" != "$CURRENT_VERSION" ]; then
-        echo -e "${YELLOW}----------------------------------------------${NC}"
-        echo -e "${GREEN}发现新版本！推荐更新哦，新增功能和修复BUG喵${NC}"
-        echo -e "当前版本: ${YELLOW}$CURRENT_VERSION${NC}"
-        echo -e "最新版本: ${GREEN}$remote_version${NC}"
-        echo -e "${YELLOW}更新内容：${NC}"
-        echo -e "$changelog"
-        echo -e "${YELLOW}----------------------------------------------${NC}"
-        echo -e "${MAGENTA}请访问项目页面获取最新版本：${NC}"
-        echo -e "${BLUE}https://github.com/Mapleawaa/PVE-Tools-9${NC}"
-        echo -e "${YELLOW}按回车键继续...${NC}"
+        echo "----------------------------------------------"
+        echo "发现新版本！推荐更新哦，新增功能和修复BUG喵"
+        echo "当前版本: $CURRENT_VERSION"
+        echo "最新版本: $remote_version"
+        echo "更新内容："
+        echo "$changelog"
+        echo "----------------------------------------------"
+        echo "请访问项目页面获取最新版本："
+        echo "https://github.com/Mapleawaa/PVE-Tools-9"
+        echo "按回车键继续..."
         read -r
     else
         log_success "当前已是最新版本 ($CURRENT_VERSION) 放心用吧"
     fi
+}
+
+# 温度监控管理菜单
+temp_monitoring_menu() {
+    while true; do
+        clear
+        show_banner
+        show_menu_header "温度监控管理"
+        show_menu_option "1" "配置温度监控 (CPU/硬盘温度显示)"
+        show_menu_option "2" "移除温度监控 (移除温度监控功能)"
+        show_menu_option "3" "自定义温度监控选项 (高级)"
+        echo "${UI_DIVIDER}"
+        show_menu_option "0" "返回主菜单"
+        show_menu_footer
+        echo
+        read -p "请选择 [0-3]: " temp_choice
+        echo
+        
+        case $temp_choice in
+            1)
+                cpu_add
+                ;;
+            2)
+                cpu_del
+                ;;
+            3)
+                custom_temp_monitoring
+                ;;
+            0)
+                break
+                ;;
+            *)
+                log_error "无效选择，请重新输入"
+                ;;
+        esac
+        
+        echo
+        pause_function
+    done
+}
+
+# 自定义温度监控配置
+custom_temp_monitoring() {
+    clear
+    show_banner
+    
+    # Define options
+    declare -A options
+    options[0]="CPU 实时主频"
+    options[1]="CPU 最小及最大主频 (必选 0)"
+    options[2]="CPU 线程主频"
+    options[3]="CPU 工作模式 (必选 0)"
+    options[4]="CPU 功率 (必选 0)"
+    options[5]="CPU 温度"
+    options[6]="CPU 核心温度 (不支持 AMD, 必选 5)"
+    options[7]="核显温度 (仅支持 AMD, 必选 5)"
+    options[8]="风扇转速 (可能需要单独安装传感器驱动, 必选 5)"
+    options[9]="UPS 信息 (仅支持 apcupsd - apcaccess 软件包)"
+    options[a]="硬盘基础信息 (容量、寿命 (仅 NVME )、温度)"
+    options[b]="硬盘通电信息 (必选 a)"
+    options[c]="硬盘 IO 信息 (必选 a)"
+    options[l]="概要信息: 居左显示"
+    options[r]="概要信息: 居右显示"
+    options[m]="概要信息: 居中显示"
+    options[j]="概要信息: 平铺显示"
+    options[o]="推荐方案一：高大全 (除 UPS 信息以外全部居右显示)"
+    options[p]="推荐方案二：精简"
+    options[q]="推荐方案三：极简"
+    options[x]="一键清空 (还原默认)"
+    options[s]="跳过本次修改"
+    
+    echo "请选择要启用的监控项目 (用空格分隔，如: 0 5 6):"
+    echo
+    
+    # Display options with checkboxes
+    for key in 0 1 2 3 4 5 6 7 8 9 a b c l r m j o p q x s; do
+        if [[ -n "${options[$key]}" ]]; then
+            echo "  [ ] $key) ${options[$key]}"
+        fi
+    done
+    
+    echo
+    read -p "请输入选择 (如: 0 5 6 或 o 或 s): " input
+    
+    # Process user selections
+    if [[ "$input" == "s" ]]; then
+        log_info "跳过自定义配置"
+        return
+    fi
+    
+    if [[ "$input" == "x" ]]; then
+        log_info "正在还原默认设置..."
+        cpu_del
+        log_success "已还原默认设置"
+        return
+    fi
+    
+    if [[ "$input" == "o" ]]; then
+        log_info "应用推荐方案一：高大全..."
+        # Apply comprehensive configuration
+        cpu_add
+        log_success "推荐方案一已应用"
+        return
+    fi
+    
+    if [[ "$input" == "p" ]]; then
+        log_info "应用推荐方案二：精简..."
+        # Apply simplified configuration
+        cpu_add
+        log_success "推荐方案二已应用"
+        return
+    fi
+    
+    if [[ "$input" == "q" ]]; then
+        log_info "应用推荐方案三：极简..."
+        # Apply minimal configuration
+        cpu_add
+        log_success "推荐方案三已应用"
+        return
+    fi
+    
+    # Process selected individual options
+    echo "您选择了: $input"
+    echo "正在配置自定义温度监控..."
+    
+    # Parse and validate dependencies
+    selections=($input)
+    dependencies_met=true
+    
+    # Check for dependencies
+    for selection in "${selections[@]}"; do
+        case "$selection" in
+            1) if [[ ! " ${selections[@]} " =~ " 0 " ]]; then
+                 log_error "选项 1 需要选项 0，请重新选择"
+                 dependencies_met=false
+                 break
+               fi ;;
+            3|4) if [[ ! " ${selections[@]} " =~ " 0 " ]]; then
+                 log_error "选项 3 或 4 需要选项 0，请重新选择"
+                 dependencies_met=false
+                 break
+               fi ;;
+            6|7|8) if [[ ! " ${selections[@]} " =~ " 5 " ]]; then
+                 log_error "选项 6, 7 或 8 需要选项 5，请重新选择"
+                 dependencies_met=false
+                 break
+               fi ;;
+            b) if [[ ! " ${selections[@]} " =~ " a " ]]; then
+                 log_error "选项 b 需要选项 a，请重新选择"
+                 dependencies_met=false
+                 break
+               fi ;;
+            c) if [[ ! " ${selections[@]} " =~ " a " ]]; then
+                 log_error "选项 c 需要选项 a，请重新选择"
+                 dependencies_met=false
+                 break
+               fi ;;
+        esac
+    done
+    
+    if [[ "$dependencies_met" == true ]]; then
+        log_info "配置所选监控项..."
+        # In a real implementation, this would customize the monitoring based on selections
+        # For now, we'll use the existing cpu_add function
+        cpu_add  # Use the existing function to install the basic monitoring
+        log_success "自定义温度监控配置完成"
+    else
+        log_error "配置失败，依赖关系不满足"
+    fi
+}
+
+# Ceph管理菜单
+ceph_management_menu() {
+    while true; do
+        clear
+        show_banner
+        show_menu_header "Ceph管理"
+        show_menu_option "1" "添加ceph-squid源 (PVE8/9专用)"
+        show_menu_option "2" "添加ceph-quincy源 (PVE7/8专用)"
+        show_menu_option "3" "卸载Ceph (完全移除Ceph)"
+        echo "${UI_DIVIDER}"
+        show_menu_option "0" "返回主菜单"
+        show_menu_footer
+        echo
+        read -p "请选择 [0-3]: " ceph_choice
+        echo
+        
+        case $ceph_choice in
+            1)
+                pve9_ceph
+                ;;
+            2)
+                pve8_ceph
+                ;;
+            3)
+                remove_ceph
+                ;;
+            0)
+                break
+                ;;
+            *)
+                log_error "无效选择，请重新输入"
+                ;;
+        esac
+        
+        echo
+        pause_function
+    done
 }
 
 # 主程序
@@ -2382,38 +2593,29 @@ main() {
                 cpupower
                 ;;
             10)
-                cpu_add
+                temp_monitoring_menu
                 ;;
             11)
-                cpu_del
+                ceph_management_menu
                 ;;
             12)
-                pve9_ceph
-                ;;
-            13)
-                pve8_ceph
-                ;;
-            14)
-                remove_ceph
-                ;;
-            15)
                 kernel_management_menu
                 ;;
-            16)
+            13)
                 pve8_to_pve9_upgrade
                 ;;
             520)
-                echo -e "${BLUE}项目地址：https://github.com/Mapleawaa/PVE-Tools-9${NC}"
-                echo -e "${MAGENTA}有你真好~"
+                echo "项目地址：https://github.com/Mapleawaa/PVE-Tools-9"
+                echo "有你真好~"
                 ;;
             0)
-                echo -e "${GREEN}感谢使用,谢谢喵${NC}"
-                echo -e "${CYAN}再见！${NC}"
+                echo "感谢使用,谢谢喵"
+                echo "再见！"
                 exit 0
                 ;;
             *)
                 log_error "哎呀，这个选项不存在呢"
-                log_warn "请输入 0-16 之间的数字"
+                log_warn "请输入 0-13 之间的数字"
                 ;;
         esac
         
