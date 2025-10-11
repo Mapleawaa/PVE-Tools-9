@@ -1,2 +1,30 @@
 .codebuddy/
 .cache
+
+# Ignore LLM Client files
+QWEN.md
+CLAUDE.md
+
+# Ignore system files
+.DS_Store
+Thumbs.db
+# Ignore node modules
+node_modules/
+# Ignore log files
+*.log
+# Ignore compiled Python files
+__pycache__/
+*.pyc
+# Ignore environment files
+.env
+# Ignore IDE specific files
+.vscode/
+.idea/
+# Ignore build directories
+dist/
+build/
+# Ignore temporary files
+*.tmp
+*.swp
+# Ignore coverage reports
+coverage/
