@@ -2301,7 +2301,7 @@ create_aligned_menu() {
     
     # Create aligned menu
     for ((j=0; j<${#temp_nums[@]}; j++)); do
-        printf "  ${temp_colors[j]}%-${max_num_length}s${NC}. %s\n" "${temp_nums[j]}" "${temp_descs[j]}"
+        echo -e "  ${temp_colors[j]}$(printf "%-${max_num_length}s" "${temp_nums[j]}")${NC}. ${temp_descs[j]}"
     done
 }
 
