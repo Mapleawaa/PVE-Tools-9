@@ -2287,8 +2287,12 @@ create_aligned_menu() {
         shift
         temp_descs[i]="$1"
         shift
-        temp_colors[i]="${1:-$GREEN}"
-        shift
+        if [[ $# -gt 0 && "$1" != [0-9]* ]]; then
+            temp_colors[i]="$1"
+            shift
+        else
+            temp_colors[i]="$GREEN"
+        fi
         ((i++))
     done
     
