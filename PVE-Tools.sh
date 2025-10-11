@@ -514,20 +514,20 @@ remove_old_kernels() {
 # 内核管理主菜单
 kernel_management_menu() {
     while true; do
-        echo -e "\n"
-        show_menu_header "内核管理菜单"
-        create_aligned_menu \
-            "1" "显示当前内核信息" \
-            "2" "查看可用内核列表" \
-            "3" "安装新内核" \
-            "4" "设置默认启动内核" \
-            "5" "清理旧内核" \
-            "6" "重启系统应用新内核"
+        echo -e "\n${UI_BORDER}"
+        echo -e "${CYAN}│${NC} ${YELLOW}内核管理菜单${NC} ${CYAN}                                  │${NC}"
+        echo -e "${UI_DIVIDER}"
+        show_menu_option "1" "显示当前内核信息"
+        show_menu_option "2" "查看可用内核列表"
+        show_menu_option "3" "安装新内核"
+        show_menu_option "4" "设置默认启动内核"
+        show_menu_option "5" "清理旧内核"
+        show_menu_option "6" "重启系统应用新内核"
         echo -e "${UI_DIVIDER}"
         show_menu_option "0" "返回主菜单"
-        show_menu_footer
+        echo -e "${UI_FOOTER}"
         
-        choice=$(get_menu_choice "请选择操作 [0-6]: " "0 1 2 3 4 5 6" "0")
+        read -p "请选择操作 [0-6]: " choice
         
         case $choice in
             1)
@@ -887,54 +887,7 @@ pause_function() {
     fi
 }
 
-# Enhanced input validation function
-validate_input() {
-    local input="$1"
-    local valid_options="$2"
-    local default_value="${3:-}"
-    
-    if [[ -z "$input" && -n "$default_value" ]]; then
-        echo "$default_value"
-        return 0
-    fi
-    
-    if [[ -n "$valid_options" ]]; then
-        local option
-        for option in $valid_options; do
-            if [[ "$input" == "$option" ]]; then
-                echo "$input"
-                return 0
-            fi
-        done
-        # If we reached here, input was not in valid options
-        echo ""
-        return 1
-    else
-        # If no valid options provided, return input as is
-        echo "$input"
-        return 0
-    fi
-}
 
-# Enhanced menu input function with validation
-get_menu_choice() {
-    local prompt="$1"
-    local valid_options="$2"
-    local default_value="${3:-}"
-    
-    while true; do
-        read -p "$prompt" choice
-        validated_choice=$(validate_input "$choice" "$valid_options" "$default_value")
-        
-        if [[ -n "$validated_choice" ]]; then
-            echo "$validated_choice"
-            return 0
-        else
-            log_error "无效选择，请重新输入！"
-            echo -ne "${YELLOW}有效选项: $valid_options${NC}\n"
-        fi
-    done
-}
 
 #--------------开启硬件直通----------------
 # 开启硬件直通
@@ -1021,10 +974,10 @@ hw_passth() {
         clear
         show_banner
         show_menu_header "配置硬件直通"
-        create_aligned_menu \
-            "1" "开启硬件直通" \
-            "2" "关闭硬件直通" \
-            "0" "返回"
+        show_menu_option "1" "开启硬件直通"
+        show_menu_option "2" "关闭硬件直通"
+        echo -e "${UI_DIVIDER}"
+        show_menu_option "0" "返回"
         show_menu_footer
         read -p "请选择: [ ]" -n 1 hwmenuid
         echo  # New line after input
@@ -1058,14 +1011,14 @@ cpupower() {
         clear
         show_banner
         show_menu_header "设置CPU电源模式"
-        create_aligned_menu \
-            "1" "设置CPU模式 conservative  保守模式   [变身老年机]" \
-            "2" "设置CPU模式 ondemand       按需模式  [默认]" \
-            "3" "设置CPU模式 powersave      节能模式  [省电小能手]" \
-            "4" "设置CPU模式 performance   性能模式   [性能释放]" \
-            "5" "设置CPU模式 schedutil      负载模式  [交给负载自动配置]" \
-            "6" "恢复系统默认电源设置"
-        echo
+        echo -e "  ${GREEN}1${NC}. 设置CPU模式 conservative  保守模式   [变身老年机]"
+        echo -e "  ${GREEN}2${NC}. 设置CPU模式 ondemand       按需模式  [默认]"
+        echo -e "  ${GREEN}3${NC}. 设置CPU模式 powersave      节能模式  [省电小能手]"
+        echo -e "  ${GREEN}4${NC}. 设置CPU模式 performance   性能模式   [性能释放]"
+        echo -e "  ${GREEN}5${NC}. 设置CPU模式 schedutil      负载模式  [交给负载自动配置]"
+        echo -e ""
+        echo -e "  ${GREEN}6${NC}. 恢复系统默认电源设置"
+        echo -e "${UI_DIVIDER}"
         show_menu_option "0" "返回"
         show_menu_footer
         echo
@@ -2208,28 +2161,28 @@ show_system_info() {
 # 主菜单
 show_menu() {
     show_menu_header "请选择您需要的功能："
-    
-    # Using the enhanced aligned menu function for better visual consistency
-    create_aligned_menu \
-        "1"  "更换软件源 ${GREEN}(强烈推荐，让下载飞起来)${NC}" \
-        "2"  "删除订阅弹窗 ${GREEN}(告别烦人提醒)${NC} | ${RED}（谨慎操作）并且只能在SSH环境下使用否则会被截断${NC}" \
-        "3"  "合并 local 与 local-lvm ${CYAN}(小硬盘救星)${NC}" \
-        "4"  "删除 Swap 分区 ${CYAN}(释放更多空间)${NC}" \
-        "5"  "更新系统 ${GREEN}(保持最新状态)${NC}" \
-        "6"  "显示系统信息 ${BLUE}(查看运行状况)${NC}" \
-        "7"  "一键配置 ${MAGENTA}(换源+删弹窗+更新，懒人必选，推荐在SSH下使用)${NC}" \
-        "8"  "硬件直通配置 ${BLUE}(PCI设备直通设置)${NC}" \
-        "9"  "CPU电源模式 ${BLUE}(调整CPU性能模式)${NC}" \
-        "10" "温度监控设置 ${BLUE}(CPU/硬盘温度显示)${NC}" \
-        "11" "温度监控移除 ${BLUE}(移除温度监控功能)${NC}" \
-        "12" "添加ceph-squid源 ${BLUE}(PVE8/9专用)${NC}" \
-        "13" "添加ceph-quincy源 ${BLUE}(PVE7/8专用)${NC}" \
-        "14" "卸载Ceph ${BLUE}(完全移除Ceph)${NC}" \
-        "15" "内核管理 ${MAGENTA}(内核切换/更新/清理)${NC}" \
-        "16" "PVE8 升级到 PVE9 ${RED}(PVE8专用)${NC}" \
-        "0"  "退出脚本" \
-        "520" "给作者点个Star吧，谢谢喵~ ${NC}"
-    
+    show_menu_option "1"  "更换软件源 ${GREEN}(强烈推荐，让下载飞起来)${NC}"
+    show_menu_option "2"  "删除订阅弹窗 ${GREEN}(告别烦人提醒)${NC} | ${RED}（谨慎操作）并且只能在SSH环境下使用否则会被截断${NC}"
+    show_menu_option "3"  "合并 local 与 local-lvm ${CYAN}(小硬盘救星)${NC}"
+    show_menu_option "4"  "删除 Swap 分区 ${CYAN}(释放更多空间)${NC}"
+    show_menu_option "5"  "更新系统 ${GREEN}(保持最新状态)${NC}"
+    show_menu_option "6"  "显示系统信息 ${BLUE}(查看运行状况)${NC}"
+    echo
+    show_menu_option "7"  "一键配置 ${MAGENTA}(换源+删弹窗+更新，懒人必选，推荐在SSH下使用)${NC}"
+    echo
+    show_menu_option "8"  "硬件直通配置 ${BLUE}(PCI设备直通设置)${NC}"
+    show_menu_option "9"  "CPU电源模式 ${BLUE}(调整CPU性能模式)${NC}"
+    show_menu_option "10" "温度监控设置 ${BLUE}(CPU/硬盘温度显示)${NC}"
+    show_menu_option "11" "温度监控移除 ${BLUE}(移除温度监控功能)${NC}"
+    show_menu_option "12" "添加ceph-squid源 ${BLUE}(PVE8/9专用)${NC}"
+    show_menu_option "13" "添加ceph-quincy源 ${BLUE}(PVE7/8专用)${NC}"
+    show_menu_option "14" "卸载Ceph ${BLUE}(完全移除Ceph)${NC}"
+    show_menu_option "15" "内核管理 ${MAGENTA}(内核切换/更新/清理)${NC}"
+    echo
+    show_menu_option "16" "PVE8 升级到 PVE9 ${RED}(PVE8专用)${NC}"
+    echo
+    show_menu_option "0"  "退出脚本"
+    show_menu_option "520" "给作者点个Star吧，谢谢喵~ ${NC}"
     show_menu_footer
     echo
     echo -e "${CYAN}小贴士：新装系统推荐选择 7 进行一键配置${NC}"
@@ -2255,10 +2208,7 @@ quick_setup() {
 show_menu_header() {
     local title="$1"
     echo -e "${UI_BORDER}"
-    local border_length=50  # Fixed length of the border
-    local content_length=$(echo -n "$title" | wc -c)
-    local padding_length=$((border_length - 4 - content_length))  # 4 accounts for │ and NC tags
-    printf "${CYAN}│${NC} %s%*s ${CYAN}│${NC}\n" "$title" $padding_length ""
+    printf "${CYAN}│${NC} ${YELLOW}%s${NC} ${CYAN}│${NC}\n" "$title"
     echo -e "${UI_DIVIDER}"
 }
 
@@ -2270,44 +2220,7 @@ show_menu_option() {
     local num="$1"
     local desc="$2"
     local color="${3:-$GREEN}" # Default to green if no color specified
-    printf "  ${color}%-3s${NC}. %s\n" "$num" "$desc"
-}
-
-# Enhanced function to create aligned menu options
-create_aligned_menu() {
-    local max_num_length=0
-    local max_desc_length=0
-    local temp_nums=()
-    local temp_descs=()
-    local temp_colors=()
-    
-    # Read all parameters into arrays
-    local i=0
-    while [[ $# -gt 0 ]]; do
-        temp_nums[i]="$1"
-        shift
-        temp_descs[i]="$1"
-        shift
-        if [[ $# -gt 0 && "$1" != [0-9]* ]]; then
-            temp_colors[i]="$1"
-            shift
-        else
-            temp_colors[i]="$GREEN"
-        fi
-        ((i++))
-    done
-    
-    # Find max lengths for alignment
-    for num in "${temp_nums[@]}"; do
-        if [[ ${#num} -gt $max_num_length ]]; then
-            max_num_length=${#num}
-        fi
-    done
-    
-    # Create aligned menu
-    for ((j=0; j<${#temp_nums[@]}; j++)); do
-        echo -e "  ${temp_colors[j]}$(printf "%-${max_num_length}s" "${temp_nums[j]}")${NC}. ${temp_descs[j]}"
-    done
+    printf "%b" "  ${color}%-3s${NC}. %s\\n" "$num" "$desc"
 }
 
 # 镜像源选择函数
@@ -2316,10 +2229,9 @@ select_mirror() {
         clear
         show_banner
         show_menu_header "请选择镜像源"
-        create_aligned_menu \
-            "1" "中科大镜像源" \
-            "2" "清华Tuna镜像源" \
-            "3" "Debian默认源 ${YELLOW}非必要请勿使用本源${NC}"
+        show_menu_option "1" "中科大镜像源"
+        show_menu_option "2" "清华Tuna镜像源" 
+        show_menu_option "3" "Debian默认源 ${YELLOW}非必要请勿使用本源${NC}"
         echo -e "${UI_DIVIDER}"
         echo -e "${YELLOW}注意：选择后将作为后续所有软件源操作的基础${NC}"
         show_menu_footer
@@ -2437,7 +2349,7 @@ main() {
     while true; do
         show_banner
         show_menu
-        read -r choice
+        read -n 2 choice
         echo
         echo
         
