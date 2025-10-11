@@ -2233,6 +2233,7 @@ show_menu() {
     show_menu_footer
     echo
     echo -e "${CYAN}小贴士：新装系统推荐选择 7 进行一键配置${NC}"
+    echo -n -e "${GREEN}请输入您的选择 [0-16, 520]: ${NC}"
 }
 
 # 一键配置
