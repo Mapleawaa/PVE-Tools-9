@@ -1137,13 +1137,13 @@ cpu_add() {
     apt-get update
 
     log_step "开始安装所需工具..."
-    # 输入需要安装的软件包
+    # 输入需要安装的软件包 (移除 hddtemp 和 smartmontools,它们已不存在或被替代)
     packages=(lm-sensors nvme-cli sysstat linux-cpupower)
 
     # 查询软件包，判断是否安装
     for package in "${packages[@]}"; do
         if ! dpkg -s "$package" &> /dev/null; then
-            echo "$package 未安装，开始安装软件包"
+            log_info "$package 未安装，开始安装软件包"
             apt-get install "${packages[@]}" -y
             modprobe msr
             install=ok
@@ -1151,34 +1151,28 @@ cpu_add() {
         fi
     done
 
-    # 设置执行权限
-    if dpkg -s "linux-cpupower" &> /dev/null; then
-        chmod +s /usr/sbin/linux-cpupower || echo "Failed to set permissions for /usr/sbin/linux-cpupower"
-    fi
-
+    # 设置执行权限 (修正路径)
+    [[ -e /usr/sbin/linux-cpupower ]] && chmod +s /usr/sbin/linux-cpupower
     chmod +s /usr/sbin/nvme
-    chmod +s /usr/sbin/hddtemp
     chmod +s /usr/sbin/smartctl
-    chmod +s /usr/sbin/turbostat || echo "Failed to set permissions for /usr/sbin/turbostat"
+    chmod +s /usr/sbin/turbostat || log_warn "无法设置 turbostat 权限"
+
+    # 启用 MSR 模块
     modprobe msr && echo msr > /etc/modules-load.d/turbostat-msr.conf
 
     # 软件包安装完成
     if [ "$install" == "ok" ]; then
-        log_info "软件包安装完成，检测硬件信息"
+        log_success "软件包安装完成，检测硬件信息"
         sensors-detect --auto > /tmp/sensors
-        drivers=`sed -n '/Chip drivers/,/\\#----cut here/p' /tmp/sensors|sed '/Chip /d'|sed '/cut/d'`
-        if [ `echo $drivers|wc -w` = 0 ];then
-            log_error "没有找到任何驱动，似乎你的系统不支持或驱动安装失败。"
-            log_tips "请检查你的硬件是否支持，或者尝试手动安装驱动。"
-            log_tips "手动安装驱动方法：去制造商官网找驱动，然后手动安装。不会装驱动建议去问问AI"
-            log_tips "猜你再找: https://claude.ai"
+        drivers=$(sed -n '/Chip drivers/,/\#----cut here/p' /tmp/sensors | sed '/Chip /d' | sed '/cut/d')
+
+        if [ $(echo $drivers | wc -w) = 0 ]; then
+            log_warn "没有找到任何驱动，似乎你的系统不支持或驱动安装失败。"
             pause_function
-            return
         else
-            for i in $drivers
-            do
+            for i in $drivers; do
                 modprobe $i
-                if [ `grep $i /etc/modules|wc -l` = 0 ];then
+                if [ $(grep $i /etc/modules | wc -l) = 0 ]; then
                     echo $i >> /etc/modules
                 fi
             done
@@ -1186,46 +1180,59 @@ cpu_add() {
             sleep 3
             log_success "驱动信息配置成功。"
         fi
-        /etc/init.d/kmod start
+        [[ -e /etc/init.d/kmod ]] && /etc/init.d/kmod start
         rm /tmp/sensors
-        # 驱动信息配置完成
     fi
 
     log_step "备份源文件"
-    # 删除旧版本备份文件
-    rm -f  $nodes.*.bak
-    rm -f  $pvemanagerlib.*.bak
-    rm -f  $proxmoxlib.*.bak
     # 备份当前版本文件
-    [ ! -e $nodes.$pvever.bak ] && cp $nodes $nodes.$pvever.bak
-    [ ! -e $pvemanagerlib.$pvever.bak ] && cp $pvemanagerlib $pvemanagerlib.$pvever.bak
-    [ ! -e $proxmoxlib.$pvever.bak ] && cp $proxmoxlib $proxmoxlib.$pvever.bak
+    backup_file "$nodes"
+    backup_file "$pvemanagerlib"
+    backup_file "$proxmoxlib"
+    
+    # 备份当前版本文件
+    cp "$nodes" "$nodes.$pvever.bak"
+    cp "$pvemanagerlib" "$pvemanagerlib.$pvever.bak"
+    cp "$proxmoxlib" "$proxmoxlib.$pvever.bak"
 
-    # 生成系统变量
+    # 生成系统变量 (使用参考脚本的正确实现)
     tmpf=tmpfile.temp
     touch $tmpf
-    cat > $tmpf << 'EOF' 
-    $res->{thermalstate} = `sensors`;
-    $res->{cpusensors} = `cat /proc/cpuinfo | grep MHz && lscpu | grep MHz`;
-    
-    my $nvme0_temperatures = `smartctl -a /dev/nvme0|grep -E "Model Number|(?=Total|Namespace)[^:]+Capacity|Temperature:|Available Spare:|Percentage|Data Unit|Power Cycles|Power On Hours|Unsafe Shutdowns|Integrity Errors"`;
-    my $nvme0_io = `iostat -d -x -k 1 1 | grep -E "^nvme0"`;
-    $res->{nvme0_status} = $nvme0_temperatures . $nvme0_io;
-    
-    $res->{hdd_temperatures} = `smartctl -a /dev/sd?|grep -E "Device Model|Capacity|Power_On_Hours|Temperature"`;
+    cat > $tmpf << 'EOF'
+        $res->{thermalstate} = `sensors`;
+        $res->{cpusensors} = `cat /proc/cpuinfo | grep MHz && lscpu | grep MHz`;
 
-    my $powermode = `cat /sys/devices/system/cpu/cpu0/cpufreq/scaling_governor && turbostat -S -q -s PkgWatt -i 0.1 -n 1 -c package | grep -v PkgWatt`;
-    $res->{cpupower} = $powermode;
+        $res->{hdd_temperatures} = `smartctl -a /dev/sd?|grep -E "Device Model|Capacity|Power_On_Hours|Temperature"`;
+
+        my $powermode = `cat /sys/devices/system/cpu/cpu0/cpufreq/scaling_governor && turbostat -S -q -s PkgWatt -i 0.1 -n 1 -c package | grep -v PkgWatt`;
+        $res->{cpupower} = $powermode;
 
 EOF
 
+    # NVME磁盘变量 (动态检测)
+    for i in {0..9}; do
+        for dev in "/dev/nvme${i}" "/dev/nvme${i}n1"; do
+            if [ -b "$dev" ]; then
+                echo "检测到NVME磁盘: $dev" >&2
+                cat >> $tmpf << EOF
+
+        my \$nvme${i}_temperatures = \`smartctl -a $dev | grep -E "Model Number|(?=Total|Namespace)[^:]+Capacity|Temperature:|Available Spare:|Percentage|Data Unit|Power Cycles|Power On Hours|Unsafe Shutdowns|Integrity Errors"\`;
+        my \$nvme${i}_io = \`iostat -d -x -k 1 1 | grep -E "^${dev##*/}"\`;
+        \$res->{nvme${i}_status} = \$nvme${i}_temperatures . \$nvme${i}_io;
+
+EOF
+                break
+            fi
+        done
+    done
+
     ###################  修改node.pm   ##########################
-    log_info "开始大活"
     log_info "修改node.pm："
     log_info "找到关键字 PVE::pvecfg::version_text 的行号并跳到下一行"
+
     # 显示匹配的行
     ln=$(expr $(sed -n -e '/PVE::pvecfg::version_text/=' $nodes) + 1)
-    log_info "匹配的行号： $ln"
+    echo "匹配的行号：" $ln
 
     log_info "修改结果："
     sed -i "${ln}r $tmpf" $nodes
@@ -1726,7 +1733,7 @@ EOF
     log_info "找到关键字pveversion的行号"
     # 显示匹配的行
     ln=$(sed -n '/pveversion/,+10{/},/{=;q}}' $pvemanagerlib)
-    log_info "匹配的行号pveversion： $ln"
+    echo "匹配的行号pveversion：" $ln
 
     log_info "修改结果："
     sed -i "${ln}r $tmpf" $pvemanagerlib
@@ -1734,45 +1741,19 @@ EOF
     # sed -n '/pveversion/,+30p' $pvemanagerlib
     rm $tmpf
 
-    log_info "开始配置温度监控显示高度"
+    log_info "修改页面高度"
     disk_count=$(lsblk -d -o NAME | grep -cE 'sd[a-z]|nvme[0-9]')
-    
-    # 提示用户配置高度相关信息
-    echo "温度监控高度配置说明："
-    echo "检测到系统中有 $disk_count 个磁盘设备"
-    echo "默认高度增量为每个磁盘69像素，如CPU核心过多导致高度不够可调整此值"
-    echo "当前设置：每个磁盘增加69像素高度"
-    echo
-    
-    # 用户可以选择自定义高度增量，或使用默认值
-    read -p "请输入每个磁盘的高度增量 (默认: 69, 直接回车使用默认值): " user_height_input
-    height_per_disk=${user_height_input:-69}
-    
-    # 验证输入是否为有效数字
-    if ! [[ "$height_per_disk" =~ ^[0-9]+$ ]]; then
-        log_warn "输入的高度增量无效，使用默认值69"
-        height_per_disk=69
-    fi
-    
-    height_increase=$((disk_count * height_per_disk))
+    # 高度变量，某些CPU核心过多，或者想显示那个PVE存储库那一行，导致高度不够，修改69为合适的数字，如80、100等。
+    height_increase=$((disk_count * 69))
 
     node_status_new_height=$((400 + height_increase))
-    sed -i -r '/widget\\.pveNodeStatus/,+5{/height/{s#[0-9]+#'$node_status_new_height'#}}' $pvemanagerlib
+    sed -i -r '/widget\.pveNodeStatus/,+5{/height/{s#[0-9]+#'$node_status_new_height'#}}' $pvemanagerlib
     cpu_status_new_height=$((300 + height_increase))
-    sed -i -r '/widget\\.pveCpuStatus/,+5{/height/{s#[0-9]+#'$cpu_status_new_height'#}}' $pvemanagerlib
+    sed -i -r '/widget\.pveCpuStatus/,+5{/height/{s#[0-9]+#'$cpu_status_new_height'#}}' $pvemanagerlib
 
-    log_info "配置后的高度值："
+    log_info "修改后的高度值："
     sed -n -e '/widget\.pveNodeStatus/,+5{/height/{p}}' \
            -e '/widget\.pveCpuStatus/,+5{/height/{p}}' $pvemanagerlib
-    # 添加滚动功能 - 为各种温度监控组件添加垂直滚动
-    sed -i '/widget\.pveNodeStatus/,+10{s/height:[[:space:]]*[0-9]{1,}[[:space:]]*;/height: '$node_status_new_height'px; overflow-y: auto; padding-right: 8px;/}' $pvemanagerlib
-    sed -i '/widget\.pveCpuStatus/,+10{s/height:[[:space:]]*[0-9]{1,}[[:space:]]*;/height: '$cpu_status_new_height'px; overflow-y: auto; padding-right: 8px;/}' $pvemanagerlib
-    
-    log_info "高度配置完成："
-    echo "节点状态组件高度: ${node_status_new_height}px"
-    echo "CPU状态组件高度: ${cpu_status_new_height}px"
-    echo "每个磁盘增加高度: ${height_per_disk}px"
-    echo "磁盘数量: ${disk_count}"
 
     # 调整显示布局
     ln=$(expr $(sed -n -e '/widget.pveDcGuests/=' $pvemanagerlib) + 10)
@@ -1782,33 +1763,44 @@ EOF
 
     ###################  修改proxmoxlib.js   ##########################
 
-    log_info "修改去除订阅弹窗"
-    sed -r -i '/\/nodes\/localhost\/subscription/,+10{/^\s+if \(res === null /{N;s#.+#\t\t  if(false){#}}' $proxmoxlib
+    log_info "加强去除订阅弹窗"
+    # sed -r -i '/\/nodes\/localhost\/subscription/,+10{/^\s+if \(res === null /{N;s#.+#\t\t  if(false){#}}' $proxmoxlib
+    sed -r -i '/\/nodes\/localhost\/subscription/,+30 {
+        /^\s+if\s*\(/ {
+            :loop
+            N
+            /\s*\)\s*\{/!b loop
+            s/(if\s*\([[:space:]]*res\s*===\s*null\s*(\|\|\s*res\s*===\s*undefined\s*)?(\|\|\s*!res\s*)?(\|\|\s*res\.data\.status\.toLowerCase\(\)\s*!==\s*['\''"]active['\''"]\s*)?[[:space:]]*\)\s*\{)/if(false){/
+        }
+    }' /usr/share/javascript/proxmox-widget-toolkit/proxmoxlib.js
+
     # 显示修改结果
     sed -n '/\/nodes\/localhost\/subscription/,+10p' $proxmoxlib
-
     systemctl restart pveproxy
+
     log_success "请刷新浏览器缓存shift+f5"
 }
 
-# 删除工具
 cpu_del() {
-    nodes="/usr/share/perl5/PVE/API2/Nodes.pm"
-    pvemanagerlib="/usr/share/pve-manager/js/pvemanagerlib.js"
-    proxmoxlib="/usr/share/javascript/proxmox-widget-toolkit/proxmoxlib.js"
 
-    pvever=$(pveversion | awk -F"/" '{print $2}')
-    echo pve版本$pvever
-    if [ -f "$nodes.$pvever.bak" ];then
-        rm -f $nodes $pvemanagerlib $proxmoxlib
-        mv $nodes.$pvever.bak $nodes
-        mv $pvemanagerlib.$pvever.bak $pvemanagerlib
-        mv $proxmoxlib.$pvever.bak $proxmoxlib
+nodes="/usr/share/perl5/PVE/API2/Nodes.pm"
+pvemanagerlib="/usr/share/pve-manager/js/pvemanagerlib.js"
+proxmoxlib="/usr/share/javascript/proxmox-widget-toolkit/proxmoxlib.js"
 
-        log_success "已删除温度显示，请重新刷新浏览器缓存."
-    else
-        log_warn "你没有添加过温度显示，退出脚本."
-    fi
+pvever=$(pveversion | awk -F"/" '{print $2}')
+echo pve版本$pvever
+if [ -f "$nodes.$pvever.bak" ];then
+rm -f $nodes $pvemanagerlib $proxmoxlib
+mv $nodes.$pvever.bak $nodes
+mv $pvemanagerlib.$pvever.bak $pvemanagerlib
+mv $proxmoxlib.$pvever.bak $proxmoxlib
+
+log_success "已删除温度显示，请重新刷新浏览器缓存."
+else
+log_warn "你没有添加过温度显示，退出脚本."
+fi
+
+
 }
 #--------------CPU、主板、硬盘温度显示----------------
 
