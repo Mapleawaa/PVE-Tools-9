@@ -4,6 +4,7 @@
 # Ignore LLM Client files
 QWEN.md
 CLAUDE.md
+.spec-workflow/
 
 # Ignore system files
 .DS_Store
