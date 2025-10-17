@@ -29,9 +29,14 @@ UI_FOOTER_SHORT="------------------------------------------------"
 
 # 镜像源配置
 MIRROR_USTC="https://mirrors.ustc.edu.cn/proxmox/debian/pve"
-MIRROR_TUNA="https://mirrors.tuna.tsinghua.edu.cn/proxmox/debian/pve" 
+MIRROR_TUNA="https://mirrors.tuna.tsinghua.edu.cn/proxmox/debian/pve"
 MIRROR_DEBIAN="https://deb.debian.org/debian"
 SELECTED_MIRROR=""
+
+# CT 模板源配置
+CT_MIRROR_USTC="https://mirrors.ustc.edu.cn/proxmox/images/system"
+CT_MIRROR_TUNA="https://mirrors.tuna.tsinghua.edu.cn/proxmox/images/system"
+CT_MIRROR_OFFICIAL="http://download.proxmox.com"
 
 # 日志函数
 log_info() {
@@ -662,20 +667,24 @@ change_sources() {
     local debian_mirror=""
     local debian_security_mirror=""
     local pve_mirror=""
-    
+    local ct_mirror=""
+
     case $SELECTED_MIRROR in
         $MIRROR_USTC)
             debian_mirror="https://mirrors.ustc.edu.cn/debian"
             pve_mirror="$MIRROR_USTC"
+            ct_mirror="$CT_MIRROR_USTC"
             ;;
         $MIRROR_TUNA)
             debian_mirror="https://mirrors.tuna.tsinghua.edu.cn/debian"
             pve_mirror="$MIRROR_TUNA"
+            ct_mirror="$CT_MIRROR_TUNA"
             ;;
         $MIRROR_DEBIAN)
             debian_mirror="https://deb.debian.org/debian"
             debian_security_mirror="https://security.debian.org/debian-security"
             pve_mirror="https://ftp.debian.org/debian"
+            ct_mirror="$CT_MIRROR_OFFICIAL"
             ;;
     esac
     
@@ -779,7 +788,13 @@ EOF
     log_info "正在加速 CT 模板下载..."
     if [[ -f "/usr/share/perl5/PVE/APLInfo.pm" ]]; then
         backup_file "/usr/share/perl5/PVE/APLInfo.pm"
-        sed -i "s|http://download.proxmox.com|$pve_mirror|g" /usr/share/perl5/PVE/APLInfo.pm
+        # 先恢复为官方源,确保可以二次替换
+        sed -i "s|https://mirrors.ustc.edu.cn/proxmox/images/system|http://download.proxmox.com|g" /usr/share/perl5/PVE/APLInfo.pm
+        sed -i "s|https://mirrors.tuna.tsinghua.edu.cn/proxmox/images/system|http://download.proxmox.com|g" /usr/share/perl5/PVE/APLInfo.pm
+        sed -i "s|https://mirrors.ustc.edu.cn/proxmox/debian/pve/images|http://download.proxmox.com|g" /usr/share/perl5/PVE/APLInfo.pm
+        sed -i "s|https://mirrors.tuna.tsinghua.edu.cn/proxmox/debian/pve/images|http://download.proxmox.com|g" /usr/share/perl5/PVE/APLInfo.pm
+        # 然后替换为选定的镜像源
+        sed -i "s|http://download.proxmox.com|$ct_mirror|g" /usr/share/perl5/PVE/APLInfo.pm
     fi
     
     log_success "太棒了！所有源都换成飞速版本啦"
