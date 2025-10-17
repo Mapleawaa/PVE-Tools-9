@@ -45,9 +45,20 @@ bash <(curl -sSL https://ghfast.top/github.com/Mapleawaa/PVE-Tools-9/blob/main/P
 bash <(curl -sSL https://github.com/Mapleawaa/PVE-Tools-9/blob/main/PVE-Tools.sh)
 ```
 
-#### PVE7~8升级PVE9快捷工具
-新项目!! 快来看! 快速升级PVE9
-![PVE 8 Upgrade Helper](https://img.shields.io/badge/PVE%208%20Upgrade%20Helper-Quick%20Upgrade%20Tool-blue?style=for-the-badge&logo=proxmox&logoColor=white)
+---
+
+<div align="center">
+<strong> [新功能!] 自带小工具软件 </strong> 
+
+<img src="./images/little-tools.png"> </img>
+**工具来源**
+**作者**: tteck
+**项目地址**: https://github.com/tteck/Proxmox
+**许可证**: MIT License
+##### 感谢 **tteck** 为 Proxmox 社区贡献的优秀工具！
+*如需了解更多工具详情，请访问原项目：*
+https://github.com/tteck/Proxmox
+</div>
 
 ---
 
