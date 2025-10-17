@@ -334,6 +334,10 @@ SOFTWARE.
   <img src="https://contrib.rocks/image?repo=Mapleawaa/PVE-Tools-9" />
 </a>
 
+特别感谢以下贡献者：
+- **[Mapleawaa](https://github.com/Mapleawaa)** - 项目创始人与主要维护者
+- **[Claude Code (Anthropic)](https://claude.ai)** - AI 代码助手，参与第三方工具集成、代码重构与优化
+
 ### 🏛️ 相关组织与项目
 
 - **[清华大学 TUNA 镜像站](https://mirrors.tuna.tsinghua.edu.cn/)** - 提供优质的镜像源服务
@@ -361,8 +365,10 @@ SOFTWARE.
 
 ### 🌟 如果这个项目对你有帮助，请给个 Star ⭐
 
-**用 ❤️ 由 AI Claude 4 和 Qwen3 联合打造**
-[**Qwen3** 是阿里云 Qwen 团队开发的大语言模型系列](https://github.com/QwenLM/Qwen3)
+**用 ❤️ 由 AI Claude Code 和 Qwen3 联合打造**
+
+[**Claude Code**](https://claude.ai/code) - Anthropic 官方 AI 编程助手
+[**Qwen3**](https://github.com/QwenLM/Qwen3) - 阿里云 Qwen 团队开发的大语言模型系列
 
 [![GitHub](https://img.shields.io/badge/GitHub-SovitxNetworks-181717?logo=github&logoColor=white)](https://github.com/Mapleawaa)
 
