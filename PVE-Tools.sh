@@ -1917,6 +1917,303 @@ remove_ceph() {
 }
 #---------PVE一键卸载ceph-----------
 
+#---------第三方小工具管理-----------
+# 小工具配置
+TOOLS_DIR="./Tools"
+TOOLS_SOURCE_URL="https://github.com/tteck/Proxmox/raw/main/misc"
+TOOLS_AUTHOR="tteck"
+TOOLS_REPO="https://github.com/tteck/Proxmox"
+
+# 小工具列表（名称|描述）
+declare -A TOOLS_LIST=(
+    ["post-pbs-install.sh"]="PBS 安装后配置|Post PBS Installation Setup"
+    ["post-pve-install.sh"]="PVE 安装后配置|Post PVE Installation Setup"
+    ["scaling-governor.sh"]="CPU 调频策略配置|CPU Scaling Governor Setup"
+    ["cron-update-lxcs.sh"]="定时更新 LXC 容器|Cron Update LXC Containers"
+    ["host-backup.sh"]="主机备份工具|Host Backup Tool"
+    ["kernel-clean.sh"]="内核清理工具|Kernel Cleanup Tool"
+    ["kernel-pin.sh"]="内核版本固定|Kernel Version Pin"
+    ["clean-lxcs.sh"]="清理 LXC 容器|Clean LXC Containers"
+    ["fstrim.sh"]="SSD Trim 优化|SSD Trim Optimization"
+    ["update-lxcs.sh"]="更新 LXC 容器|Update LXC Containers"
+    ["monitor-all.sh"]="全局监控工具|Monitor All Services"
+    ["netdata.sh"]="Netdata 监控安装|Netdata Monitoring Setup"
+    ["microcode.sh"]="CPU 微码更新|CPU Microcode Update"
+)
+
+# 检查并创建工具目录
+check_tools_directory() {
+    if [[ ! -d "$TOOLS_DIR" ]]; then
+        log_info "创建工具目录: $TOOLS_DIR"
+        mkdir -p "$TOOLS_DIR"
+    fi
+}
+
+# 下载所有小工具
+download_tools() {
+    log_step "开始下载第三方小工具集..."
+    check_tools_directory
+
+    echo
+    log_info "工具来源: ${CYAN}$TOOLS_AUTHOR${NC} - $TOOLS_REPO"
+    log_info "下载位置: ${CYAN}$TOOLS_DIR${NC}"
+    echo
+
+    local total=${#TOOLS_LIST[@]}
+    local current=0
+    local success=0
+    local failed=0
+
+    for tool_name in "${!TOOLS_LIST[@]}"; do
+        current=$((current + 1))
+        local tool_url="$TOOLS_SOURCE_URL/$tool_name"
+        local tool_path="$TOOLS_DIR/$tool_name"
+
+        # 显示进度
+        show_progress_bar $current $total "下载: $tool_name"
+
+        # 使用 curl 下载（带进度和超时）
+        if command -v curl &> /dev/null; then
+            if curl -fsSL --connect-timeout 10 --max-time 60 \
+                -o "$tool_path" "$tool_url" 2>/dev/null; then
+                chmod +x "$tool_path"
+                success=$((success + 1))
+            else
+                failed=$((failed + 1))
+                log_warn "下载失败: $tool_name"
+            fi
+        else
+            # 备用 wget
+            if wget -q -O "$tool_path" "$tool_url" 2>/dev/null; then
+                chmod +x "$tool_path"
+                success=$((success + 1))
+            else
+                failed=$((failed + 1))
+                log_warn "下载失败: $tool_name"
+            fi
+        fi
+    done
+
+    echo  # 进度条后换行
+    echo
+
+    if [[ $success -eq $total ]]; then
+        log_success "所有工具下载完成！成功: $success/$total"
+    elif [[ $success -gt 0 ]]; then
+        log_warn "部分工具下载完成。成功: $success, 失败: $failed"
+    else
+        log_error "工具下载失败！请检查网络连接"
+        return 1
+    fi
+
+    log_info "工具已保存到: ${CYAN}$(cd "$TOOLS_DIR" && pwd)${NC}"
+    return 0
+}
+
+# 检查工具是否已下载
+check_tools_downloaded() {
+    if [[ ! -d "$TOOLS_DIR" ]] || [[ $(ls -1 "$TOOLS_DIR"/*.sh 2>/dev/null | wc -l) -eq 0 ]]; then
+        return 1
+    fi
+    return 0
+}
+
+# 显示已下载的工具列表
+list_downloaded_tools() {
+    log_info "已下载的工具:"
+    echo
+
+    local index=1
+    for tool_name in "${!TOOLS_LIST[@]}"; do
+        local tool_path="$TOOLS_DIR/$tool_name"
+        local desc_full="${TOOLS_LIST[$tool_name]}"
+        local desc_cn=$(echo "$desc_full" | cut -d'|' -f1)
+        local desc_en=$(echo "$desc_full" | cut -d'|' -f2)
+
+        if [[ -f "$tool_path" ]]; then
+            printf "  ${GREEN}%-2s${NC}. %-30s ${CYAN}%s${NC}\n" "$index" "$desc_cn" "($desc_en)"
+            printf "      ${YELLOW}文件:${NC} %s\n" "$tool_name"
+        else
+            printf "  ${RED}%-2s${NC}. %-30s ${RED}(未下载)${NC}\n" "$index" "$desc_cn"
+        fi
+
+        index=$((index + 1))
+        echo
+    done
+}
+
+# 执行小工具
+run_tool() {
+    local tool_name="$1"
+    local tool_path="$TOOLS_DIR/$tool_name"
+
+    if [[ ! -f "$tool_path" ]]; then
+        log_error "工具不存在: $tool_name"
+        return 1
+    fi
+
+    if [[ ! -x "$tool_path" ]]; then
+        log_warn "工具不可执行，尝试添加执行权限..."
+        chmod +x "$tool_path"
+    fi
+
+    local desc_full="${TOOLS_LIST[$tool_name]}"
+    local desc_cn=$(echo "$desc_full" | cut -d'|' -f1)
+
+    echo
+    log_step "准备执行工具: ${GREEN}$desc_cn${NC}"
+    log_info "工具文件: ${CYAN}$tool_name${NC}"
+    log_info "工具路径: ${CYAN}$tool_path${NC}"
+    echo
+
+    echo "${UI_BORDER}"
+    log_warn "注意事项："
+    echo "  1. 此工具来自第三方项目: $TOOLS_AUTHOR"
+    echo "  2. 工具执行可能修改系统配置"
+    echo "  3. 建议先了解工具功能再使用"
+    echo "  4. 项目地址: $TOOLS_REPO"
+    echo "${UI_DIVIDER}"
+
+    read -p "确认执行此工具吗？(y/N): " confirm
+    if [[ "$confirm" != "y" && "$confirm" != "Y" ]]; then
+        log_info "已取消工具执行"
+        return 0
+    fi
+
+    echo
+    log_step "开始执行工具..."
+    echo "${UI_BORDER}"
+
+    # 记录执行日志
+    log_info "工具执行开始: $tool_name ($(date '+%Y-%m-%d %H:%M:%S'))"
+
+    # 执行工具并捕获输出
+    if bash "$tool_path"; then
+        echo "${UI_BORDER}"
+        log_success "工具执行完成: $desc_cn"
+        log_info "工具执行结束: $tool_name ($(date '+%Y-%m-%d %H:%M:%S'))"
+    else
+        echo "${UI_BORDER}"
+        log_error "工具执行失败: $desc_cn"
+        log_error "工具执行失败: $tool_name (退出码: $?)"
+    fi
+}
+
+# 小工具选择菜单
+tools_selection_menu() {
+    while true; do
+        clear
+        show_banner
+        show_menu_header "第三方小工具管理"
+
+        echo "  工具来源: ${CYAN}$TOOLS_AUTHOR${NC}"
+        echo "  项目地址: ${BLUE}$TOOLS_REPO${NC}"
+        echo "${UI_DIVIDER}"
+
+        # 显示工具列表
+        local index=1
+        local -a tool_names=()
+
+        for tool_name in $(echo "${!TOOLS_LIST[@]}" | tr ' ' '\n' | sort); do
+            tool_names[$index]=$tool_name
+            local desc_full="${TOOLS_LIST[$tool_name]}"
+            local desc_cn=$(echo "$desc_full" | cut -d'|' -f1)
+            local tool_path="$TOOLS_DIR/$tool_name"
+
+            if [[ -f "$tool_path" ]]; then
+                show_menu_option "$index" "$desc_cn ${GREEN}✓${NC}"
+            else
+                show_menu_option "$index" "$desc_cn ${RED}✗${NC}"
+            fi
+
+            index=$((index + 1))
+        done
+
+        echo "${UI_DIVIDER}"
+        show_menu_option "r" "重新下载所有工具"
+        show_menu_option "l" "列出工具详情"
+        show_menu_option "0" "返回主菜单"
+        show_menu_footer
+        echo
+
+        read -p "请选择工具 [0-${#TOOLS_LIST[@]}] 或 [r/l]: " choice
+        echo
+
+        case $choice in
+            0)
+                break
+                ;;
+            r)
+                download_tools
+                pause_function
+                ;;
+            l)
+                list_downloaded_tools
+                pause_function
+                ;;
+            [1-9]|[1-9][0-9])
+                if [[ $choice -le ${#TOOLS_LIST[@]} ]] && [[ -n "${tool_names[$choice]}" ]]; then
+                    run_tool "${tool_names[$choice]}"
+                else
+                    log_error "无效选择"
+                fi
+                pause_function
+                ;;
+            *)
+                log_error "无效选择，请重新输入"
+                pause_function
+                ;;
+        esac
+    done
+}
+
+# 第三方工具主入口
+third_party_tools_menu() {
+    # 检查是否已下载工具
+    if ! check_tools_downloaded; then
+        clear
+        show_banner
+        show_menu_header "第三方小工具管理"
+
+        echo "  检测到您还未下载第三方工具集"
+        echo
+        log_info "工具来源: ${CYAN}$TOOLS_AUTHOR${NC}"
+        log_info "项目地址: ${BLUE}$TOOLS_REPO${NC}"
+        log_info "工具数量: ${GREEN}${#TOOLS_LIST[@]}${NC} 个"
+        echo
+        echo "  这些工具包括:"
+        echo "    • PVE/PBS 安装后配置"
+        echo "    • CPU 调频策略管理"
+        echo "    • LXC 容器管理"
+        echo "    • 内核管理工具"
+        echo "    • 系统监控工具"
+        echo "    • 等等..."
+        echo
+        echo "${UI_DIVIDER}"
+
+        read -p "是否立即下载工具集？(Y/n): " download_confirm
+        download_confirm=${download_confirm:-Y}
+
+        if [[ "$download_confirm" == "Y" || "$download_confirm" == "y" ]]; then
+            echo
+            download_tools
+            pause_function
+
+            # 下载成功后进入工具菜单
+            if check_tools_downloaded; then
+                tools_selection_menu
+            fi
+        else
+            log_info "已取消下载"
+            return 0
+        fi
+    else
+        # 已下载，直接进入工具菜单
+        tools_selection_menu
+    fi
+}
+#---------第三方小工具管理-----------
+
 # PVE8 to PVE9 升级功能
 pve8_to_pve9_upgrade() {
     log_step "开始 PVE 8.x 升级到 PVE 9.x"
@@ -2191,13 +2488,14 @@ show_menu() {
     show_menu_option "11" "Ceph管理 (存储相关配置)"
     show_menu_option "12" "内核管理 (内核切换/更新/清理)"
     show_menu_option "13" "PVE8 升级到 PVE9 (PVE8专用)"
+    show_menu_option "14" "第三方工具集 (tteck社区工具)"
     echo
     show_menu_option "0"  "退出脚本"
     show_menu_option "520" "给作者点个Star吧，谢谢喵~"
     show_menu_footer
     echo
     echo "小贴士：新装系统推荐选择 7 进行一键配置"
-    echo -n "请输入您的选择 [0-13, 520]: "
+    echo -n "请输入您的选择 [0-14, 520]: "
 }
 
 # 一键配置
@@ -2634,6 +2932,9 @@ main() {
             13)
                 pve8_to_pve9_upgrade
                 ;;
+            14)
+                third_party_tools_menu
+                ;;
             520)
                 echo "项目地址：https://github.com/Mapleawaa/PVE-Tools-9"
                 echo "有你真好~"
@@ -2645,7 +2946,7 @@ main() {
                 ;;
             *)
                 log_error "哎呀，这个选项不存在呢"
-                log_warn "请输入 0-13 之间的数字"
+                log_warn "请输入 0-14 之间的数字"
                 ;;
         esac
         
