@@ -1955,8 +1955,8 @@ download_tools() {
     check_tools_directory
 
     echo
-    log_info "工具来源: ${CYAN}$TOOLS_AUTHOR${NC} - $TOOLS_REPO"
-    log_info "下载位置: ${CYAN}$TOOLS_DIR${NC}"
+    log_info "工具来源: $TOOLS_AUTHOR - $TOOLS_REPO"
+    log_info "下载位置: $TOOLS_DIR"
     echo
 
     local total=${#TOOLS_LIST[@]}
@@ -2006,7 +2006,7 @@ download_tools() {
         return 1
     fi
 
-    log_info "工具已保存到: ${CYAN}$(cd "$TOOLS_DIR" && pwd)${NC}"
+    log_info "工具已保存到: $(cd "$TOOLS_DIR" && pwd)"
     return 0
 }
 
@@ -2031,10 +2031,10 @@ list_downloaded_tools() {
         local desc_en=$(echo "$desc_full" | cut -d'|' -f2)
 
         if [[ -f "$tool_path" ]]; then
-            printf "  ${GREEN}%-2s${NC}. %-30s ${CYAN}%s${NC}\n" "$index" "$desc_cn" "($desc_en)"
-            printf "      ${YELLOW}文件:${NC} %s\n" "$tool_name"
+            printf "  %-2s. %-30s %s\n" "$index" "$desc_cn" "($desc_en)"
+            printf "      文件: %s\n" "$tool_name"
         else
-            printf "  ${RED}%-2s${NC}. %-30s ${RED}(未下载)${NC}\n" "$index" "$desc_cn"
+            printf "  %-2s. %-30s %s\n" "$index" "$desc_cn" "(未下载)"
         fi
 
         index=$((index + 1))
@@ -2061,9 +2061,9 @@ run_tool() {
     local desc_cn=$(echo "$desc_full" | cut -d'|' -f1)
 
     echo
-    log_step "准备执行工具: ${GREEN}$desc_cn${NC}"
-    log_info "工具文件: ${CYAN}$tool_name${NC}"
-    log_info "工具路径: ${CYAN}$tool_path${NC}"
+    log_step "准备执行工具: $desc_cn"
+    log_info "工具文件: $tool_name"
+    log_info "工具路径: $tool_path"
     echo
 
     echo "${UI_BORDER}"
@@ -2106,8 +2106,8 @@ tools_selection_menu() {
         show_banner
         show_menu_header "第三方小工具管理"
 
-        echo "  工具来源: ${CYAN}$TOOLS_AUTHOR${NC}"
-        echo "  项目地址: ${BLUE}$TOOLS_REPO${NC}"
+        echo "  工具来源: $TOOLS_AUTHOR"
+        echo "  项目地址: $TOOLS_REPO"
         echo "${UI_DIVIDER}"
 
         # 显示工具列表
@@ -2121,9 +2121,9 @@ tools_selection_menu() {
             local tool_path="$TOOLS_DIR/$tool_name"
 
             if [[ -f "$tool_path" ]]; then
-                show_menu_option "$index" "$desc_cn ${GREEN}✓${NC}"
+                show_menu_option "$index" "$desc_cn ✓"
             else
-                show_menu_option "$index" "$desc_cn ${RED}✗${NC}"
+                show_menu_option "$index" "$desc_cn ✗"
             fi
 
             index=$((index + 1))
@@ -2177,9 +2177,9 @@ third_party_tools_menu() {
 
         echo "  检测到您还未下载第三方工具集"
         echo
-        log_info "工具来源: ${CYAN}$TOOLS_AUTHOR${NC}"
-        log_info "项目地址: ${BLUE}$TOOLS_REPO${NC}"
-        log_info "工具数量: ${GREEN}${#TOOLS_LIST[@]}${NC} 个"
+        log_info "工具来源: $TOOLS_AUTHOR"
+        log_info "项目地址: $TOOLS_REPO"
+        log_info "工具数量: ${#TOOLS_LIST[@]} 个"
         echo
         echo "  这些工具包括:"
         echo "    • PVE/PBS 安装后配置"
