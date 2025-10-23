@@ -17,8 +17,8 @@ BLUE='\033[0;34m'
 CYAN='\033[0;36m'
 MAGENTA='\033[0;35m'
 WHITE='\033[1;37m'
-ORANGE='\033[0;33m'  # Alternative to YELLOW for warnings
-NC='\033[0m' # No Color
+ORANGE='\033[0;33m'  
+NC='\033[0m'
 
 # UI 界面一致性常量
 UI_BORDER="------------------------------------------------"
