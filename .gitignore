@@ -29,3 +29,9 @@ build/
 *.swp
 # Ignore coverage reports
 coverage/
+
+# Ignore testing files
+Proxmox-Helper-Script/
+
+# Ignore Claude code files
+.claude/
