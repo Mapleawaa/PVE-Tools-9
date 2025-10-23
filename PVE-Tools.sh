@@ -1758,8 +1758,29 @@ EOF
 
     log_info "修改页面高度"
     disk_count=$(lsblk -d -o NAME | grep -cE 'sd[a-z]|nvme[0-9]')
-    # 高度变量，某些CPU核心过多，或者想显示那个PVE存储库那一行，导致高度不够，修改69为合适的数字，如80、100等。
-    height_increase=$((disk_count * 69))
+
+    # 让用户自定义高度变量
+    echo
+    echo "检测到磁盘数量: $disk_count"
+    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    echo "高度变量说明："
+    echo "  - 默认值: 69 (适用于大多数场景)"
+    echo "  - 推荐范围: 50-100"
+    echo "  - 如果您的CPU核心过多或想显示更多信息,可适当增大"
+    echo "  - 如果界面出现遮挡,可适当减小此值"
+    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    echo
+    read -p "请输入高度增量值 (直接回车使用默认值 69): " height_multiplier
+
+    # 验证输入是否为数字,如果不是或为空则使用默认值
+    if [[ -z "$height_multiplier" ]] || ! [[ "$height_multiplier" =~ ^[0-9]+$ ]]; then
+        height_multiplier=69
+        log_info "使用默认高度增量: 69"
+    else
+        log_info "使用自定义高度增量: $height_multiplier"
+    fi
+
+    height_increase=$((disk_count * height_multiplier))
 
     node_status_new_height=$((400 + height_increase))
     sed -i -r '/widget\.pveNodeStatus/,+5{/height/{s#[0-9]+#'$node_status_new_height'#}}' $pvemanagerlib
@@ -2169,6 +2190,31 @@ tools_selection_menu() {
 
 # 第三方工具主入口
 third_party_tools_menu() {
+    clear
+    show_banner
+
+    # 显示重要警告信息
+    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    echo -e "${RED}⚠️  重要提示  ⚠️${NC}"
+    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    echo
+    log_warn "此处提到的脚本已经不再更新，使用可能会出现问题"
+    echo
+    echo -e "${YELLOW}存在这里的意义仅是为了提示您：${NC}"
+    echo "  有第三方社区提供了更完善的脚本工具集"
+    echo
+    echo -e "${GREEN}推荐访问以下地址获取最新可用脚本：${NC}"
+    echo -e "${CYAN}  👉 https://community-scripts.github.io/ProxmoxVE/scripts${NC}"
+    echo
+    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    echo
+    read -p "按任意键继续 (或输入 'q' 返回主菜单): " -n 1 continue_choice
+    echo
+
+    if [[ "$continue_choice" == "q" || "$continue_choice" == "Q" ]]; then
+        return 0
+    fi
+
     # 检查是否已下载工具
     if ! check_tools_downloaded; then
         clear
@@ -2177,7 +2223,9 @@ third_party_tools_menu() {
 
         echo "  检测到您还未下载第三方工具集"
         echo
-        log_info "工具来源: $TOOLS_AUTHOR"
+        log_warn "注意: 这些工具来自旧版仓库，可能存在兼容性问题"
+        echo
+        log_info "工具来源: $TOOLS_AUTHOR (已停止更新)"
         log_info "项目地址: $TOOLS_REPO"
         log_info "工具数量: ${#TOOLS_LIST[@]} 个"
         echo
@@ -2711,34 +2759,35 @@ custom_temp_monitoring() {
     
     # Define options
     declare -A options
-    options[0]="CPU 实时主频"
-    options[1]="CPU 最小及最大主频 (必选 0)"
-    options[2]="CPU 线程主频"
-    options[3]="CPU 工作模式 (必选 0)"
-    options[4]="CPU 功率 (必选 0)"
-    options[5]="CPU 温度"
-    options[6]="CPU 核心温度 (不支持 AMD, 必选 5)"
-    options[7]="核显温度 (仅支持 AMD, 必选 5)"
-    options[8]="风扇转速 (可能需要单独安装传感器驱动, 必选 5)"
-    options[9]="UPS 信息 (仅支持 apcupsd - apcaccess 软件包)"
-    options[a]="硬盘基础信息 (容量、寿命 (仅 NVME )、温度)"
-    options[b]="硬盘通电信息 (必选 a)"
-    options[c]="硬盘 IO 信息 (必选 a)"
-    options[l]="概要信息: 居左显示"
-    options[r]="概要信息: 居右显示"
-    options[m]="概要信息: 居中显示"
-    options[j]="概要信息: 平铺显示"
+    # options[0]="CPU 实时主频"
+    # options[1]="CPU 最小及最大主频 (必选 0)"
+    # options[2]="CPU 线程主频"
+    # options[3]="CPU 工作模式 (必选 0)"
+    # options[4]="CPU 功率 (必选 0)"
+    # options[5]="CPU 温度"
+    # options[6]="CPU 核心温度 (不支持 AMD, 必选 5)"
+    # options[7]="核显温度 (仅支持 AMD, 必选 5)"
+    # options[8]="风扇转速 (可能需要单独安装传感器驱动, 必选 5)"
+    # options[9]="UPS 信息 (仅支持 apcupsd - apcaccess 软件包)"
+    # options[a]="硬盘基础信息 (容量、寿命 (仅 NVME )、温度)"
+    # options[b]="硬盘通电信息 (必选 a)"
+    # options[c]="硬盘 IO 信息 (必选 a)"
+    # options[l]="概要信息: 居左显示"
+    # options[r]="概要信息: 居右显示"
+    # options[m]="概要信息: 居中显示"
+    # options[j]="概要信息: 平铺显示"
     options[o]="推荐方案一：高大全 (除 UPS 信息以外全部居右显示)"
     options[p]="推荐方案二：精简"
     options[q]="推荐方案三：极简"
     options[x]="一键清空 (还原默认)"
     options[s]="跳过本次修改"
     
-    echo "请选择要启用的监控项目 (用空格分隔，如: 0 5 6):"
+    echo "请选择要启用的监控项目 (用空格分隔，如: o):"
     echo
     
     # Display options with checkboxes
-    for key in 0 1 2 3 4 5 6 7 8 9 a b c l r m j o p q x s; do
+    # for key in 0 1 2 3 4 5 6 7 8 9 a b c l r m j o p q x s; do
+    for key in o p q x s; do
         if [[ -n "${options[$key]}" ]]; then
             echo "  [ ] $key) ${options[$key]}"
         fi
