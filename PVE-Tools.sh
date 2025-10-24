@@ -789,12 +789,12 @@ EOF
     if [[ -f "/usr/share/perl5/PVE/APLInfo.pm" ]]; then
         backup_file "/usr/share/perl5/PVE/APLInfo.pm"
         # 先恢复为官方源,确保可以二次替换
-        sed -i "s|https://mirrors.ustc.edu.cn/proxmox/images/system|http://download.proxmox.com|g" /usr/share/perl5/PVE/APLInfo.pm
-        sed -i "s|https://mirrors.tuna.tsinghua.edu.cn/proxmox/images/system|http://download.proxmox.com|g" /usr/share/perl5/PVE/APLInfo.pm
-        sed -i "s|https://mirrors.ustc.edu.cn/proxmox/debian/pve/images|http://download.proxmox.com|g" /usr/share/perl5/PVE/APLInfo.pm
-        sed -i "s|https://mirrors.tuna.tsinghua.edu.cn/proxmox/debian/pve/images|http://download.proxmox.com|g" /usr/share/perl5/PVE/APLInfo.pm
+        sed -i "s|https://mirrors.ustc.edu.cn/proxmox/images/system|http://download.proxmox.com/images|g" /usr/share/perl5/PVE/APLInfo.pm
+        sed -i "s|https://mirrors.tuna.tsinghua.edu.cn/proxmox/images/system|http://download.proxmox.com/images|g" /usr/share/perl5/PVE/APLInfo.pm
+        sed -i "s|https://mirrors.ustc.edu.cn/proxmox/debian/pve/images|http://download.proxmox.com/images|g" /usr/share/perl5/PVE/APLInfo.pm
+        sed -i "s|https://mirrors.tuna.tsinghua.edu.cn/proxmox/debian/pve/images|http://download.proxmox.com/images|g" /usr/share/perl5/PVE/APLInfo.pm
         # 然后替换为选定的镜像源
-        sed -i "s|http://download.proxmox.com|$ct_mirror|g" /usr/share/perl5/PVE/APLInfo.pm
+        sed -i "s|http://download.proxmox.com/images|$ct_mirror|g" /usr/share/perl5/PVE/APLInfo.pm
     fi
     
     log_success "太棒了！所有源都换成飞速版本啦"
