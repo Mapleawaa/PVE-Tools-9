@@ -1223,10 +1223,12 @@ cpu_add() {
 EOF
 
     # NVME磁盘变量 (动态检测)
+    detected_nvmes=()  # 存储检测到的 NVMe 索引
     for i in {0..9}; do
         for dev in "/dev/nvme${i}" "/dev/nvme${i}n1"; do
             if [ -b "$dev" ]; then
                 echo "检测到NVME磁盘: $dev" >&2
+                detected_nvmes+=($i)  # 记录检测到的 NVMe 编号
                 cat >> $tmpf << EOF
 
         my \$nvme${i}_temperatures = \`smartctl -a $dev | grep -E "Model Number|(?=Total|Namespace)[^:]+Capacity|Temperature:|Available Spare:|Percentage|Data Unit|Power Cycles|Power On Hours|Unsafe Shutdowns|Integrity Errors"\`;
@@ -1238,6 +1240,9 @@ EOF
             fi
         done
     done
+
+    # 输出检测到的 NVMe 数量
+    log_info "检测到 ${#detected_nvmes[@]} 块 NVMe 硬盘: ${detected_nvmes[*]}"
 
     ###################  修改node.pm   ##########################
     log_info "修改node.pm："
@@ -1411,13 +1416,25 @@ EOF
     检测不到相关参数的可以注释掉---需要的注释本行即可  */
 
     // /* 检测不到相关参数的可以注释掉---需要的注释本行即可
-    // NVME硬盘温度
+EOF
+
+    # 为每个检测到的 NVMe 生成 JavaScript 显示块
+    for nvme_idx in "${detected_nvmes[@]}"; do
+        # 决定标题：第一块显示 "NVME硬盘"，后续显示 "NVME硬盘 #N"
+        if [ "$nvme_idx" -eq 0 ] && [ "${#detected_nvmes[@]}" -eq 1 ]; then
+            nvme_title="NVME硬盘"
+        else
+            nvme_title="NVME硬盘 #$((nvme_idx))"
+        fi
+
+        cat >> $tmpf << EOF
+    // NVME${nvme_idx} 硬盘温度
     {
-        itemId: 'nvme0-status',
+        itemId: 'nvme${nvme_idx}-status',
         colspan: 2,
         printBar: false,
-        title: gettext('NVME硬盘'),
-        textField: 'nvme0_status',
+        title: gettext('${nvme_title}'),
+        textField: 'nvme${nvme_idx}_status',
         renderer:function(value){
             if (value.length > 0) {
                 value = value.replace(/Â/g, '');
@@ -1656,7 +1673,12 @@ EOF
         }
     }
 },
+EOF
+    done  # 结束 NVMe 循环
+
+    cat >> $tmpf << 'EOF'
     // 检测不到相关参数的可以注释掉---需要的注释本行即可  */
+
 
     // SATA硬盘温度
     {
