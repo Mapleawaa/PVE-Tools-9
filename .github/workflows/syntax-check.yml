@@ -1,0 +1,80 @@
+name: Syntax Check on Push
+
+on:
+  push:
+    branches:
+      - main
+      - beta
+    paths:
+      - '*.sh'
+      - 'Tools/*.sh'
+
+jobs:
+  syntax-check:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install ShellCheck
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y shellcheck
+
+      - name: Bash syntax check
+        run: |
+          echo "🔍 检查 Bash 脚本语法..."
+          if bash -n PVE-Tools.sh; then
+            echo "✅ PVE-Tools.sh 语法检查通过"
+          else
+            echo "❌ PVE-Tools.sh 语法检查失败"
+            exit 1
+          fi
+
+          # 检查 Tools 目录下的脚本
+          for script in Tools/*.sh; do
+            if [ -f "$script" ]; then
+              echo "🔍 检查 $script..."
+              if bash -n "$script"; then
+                echo "✅ $script 语法检查通过"
+              else
+                echo "❌ $script 语法检查失败"
+                exit 1
+              fi
+            fi
+          done
+
+      - name: ShellCheck lint
+        run: |
+          echo "🔍 执行 ShellCheck 静态分析..."
+          # 忽略一些常见的警告（根据项目实际情况调整）
+          shellcheck -e SC2086,SC2181,SC2162 -f gcc PVE-Tools.sh || true
+
+          # 严格模式：检查严重错误
+          if shellcheck -S error PVE-Tools.sh; then
+            echo "✅ ShellCheck 严重错误检查通过"
+          else
+            echo "❌ ShellCheck 发现严重错误"
+            exit 1
+          fi
+
+      - name: Check for dangerous commands
+        run: |
+          echo "🔍 检查潜在危险命令..."
+          DANGEROUS_PATTERNS=("rm -rf /" "dd if=" "mkfs." ":(){ :|:& };:")
+
+          for pattern in "${DANGEROUS_PATTERNS[@]}"; do
+            if grep -q "$pattern" PVE-Tools.sh; then
+              echo "⚠️  发现潜在危险命令: $pattern"
+            fi
+          done
+
+          echo "✅ 危险命令检查完成"
+
+      - name: Report results
+        if: success()
+        run: |
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+          echo "🎉 所有语法检查通过！"
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"

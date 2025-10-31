@@ -9,53 +9,193 @@ jobs:
   beta-release:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout repository
+        uses: actions/checkout@v4
         with:
           fetch-depth: 0
-          
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y shellcheck
+
+      # ====== 语法检查阶段 ======
+      - name: Bash syntax validation
+        run: |
+          echo "🔍 执行 Bash 语法检查..."
+          if bash -n PVE-Tools.sh; then
+            echo "✅ 语法检查通过"
+          else
+            echo "❌ 语法检查失败，终止发布流程"
+            exit 1
+          fi
+
+      - name: ShellCheck analysis
+        run: |
+          echo "🔍 执行 ShellCheck 静态分析..."
+          shellcheck -e SC2086,SC2181,SC2162 -f gcc PVE-Tools.sh || true
+
+          # Beta 版本允许更宽松的检查
+          if shellcheck -S error PVE-Tools.sh; then
+            echo "✅ ShellCheck 检查通过"
+          else
+            echo "⚠️  ShellCheck 发现问题，但继续发布 Beta 版本"
+          fi
+
+      # ====== 版本管理阶段 ======
       - name: Get version from tag
         id: get_version
         run: |
           VERSION=${GITHUB_REF#refs/tags/v}
           echo "VERSION=$VERSION" >> $GITHUB_OUTPUT
-          
+          echo "📦 发布 Beta 版本: $VERSION"
+
       - name: Update VERSION file
         run: |
           echo "${{ steps.get_version.outputs.VERSION }}" > VERSION
-          
+
       - name: Update script version
         run: |
           sed -i "s/CURRENT_VERSION=\".*\"/CURRENT_VERSION=\"${{ steps.get_version.outputs.VERSION }}\"/" PVE-Tools.sh
-          
+
       - name: Commit version changes
         run: |
           git config --local user.email "action@github.com"
           git config --local user.name "GitHub Action"
           git add VERSION PVE-Tools.sh
           git commit -m "chore: update beta version to ${{ steps.get_version.outputs.VERSION }}" || echo "No changes to commit"
-          
+
       - name: Push changes
         uses: ad-m/github-push-action@master
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
           branch: beta
-          
-      - name: Create GitHub Release
-        uses: actions/create-release@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      # ====== 生成更新日志阶段 ======
+      - name: Generate formatted changelog
+        id: changelog
+        run: |
+          echo "📝 生成 Beta 版本更新日志..."
+
+          # 获取标签信息
+          CURRENT_TAG=$(git describe --tags --abbrev=0)
+          PREVIOUS_TAG=$(git describe --tags --abbrev=0 $(git rev-list --tags --skip=1 --max-count=1) 2>/dev/null || echo "")
+
+          # 如果没有前一个标签，使用第一个提交
+          if [ -z "$PREVIOUS_TAG" ]; then
+            PREVIOUS_TAG=$(git rev-list --max-parents=0 HEAD)
+          fi
+
+          echo "📊 版本范围: $PREVIOUS_TAG → $CURRENT_TAG"
+
+          # 生成分类的更新日志
+          cat > changelog.md << 'CHANGELOG_EOF'
+          ## 📋 Beta 版本更新日志
+
+          CHANGELOG_EOF
+
+          # 新增功能
+          FEATURES=$(git log --pretty=format:"%s (%an)" $PREVIOUS_TAG..$CURRENT_TAG | grep -i "^feat\|^feature" || true)
+          if [ -n "$FEATURES" ]; then
+            echo "### ✨ 新增功能" >> changelog.md
+            echo "$FEATURES" | sed 's/^feat\(([^)]*)\)\?://i' | sed 's/^feature\(([^)]*)\)\?://i' | while read line; do
+              echo "- $line" >> changelog.md
+            done
+            echo "" >> changelog.md
+          fi
+
+          # 错误修复
+          FIXES=$(git log --pretty=format:"%s (%an)" $PREVIOUS_TAG..$CURRENT_TAG | grep -i "^fix\|^bugfix" || true)
+          if [ -n "$FIXES" ]; then
+            echo "### 🐛 错误修复" >> changelog.md
+            echo "$FIXES" | sed 's/^fix\(([^)]*)\)\?://i' | sed 's/^bugfix\(([^)]*)\)\?://i' | while read line; do
+              echo "- $line" >> changelog.md
+            done
+            echo "" >> changelog.md
+          fi
+
+          # 实验性功能
+          EXPERIMENTAL=$(git log --pretty=format:"%s (%an)" $PREVIOUS_TAG..$CURRENT_TAG | grep -i "^experimental\|^wip" || true)
+          if [ -n "$EXPERIMENTAL" ]; then
+            echo "### 🧪 实验性功能" >> changelog.md
+            echo "$EXPERIMENTAL" | sed 's/^experimental\(([^)]*)\)\?://i' | sed 's/^wip\(([^)]*)\)\?://i' | while read line; do
+              echo "- $line" >> changelog.md
+            done
+            echo "" >> changelog.md
+          fi
+
+          # 其他改动
+          OTHERS=$(git log --pretty=format:"%s (%an)" $PREVIOUS_TAG..$CURRENT_TAG | grep -iv "^feat\|^feature\|^fix\|^bugfix\|^experimental\|^wip\|^chore\|^style\|^refactor\|^test\|^build\|^ci" || true)
+          if [ -n "$OTHERS" ]; then
+            echo "### 🔧 其他改动" >> changelog.md
+            echo "$OTHERS" | while read line; do
+              echo "- $line" >> changelog.md
+            done
+            echo "" >> changelog.md
+          fi
+
+          # 提交统计
+          COMMIT_COUNT=$(git rev-list --count $PREVIOUS_TAG..$CURRENT_TAG)
+          echo "### 📊 版本统计" >> changelog.md
+          echo "- 提交数量: $COMMIT_COUNT" >> changelog.md
+
+          # 读取生成的 changelog
+          CHANGELOG_CONTENT=$(cat changelog.md)
+
+          # 使用 EOF 分隔符输出多行内容
+          echo "CHANGELOG<<CHANGELOG_DELIMITER" >> $GITHUB_OUTPUT
+          echo "$CHANGELOG_CONTENT" >> $GITHUB_OUTPUT
+          echo "CHANGELOG_DELIMITER" >> $GITHUB_OUTPUT
+
+          echo "✅ Beta 版本更新日志生成完成"
+
+      # ====== 创建 Beta Release ======
+      - name: Create GitHub Beta Release
+        uses: softprops/action-gh-release@v1
         with:
-          tag_name: ${{ github.ref }}
-          release_name: Beta Release ${{ github.ref }}
+          tag_name: v${{ steps.get_version.outputs.VERSION }}
+          name: 🚧 Beta Release v${{ steps.get_version.outputs.VERSION }}
           body: |
-            ## Beta 版本 ${{ steps.get_version.outputs.VERSION }}
-            
-            ⚠️ 这是测试版本，可能存在不稳定因素，请勿在生产环境使用
-            
-            ## 安装方式
-            
+            # PVE Tools 9 - Beta v${{ steps.get_version.outputs.VERSION }}
+
+            > ⚠️  **这是测试版本**
+            > 此版本用于功能测试和早期体验，可能存在未知问题。
+            > **请勿在生产环境使用！**
+
+            ${{ steps.changelog.outputs.CHANGELOG }}
+
+            ---
+
+            ## 📥 安装方式
+
+            ### Beta 版本安装
             ```bash
-            bash <(curl -sSL https://github.com/Mapleawaa/PVE-Tools-9/blob/beta/PVE-Tools.sh)
+            bash <(curl -sSL https://raw.githubusercontent.com/Mapleawaa/PVE-Tools-9/beta/PVE-Tools.sh)
             ```
+
+            ### 手动下载
+            ```bash
+            wget https://github.com/Mapleawaa/PVE-Tools-9/releases/download/v${{ steps.get_version.outputs.VERSION }}/PVE-Tools.sh
+            chmod +x PVE-Tools.sh
+            sudo ./PVE-Tools.sh
+            ```
+
+            ## ⚠️  使用须知
+            1. 建议在虚拟机或测试环境中使用
+            2. 使用前请备份重要数据
+            3. 发现问题请及时反馈
+
+            ## 💬 反馈渠道
+            - [提交 Bug](https://github.com/Mapleawaa/PVE-Tools-9/issues/new?template=report-bugs.md)
+            - [功能建议](https://github.com/Mapleawaa/PVE-Tools-9/issues/new?template=feature-request.md)
+
+            ---
+
+            **完整提交历史**: [`${{ steps.get_version.outputs.VERSION }}`](https://github.com/Mapleawaa/PVE-Tools-9/commits/v${{ steps.get_version.outputs.VERSION }})
           draft: false
           prerelease: true
+          files: |
+            PVE-Tools.sh
+            VERSION
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

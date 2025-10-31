@@ -9,6 +9,7 @@
 [![Shell Script](https://img.shields.io/badge/Shell-Script-4EAA25?logo=gnu-bash&logoColor=white)](https://www.gnu.org/software/bash/)
 [![Proxmox VE](https://img.shields.io/badge/Proxmox-VE%209.0-E57000?logo=proxmox&logoColor=white)](https://www.proxmox.com/)
 [![Debian](https://img.shields.io/badge/Debian-13%20(Trixie)-A81D33?logo=debian&logoColor=white)](https://www.debian.org/)
+[![Latest Release](https://img.shields.io/github/release/octocat/Hello-World.svg)](https://github.com/Mapleawaa/PVE-Tools-9/releases)
 
 **🌍 语言选择**
 
@@ -47,18 +48,7 @@ bash <(curl -sSL https://github.com/Mapleawaa/PVE-Tools-9/blob/main/PVE-Tools.sh
 
 ---
 
-<div align="center">
-<strong> [新功能!] 自带小工具软件 </strong> 
-
-<img src="./images/little-tools.png"> </img>
-**工具来源**
-**作者**: tteck
-**项目地址**: https://github.com/tteck/Proxmox
-**许可证**: MIT License
-##### 感谢 **tteck** 为 Proxmox 社区贡献的优秀工具！
-*如需了解更多工具详情，请访问原项目：*
-https://github.com/tteck/Proxmox
-</div>
+### 📚 更新日志   [![更新日志](https://img.shields.io/badge/Release-更新日志-green)](https://github.com/Mapleawaa/PVE-Tools-9/release)
 
 ---
 

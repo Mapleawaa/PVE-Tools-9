@@ -9,66 +9,211 @@ jobs:
   release:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout repository
+        uses: actions/checkout@v4
         with:
           fetch-depth: 0  # 获取所有历史以生成changelog
-      
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y shellcheck
+
+      # ====== 语法检查阶段 ======
+      - name: Bash syntax validation
+        run: |
+          echo "🔍 执行 Bash 语法检查..."
+          if bash -n PVE-Tools.sh; then
+            echo "✅ 语法检查通过"
+          else
+            echo "❌ 语法检查失败，终止发布流程"
+            exit 1
+          fi
+
+      - name: ShellCheck analysis
+        run: |
+          echo "🔍 执行 ShellCheck 静态分析..."
+          shellcheck -e SC2086,SC2181,SC2162 -f gcc PVE-Tools.sh || true
+
+          # 检查严重错误
+          if shellcheck -S error PVE-Tools.sh; then
+            echo "✅ ShellCheck 检查通过"
+          else
+            echo "❌ ShellCheck 发现严重错误，终止发布流程"
+            exit 1
+          fi
+
+      # ====== 版本管理阶段 ======
       - name: Get version from tag
         id: get_version
         run: |
           VERSION=${GITHUB_REF#refs/tags/v}
           echo "VERSION=$VERSION" >> $GITHUB_OUTPUT
-          
+          echo "📦 发布版本: $VERSION"
+
       - name: Update VERSION file
         run: |
           echo "${{ steps.get_version.outputs.VERSION }}" > VERSION
-          
+
       - name: Update script version
         run: |
           sed -i "s/CURRENT_VERSION=\".*\"/CURRENT_VERSION=\"${{ steps.get_version.outputs.VERSION }}\"/" PVE-Tools.sh
-          
+
       - name: Commit version changes
         run: |
           git config --local user.email "action@github.com"
           git config --local user.name "GitHub Action"
           git add VERSION PVE-Tools.sh
           git commit -m "chore: update version to ${{ steps.get_version.outputs.VERSION }}" || echo "No changes to commit"
-          
+
       - name: Push changes
         uses: ad-m/github-push-action@master
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
           branch: main
-          
-      - name: Generate release notes
-        id: release_notes
+
+      # ====== 生成更新日志阶段 ======
+      - name: Generate formatted changelog
+        id: changelog
         run: |
-          # 生成基于提交历史的发布说明
-          LATEST_TAG=$(git describe --tags --abbrev=0)
-          PREVIOUS_TAG=$(git describe --tags --abbrev=0 $(git rev-list --tags --skip=1 --max-count=1))
-          CHANGELOG=$(git log --pretty=format:"%h - %s (%an)" $PREVIOUS_TAG..$LATEST_TAG)
-          echo "CHANGELOG<<EOF" >> $GITHUB_OUTPUT
-          echo "$CHANGELOG" >> $GITHUB_OUTPUT
-          echo "EOF" >> $GITHUB_OUTPUT
-          
+          echo "📝 生成格式化更新日志..."
+
+          # 获取标签信息
+          CURRENT_TAG=$(git describe --tags --abbrev=0)
+          PREVIOUS_TAG=$(git describe --tags --abbrev=0 $(git rev-list --tags --skip=1 --max-count=1) 2>/dev/null || echo "")
+
+          # 如果没有前一个标签，使用第一个提交
+          if [ -z "$PREVIOUS_TAG" ]; then
+            PREVIOUS_TAG=$(git rev-list --max-parents=0 HEAD)
+          fi
+
+          echo "📊 版本范围: $PREVIOUS_TAG → $CURRENT_TAG"
+
+          # 生成分类的更新日志
+          cat > changelog.md << 'CHANGELOG_EOF'
+          ## 📋 更新日志
+
+          CHANGELOG_EOF
+
+          # 新增功能
+          FEATURES=$(git log --pretty=format:"%s (%an)" $PREVIOUS_TAG..$CURRENT_TAG | grep -i "^feat\|^feature" || true)
+          if [ -n "$FEATURES" ]; then
+            echo "### ✨ 新增功能" >> changelog.md
+            echo "$FEATURES" | sed 's/^feat\(([^)]*)\)\?://i' | sed 's/^feature\(([^)]*)\)\?://i' | while read line; do
+              echo "- $line" >> changelog.md
+            done
+            echo "" >> changelog.md
+          fi
+
+          # 错误修复
+          FIXES=$(git log --pretty=format:"%s (%an)" $PREVIOUS_TAG..$CURRENT_TAG | grep -i "^fix\|^bugfix" || true)
+          if [ -n "$FIXES" ]; then
+            echo "### 🐛 错误修复" >> changelog.md
+            echo "$FIXES" | sed 's/^fix\(([^)]*)\)\?://i' | sed 's/^bugfix\(([^)]*)\)\?://i' | while read line; do
+              echo "- $line" >> changelog.md
+            done
+            echo "" >> changelog.md
+          fi
+
+          # 性能优化
+          PERF=$(git log --pretty=format:"%s (%an)" $PREVIOUS_TAG..$CURRENT_TAG | grep -i "^perf" || true)
+          if [ -n "$PERF" ]; then
+            echo "### ⚡ 性能优化" >> changelog.md
+            echo "$PERF" | sed 's/^perf\(([^)]*)\)\?://i' | while read line; do
+              echo "- $line" >> changelog.md
+            done
+            echo "" >> changelog.md
+          fi
+
+          # 文档更新
+          DOCS=$(git log --pretty=format:"%s (%an)" $PREVIOUS_TAG..$CURRENT_TAG | grep -i "^docs" || true)
+          if [ -n "$DOCS" ]; then
+            echo "### 📚 文档更新" >> changelog.md
+            echo "$DOCS" | sed 's/^docs\(([^)]*)\)\?://i' | while read line; do
+              echo "- $line" >> changelog.md
+            done
+            echo "" >> changelog.md
+          fi
+
+          # 其他改动
+          OTHERS=$(git log --pretty=format:"%s (%an)" $PREVIOUS_TAG..$CURRENT_TAG | grep -iv "^feat\|^feature\|^fix\|^bugfix\|^perf\|^docs\|^chore\|^style\|^refactor\|^test\|^build\|^ci" || true)
+          if [ -n "$OTHERS" ]; then
+            echo "### 🔧 其他改动" >> changelog.md
+            echo "$OTHERS" | while read line; do
+              echo "- $line" >> changelog.md
+            done
+            echo "" >> changelog.md
+          fi
+
+          # 提交统计
+          COMMIT_COUNT=$(git rev-list --count $PREVIOUS_TAG..$CURRENT_TAG)
+          CONTRIBUTOR_COUNT=$(git log --pretty=format:"%an" $PREVIOUS_TAG..$CURRENT_TAG | sort -u | wc -l)
+
+          echo "### 📊 版本统计" >> changelog.md
+          echo "- 提交数量: $COMMIT_COUNT" >> changelog.md
+          echo "- 贡献者数: $CONTRIBUTOR_COUNT" >> changelog.md
+          echo "" >> changelog.md
+
+          # 贡献者列表
+          echo "### 👥 贡献者" >> changelog.md
+          git log --pretty=format:"%an" $PREVIOUS_TAG..$CURRENT_TAG | sort -u | while read contributor; do
+            echo "- @$contributor" >> changelog.md
+          done
+
+          # 读取生成的 changelog
+          CHANGELOG_CONTENT=$(cat changelog.md)
+
+          # 使用 EOF 分隔符输出多行内容
+          echo "CHANGELOG<<CHANGELOG_DELIMITER" >> $GITHUB_OUTPUT
+          echo "$CHANGELOG_CONTENT" >> $GITHUB_OUTPUT
+          echo "CHANGELOG_DELIMITER" >> $GITHUB_OUTPUT
+
+          echo "✅ 更新日志生成完成"
+
+      # ====== 创建 Release ======
       - name: Create GitHub Release
-        uses: actions/create-release@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        uses: softprops/action-gh-release@v1
         with:
-          tag_name: ${{ github.ref }}
-          release_name: Release ${{ github.ref }}
+          tag_name: v${{ steps.get_version.outputs.VERSION }}
+          name: 🚀 Release v${{ steps.get_version.outputs.VERSION }}
           body: |
-            ## 版本 ${{ steps.get_version.outputs.VERSION }}
-            
-            自动发布
-            
-            ${{ steps.release_notes.outputs.CHANGELOG }}
-            
-            ## 安装方式
-            
+            # PVE Tools 9 - v${{ steps.get_version.outputs.VERSION }}
+
+            > 🎉 感谢使用 PVE Tools 9！这是一个稳定版本。
+
+            ${{ steps.changelog.outputs.CHANGELOG }}
+
+            ---
+
+            ## 📥 安装方式
+
+            ### 方式一：一键安装（推荐）
             ```bash
-            bash <(curl -sSL https://github.com/Mapleawaa/PVE-Tools-9/blob/main/PVE-Tools.sh)
+            bash <(curl -sSL https://raw.githubusercontent.com/Mapleawaa/PVE-Tools-9/main/PVE-Tools.sh)
             ```
+
+            ### 方式二：手动下载
+            ```bash
+            wget https://github.com/Mapleawaa/PVE-Tools-9/releases/download/v${{ steps.get_version.outputs.VERSION }}/PVE-Tools.sh
+            chmod +x PVE-Tools.sh
+            sudo ./PVE-Tools.sh
+            ```
+
+            ## 📖 文档
+            - [中文文档](https://github.com/Mapleawaa/PVE-Tools-9/blob/main/README.md)
+            - [English Documentation](https://github.com/Mapleawaa/PVE-Tools-9/blob/main/docs/README-EN.md)
+
+            ## 💬 反馈与支持
+            - [提交问题](https://github.com/Mapleawaa/PVE-Tools-9/issues/new?template=report-bugs.md)
+            - [功能建议](https://github.com/Mapleawaa/PVE-Tools-9/issues/new?template=feature-request.md)
+
+            ---
+
+            **完整提交历史**: [`${{ steps.get_version.outputs.VERSION }}`](https://github.com/Mapleawaa/PVE-Tools-9/commits/v${{ steps.get_version.outputs.VERSION }})
           draft: false
           prerelease: false
+          files: |
+            PVE-Tools.sh
+            VERSION
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
