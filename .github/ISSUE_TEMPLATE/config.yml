@@ -1,7 +1,7 @@
 blank_issues_enabled: false  # 禁用空白issue
 contact_links:
   - name: "和作者即时反馈问题 ℹ️ Telegram"
-    url: https://t.me/@Omphalos2_bot
+    url: https://t.me/Omphalos2_bot
     about: "欢迎参与讨论"
   - name: "创建 ISSUE 前必读"
     url: https://raw.githubusercontent.com/tvvocold/How-To-Ask-Questions-The-Smart-Way/refs/heads/master/README.md
