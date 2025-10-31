@@ -6,6 +6,6 @@ contact_links:
   - name: "创建 ISSUE 前必读"
     url: https://raw.githubusercontent.com/tvvocold/How-To-Ask-Questions-The-Smart-Way/refs/heads/master/README.md
     about: "请先阅读如何高效提问"
-  - name: "项目主页 🏠 GitHub"
+  - name: "请务必使用模板创建问题，才能高效的得到解决方案"
     url: https://github.com/Mapleawaa/PVE-Tools-9
-    about: "查看项目的源代码和文档"
+    about: "如不使用模板提出的问题，且内容无参考意义或已经修复的问题，将会被直接关闭，请知悉。"
