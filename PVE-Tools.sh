@@ -6,7 +6,7 @@
 # Auther:Maple 二次修改使用请不要删除此段注释
 
 # 版本信息
-CURRENT_VERSION="4.3.0"
+CURRENT_VERSION="4.5.0"
 VERSION_FILE_URL="https://raw.githubusercontent.com/Mapleawaa/PVE-Tools-9/main/VERSION"
 
 # 颜色定义 - 保持一致性
@@ -1534,9 +1534,10 @@ EOF
                             data[nvmeNumber]['utils'].push(IO_array[21]);
                         }
                     }
+                }
 
-                    let output = '';
-                    for (const [i, nvme] of data.entries()) {
+                let output = '';
+                for (const [i, nvme] of data.entries()) {
                         if (i > 0) output += '<br><br>';
 
                         if (nvme.Models.length > 0) {
@@ -1667,8 +1668,7 @@ EOF
                 return output.replace(/\n/g, '<br>');
             }
 
-            return output;
-        } else {
+        else {
             return `提示: 未安装 NVME 或已直通 NVME 控制器！`;
         }
     }
@@ -1857,6 +1857,223 @@ log_warn "你没有添加过温度显示，退出脚本."
 fi
 
 
+}
+
+# NVME 监控诊断函数
+diagnose_nvme_monitoring() {
+    local nodes="/usr/share/perl5/PVE/API2/Nodes.pm"
+    local pvemanagerlib="/usr/share/pve-manager/js/pvemanagerlib.js"
+    local pvever=$(pveversion 2>/dev/null | awk -F"/" '{print $2}' || echo "unknown")
+
+    clear
+    show_banner
+    echo "${UI_BORDER}"
+    echo "  NVME 监控诊断工具"
+    echo "${UI_DIVIDER}"
+    echo
+
+    # 1. 检测 NVME 设备
+    log_info "[1/5] 检测 NVME 设备..."
+    local detected_count=0
+    local detected_devices=()
+    for i in {0..9}; do
+        for dev in "/dev/nvme${i}n1" "/dev/nvme${i}"; do
+            if [ -b "$dev" ]; then
+                echo "  ${GREEN}✓${NC} 检测到: $dev"
+                detected_devices+=("$dev")
+                ((detected_count++))
+                break
+            fi
+        done
+    done
+
+    if [ $detected_count -eq 0 ]; then
+        echo "  ${RED}✗${NC} 未检测到任何 NVME 设备"
+        log_error "未检测到 NVME 设备"
+    else
+        log_success "检测到 $detected_count 块 NVME: ${detected_devices[*]}"
+    fi
+    echo
+
+    # 2. 检查备份文件
+    log_info "[2/5] 检查备份文件..."
+    local has_blocking_backup=false
+    if [ -e "$nodes.$pvever.bak" ]; then
+        echo "  ${YELLOW}⚠${NC} 存在备份: Nodes.pm.$pvever.bak"
+        log_warn "发现阻塞性备份文件"
+        has_blocking_backup=true
+    else
+        echo "  ${GREEN}✓${NC} 未找到阻塞性备份文件"
+    fi
+    echo
+
+    # 3. 检查 Perl 代码
+    log_info "[3/5] 检查 Nodes.pm 中的 NVME 变量..."
+    if [ -f "$nodes" ]; then
+        local nvme_count=$(grep -c '\$res->{nvme[0-9]_status}' "$nodes" 2>/dev/null || echo "0")
+        if [ "$nvme_count" -gt 0 ]; then
+            echo "  ${GREEN}✓${NC} 发现 $nvme_count 个 NVME 变量定义"
+            log_success "Perl 代码已正确插入"
+        else
+            echo "  ${RED}✗${NC} 未找到 NVME 变量定义"
+            log_error "Perl 代码未插入"
+        fi
+    else
+        echo "  ${RED}✗${NC} 文件不存在: $nodes"
+    fi
+    echo
+
+    # 4. 检查 JavaScript 代码
+    log_info "[4/5] 检查 pvemanagerlib.js 中的 NVME 显示块..."
+    if [ -f "$pvemanagerlib" ]; then
+        local display_count=$(grep -c "itemId: 'nvme[0-9]-status'" "$pvemanagerlib" 2>/dev/null || echo "0")
+        if [ "$display_count" -gt 0 ]; then
+            echo "  ${GREEN}✓${NC} 发现 $display_count 个 NVME 显示块"
+            log_success "JavaScript 代码已正确插入"
+        else
+            echo "  ${RED}✗${NC} 未找到 NVME 显示块"
+            log_error "JavaScript 代码未插入"
+        fi
+    else
+        echo "  ${RED}✗${NC} 文件不存在: $pvemanagerlib"
+    fi
+    echo
+
+    # 5. 检查服务状态
+    log_info "[5/5] 检查 pveproxy 服务..."
+    if systemctl is-active --quiet pveproxy 2>/dev/null; then
+        echo "  ${GREEN}✓${NC} pveproxy 服务运行中"
+        log_success "服务状态正常"
+    else
+        echo "  ${RED}✗${NC} pveproxy 服务未运行"
+        log_error "服务未运行"
+    fi
+    echo
+
+    # 诊断建议
+    echo "${UI_BORDER}"
+    echo "  诊断建议"
+    echo "${UI_DIVIDER}"
+
+    if [ "$has_blocking_backup" = true ]; then
+        log_warn "发现备份文件阻塞，建议执行以下操作："
+        echo "  1. 使用菜单中的 [4] 重置温度监控"
+        echo "  2. 重新执行 [1] 配置温度监控"
+        echo
+    elif [ "$detected_count" -eq 0 ]; then
+        log_warn "未检测到 NVME 设备，建议检查："
+        echo "  1. 硬盘是否被直通到虚拟机"
+        echo "  2. 执行命令: ls /dev/nvme*"
+        echo "  3. 执行命令: lspci | grep -i nvme"
+        echo
+    elif [ "$nvme_count" -eq 0 ] || [ "$display_count" -eq 0 ]; then
+        log_warn "代码未正确插入，建议："
+        echo "  1. 重新执行 [1] 配置温度监控"
+        echo
+    else
+        log_success "所有检查通过！"
+        echo "如果前端仍不显示 NVME 信息，请尝试："
+        echo "  1. 重启服务: systemctl restart pveproxy"
+        echo "  2. 清除浏览器缓存: Shift + F5 或 Ctrl + Shift + R"
+        echo "  3. 等待 1-2 分钟让数据刷新"
+        echo
+    fi
+    echo "${UI_FOOTER}"
+}
+
+# NVME 监控重置功能
+reset_nvme_monitoring() {
+    local nodes="/usr/share/perl5/PVE/API2/Nodes.pm"
+    local pvemanagerlib="/usr/share/pve-manager/js/pvemanagerlib.js"
+    local proxmoxlib="/usr/share/javascript/proxmox-widget-toolkit/proxmoxlib.js"
+    local pvever=$(pveversion 2>/dev/null | awk -F"/" '{print $2}' || echo "unknown")
+
+    clear
+    show_banner
+    echo "${RED}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+    echo -e "${RED}      ⚠️  警告: 重置温度监控  ⚠️${NC}"
+    echo "${RED}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+    echo
+    echo "此操作将:"
+    echo "  1. 删除所有版本备份文件"
+    echo "  2. 恢复原始系统文件（从工具备份恢复）"
+    echo "  3. 允许重新执行温度监控配置"
+    echo "  4. 自动重启 pveproxy 服务"
+    echo
+    log_warn "此操作不可逆，请确认！"
+    echo
+
+    read -p "确认继续重置? 输入 'yes' 确认: " confirm
+    if [ "$confirm" != "yes" ]; then
+        log_info "操作已取消"
+        return 0
+    fi
+
+    log_step "开始重置温度监控..."
+    echo
+
+    # 1. 恢复原始文件
+    log_info "[1/4] 恢复原始系统文件..."
+    for file in "$nodes" "$pvemanagerlib" "$proxmoxlib"; do
+        local basename_file=$(basename "$file")
+        
+        # 查找最新的工具备份
+        local latest_backup=$(find /etc/pve-tools-9-bak -name "${basename_file}.backup.*" 2>/dev/null | sort -r | head -1)
+
+        if [ -n "$latest_backup" ] && [ -f "$latest_backup" ]; then
+            log_info "  恢复: $file"
+            log_info "  来源: $latest_backup"
+            cp "$latest_backup" "$file"
+            echo "  ${GREEN}✓${NC} 已恢复"
+        else
+            log_warn "  未找到备份: $basename_file（保持当前文件）"
+        fi
+    done
+    echo
+
+    # 2. 删除版本备份
+    log_info "[2/4] 删除版本备份文件..."
+    local deleted=0
+    for file in "$nodes.$pvever.bak" "$pvemanagerlib.$pvever.bak" "$proxmoxlib.$pvever.bak"; do
+        if [ -e "$file" ]; then
+            rm -f "$file"
+            echo "  ${GREEN}✓${NC} 已删除: $(basename $file)"
+            ((deleted++))
+        fi
+    done
+    
+    if [ $deleted -eq 0 ]; then
+        log_info "  未找到需要删除的版本备份文件"
+    else
+        log_success "  已删除 $deleted 个版本备份文件"
+    fi
+    echo
+
+    # 3. 清理临时文件
+    log_info "[3/4] 清理临时文件..."
+    rm -f /tmp/sensors 2>/dev/null
+    rm -f tmpfile.temp 2>/dev/null
+    echo "  ${GREEN}✓${NC} 临时文件已清理"
+    echo
+
+    # 4. 重启服务
+    log_info "[4/4] 重启 pveproxy 服务..."
+    if systemctl restart pveproxy 2>/dev/null; then
+        log_success "  pveproxy 服务已重启"
+    else
+        log_warn "  pveproxy 服务重启失败，请手动重启"
+    fi
+    echo
+
+    log_success "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    log_success "       重置完成！"
+    log_success "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    echo
+    echo "现在可以重新配置温度监控："
+    echo "  1. 返回上一级菜单"
+    echo "  2. 选择 [1] 配置温度监控"
+    echo "  3. 完成后清除浏览器缓存: Shift + F5"
+    echo
 }
 #--------------CPU、主板、硬盘温度显示----------------
 
@@ -2742,11 +2959,13 @@ temp_monitoring_menu() {
         show_menu_option "1" "配置温度监控 (CPU/硬盘温度显示)"
         show_menu_option "2" "移除温度监控 (移除温度监控功能)"
         show_menu_option "3" "自定义温度监控选项 (高级)"
+        show_menu_option "4" "诊断 NVME 监控 (检查配置状态)"
+        show_menu_option "5" "重置温度监控 (清除配置重来)"
         echo "${UI_DIVIDER}"
         show_menu_option "0" "返回主菜单"
         show_menu_footer
         echo
-        read -p "请选择 [0-3]: " temp_choice
+        read -p "请选择 [0-5]: " temp_choice
         echo
         
         case $temp_choice in
@@ -2758,6 +2977,12 @@ temp_monitoring_menu() {
                 ;;
             3)
                 custom_temp_monitoring
+                ;;
+            4)
+                diagnose_nvme_monitoring
+                ;;
+            5)
+                reset_nvme_monitoring
                 ;;
             0)
                 break
