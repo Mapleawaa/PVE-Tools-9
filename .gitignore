@@ -35,3 +35,6 @@ Proxmox-Helper-Script/
 
 # Ignore Claude code files
 .claude/
+
+# Ingore Claude workflow files
+BAK*.sh
