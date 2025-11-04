@@ -1142,16 +1142,22 @@ cpu_add() {
     pvever=$(pveversion | awk -F"/" '{print $2}')
     echo pve版本$pvever
 
-    # 判断是否已经执行过修改
-    [ ! -e $nodes.$pvever.bak ] || { log_warn "已经执行过修改，请勿重复执行"; pause_function; return;}
+    # 判断是否已经执行过修改 (使用 modbyshowtempfreq 标记检测)
+    if [ $(grep 'modbyshowtempfreq' $nodes $pvemanagerlib $proxmoxlib 2>/dev/null | wc -l) -eq 3 ]; then
+        log_warn "已经修改过，请勿重复修改"
+        log_tips "如果没有生效，请使用 Shift+F5 刷新浏览器缓存"
+        log_tips "如果需要强制重新修改，请先执行还原操作"
+        pause_function
+        return
+    fi
 
     # 先刷新下源
     log_step "更新软件包列表..."
     apt-get update
 
     log_step "开始安装所需工具..."
-    # 输入需要安装的软件包 (移除 hddtemp 和 smartmontools,它们已不存在或被替代)
-    packages=(lm-sensors nvme-cli sysstat linux-cpupower)
+    # 输入需要安装的软件包 (添加 hdparm 用于 SATA 硬盘休眠检测)
+    packages=(lm-sensors nvme-cli sysstat linux-cpupower hdparm smartmontools)
 
     # 查询软件包，判断是否安装
     for package in "${packages[@]}"; do
@@ -1208,36 +1214,87 @@ cpu_add() {
     cp "$pvemanagerlib" "$pvemanagerlib.$pvever.bak"
     cp "$proxmoxlib" "$proxmoxlib.$pvever.bak"
 
-    # 生成系统变量 (使用参考脚本的正确实现)
+    # 生成系统变量 (参考 PVE 8 脚本的改进实现)
     tmpf=tmpfile.temp
     touch $tmpf
     cat > $tmpf << 'EOF'
-        $res->{thermalstate} = `sensors`;
-        $res->{cpusensors} = `cat /proc/cpuinfo | grep MHz && lscpu | grep MHz`;
 
-        $res->{hdd_temperatures} = `smartctl -a /dev/sd?|grep -E "Device Model|Capacity|Power_On_Hours|Temperature"`;
+#modbyshowtempfreq
 
-        my $powermode = `cat /sys/devices/system/cpu/cpu0/cpufreq/scaling_governor && turbostat -S -q -s PkgWatt -i 0.1 -n 1 -c package | grep -v PkgWatt`;
-        $res->{cpupower} = $powermode;
+        $res->{thermalstate} = `sensors -A`;
+        $res->{cpuFreq} = `
+            goverf=/sys/devices/system/cpu/cpufreq/policy0/scaling_governor
+            maxf=/sys/devices/system/cpu/cpufreq/policy0/cpuinfo_max_freq
+            minf=/sys/devices/system/cpu/cpufreq/policy0/cpuinfo_min_freq
+
+            cat /proc/cpuinfo | grep -i "cpu mhz"
+            echo -n 'gov:'
+            [ -f \$goverf ] && cat \$goverf || echo none
+            echo -n 'min:'
+            [ -f \$minf ] && cat \$minf || echo none
+            echo -n 'max:'
+            [ -f \$maxf ] && cat \$maxf || echo none
+            echo -n 'pkgwatt:'
+            [ -e /usr/sbin/turbostat ] && turbostat --quiet --cpu package --show "PkgWatt" -S sleep 0.25 2>&1 | tail -n1
+        `;
 
 EOF
 
-    # NVME磁盘变量 (动态检测)
-    for i in {0..9}; do
-        for dev in "/dev/nvme${i}" "/dev/nvme${i}n1"; do
-            if [ -b "$dev" ]; then
-                echo "检测到NVME磁盘: $dev" >&2
-                cat >> $tmpf << EOF
+    # NVME 硬盘变量 (动态检测，参考 PVE 8 实现)
+    log_info "检测系统中的 NVME 硬盘"
+    nvi=0
+    for nvme in $(ls /dev/nvme[0-9] 2> /dev/null); do
+        chmod +s /usr/sbin/smartctl 2>/dev/null
 
-        my \$nvme${i}_temperatures = \`smartctl -a $dev | grep -E "Model Number|(?=Total|Namespace)[^:]+Capacity|Temperature:|Available Spare:|Percentage|Data Unit|Power Cycles|Power On Hours|Unsafe Shutdowns|Integrity Errors"\`;
-        my \$nvme${i}_io = \`iostat -d -x -k 1 1 | grep -E "^${dev##*/}"\`;
-        \$res->{nvme${i}_status} = \$nvme${i}_temperatures . \$nvme${i}_io;
+        cat >> $tmpf << EOF
 
+        \$res->{nvme$nvi} = \`smartctl $nvme -a -j\`;
 EOF
-                break
-            fi
-        done
+        echo "检测到 NVME 硬盘: $nvme (nvme$nvi)"
+        let nvi++
     done
+    echo "已添加 $nvi 块 NVME 硬盘"
+
+    # SATA 硬盘变量 (动态检测，参考 PVE 8 实现)
+    log_info "检测系统中的 SATA 固态和机械硬盘"
+    sdi=0
+    for sd in $(ls /dev/sd[a-z] 2> /dev/null); do
+        chmod +s /usr/sbin/smartctl 2>/dev/null
+        chmod +s /usr/sbin/hdparm 2>/dev/null
+
+        # 检测是否是真的硬盘
+        sdsn=$(awk -F '/' '{print $NF}' <<< $sd)
+        sdcr=/sys/block/$sdsn/queue/rotational
+        [ -f $sdcr ] || continue
+
+        if [ "$(cat $sdcr)" = "0" ]; then
+            hddisk=false
+            sdtype="固态硬盘"
+        else
+            hddisk=true
+            sdtype="机械硬盘"
+        fi
+
+        # 硬盘输出信息逻辑，如果硬盘不存在就输出空 JSON
+        cat >> $tmpf << EOF
+
+        \$res->{sd$sdi} = \`
+            if [ -b $sd ]; then
+                if $hddisk && hdparm -C $sd | grep -iq 'standby'; then
+                    echo '{"standy": true}'
+                else
+                    smartctl $sd -a -j
+                fi
+            else
+                echo '{}'
+            fi
+        \`;
+EOF
+        echo "检测到 $sdtype: $sd (sd$sdi)"
+        let sdi++
+    done
+    echo "已添加 $sdi 块 SATA 固态和机械硬盘"
+
 
     ###################  修改node.pm   ##########################
     log_info "修改node.pm："
@@ -1258,490 +1315,290 @@ EOF
     touch $tmpf
     cat > $tmpf << 'EOF'
 
+//modbyshowtempfreq
     {
-          itemId: 'CPUW',
+          itemId: 'cpumhz',
           colspan: 2,
           printBar: false,
-          title: gettext('CPU功耗'),
-          textField: 'cpupower',
-          renderer:function(value){
-              const w0 = value.split('\n')[0].split(' ')[0];
-              const w1 = value.split('\n')[1].split(' ')[0];
-              return `CPU电源模式: <strong>${w0}</strong> | CPU功耗: <strong>${w1} W</strong> `
-            }
+          title: gettext('CPU频率(GHz)'),
+          textField: 'cpuFreq',
+          renderer:function(v){
+              console.log(v);
+
+              // 解析所有核心频率
+              let m = v.match(/(?<=^cpu[^\d]+)\d+/img);
+              if (!m || m.length === 0) {
+                  return '无法获取CPU频率信息';
+              }
+
+              let freqs = m.map(e => parseFloat((e / 1000).toFixed(1)));
+
+              // 计算统计信息
+              let avgFreq = (freqs.reduce((a, b) => a + b, 0) / freqs.length).toFixed(1);
+              let minFreq = Math.min(...freqs).toFixed(1);
+              let maxFreq = Math.max(...freqs).toFixed(1);
+              let coreCount = freqs.length;
+
+              // 获取系统配置的频率范围
+              let sysMin = (v.match(/(?<=^min:).+/im)[0]);
+              if (sysMin !== 'none') {
+                  sysMin = (sysMin / 1000000).toFixed(1);
+              }
+
+              let sysMax = (v.match(/(?<=^max:).+/im)[0]);
+              if (sysMax !== 'none') {
+                  sysMax = (sysMax / 1000000).toFixed(1);
+              }
+
+              let gov = v.match(/(?<=^gov:).+/im)[0].toUpperCase();
+
+              let watt = v.match(/(?<=^pkgwatt:)[\d.]+$/im);
+              watt = watt ? " | 功耗: " + (watt[0]/1).toFixed(1) + 'W' : '';
+
+              // 简洁显示：平均值 + 当前范围 + 系统范围 + 功耗 + 调速器
+              return `${coreCount}核心 平均: ${avgFreq} GHz (当前: ${minFreq}~${maxFreq}) | 范围: ${sysMin}~${sysMax} GHz${watt} | 调速器: ${gov}`;
+           }
     },
 
-    {
-          itemId: 'MHz',
-          colspan: 2,
-          printBar: false,
-          title: gettext('CPU频率'),
-          textField: 'cpusensors',
-          renderer:function(value){
-              const f0 = value.match(/cpu MHz.*?([\d]+)/)[1];
-              const f1 = value.match(/CPU min MHz.*?([\d]+)/)[1];
-              const f2 = value.match(/CPU max MHz.*?([\d]+)/)[1];
-              return `CPU实时: <strong>${f0} MHz</strong> | 最小: ${f1} MHz | 最大: ${f2} MHz `
-            }
-    },
-    
     {
           itemId: 'thermal',
           colspan: 2,
           printBar: false,
           title: gettext('CPU温度'),
           textField: 'thermalstate',
-          renderer: function(value) {
-              const coreTemps = [];
-              let coreMatch;
-              const coreRegex = /(Core\s*\d+|Core\d+|Tdie|Tctl|Physical id\s*\d+).*?\+\s*([\d\.]+)/gi;
+          renderer:function(value){
+              console.log(value);
+              let b = value.trim().split(/\s+(?=^\w+-)/m).sort();
+              let cpuResults = [];
+              let otherResults = [];
 
-              while ((coreMatch = coreRegex.exec(value)) !== null) {
-                  let label = coreMatch[1];
-                  let tempValue = coreMatch[2];
-
-                  if (label.match(/Tdie|Tctl/i)) {
-                      coreTemps.push(`CPU温度: <strong>${tempValue}℃</strong>`);
+              b.forEach(function(v){
+                  // 风扇转速数据
+                  let fandata = v.match(/(?<=:\s+)[1-9]\d*(?=\s+RPM\s+)/ig);
+                  if (fandata) {
+                      otherResults.push('风扇: ' + fandata.join(', ') + ' RPM');
+                      return;
                   }
 
-                  else {
-                      const coreNumberMatch = label.match(/\d+/);
-                      const coreNum = coreNumberMatch ? parseInt(coreNumberMatch[0]) + 1 : 1;
-                      coreTemps.push(`核心${coreNum}: <strong>${tempValue}℃</strong>`);
+                  let name = v.match(/^[^-]+/);
+                  if (!name) return;
+                  name = name[0].toUpperCase();
+
+                  let temps = v.match(/(?<=:\s+)[+-][\d.]+(?=.?°C)/g);
+                  if (!temps) return;
+
+                  temps = temps.map(t => parseFloat(t));
+
+                  // 只处理 CPU 温度（coretemp）
+                  if (/coretemp/i.test(name)) {
+                      let packageTemp = temps[0].toFixed(0);
+
+                      if (temps.length > 1) {
+                          let coreTemps = temps.slice(1);
+                          let avgCore = (coreTemps.reduce((a, b) => a + b, 0) / coreTemps.length).toFixed(0);
+                          let maxCore = Math.max(...coreTemps).toFixed(0);
+                          let minCore = Math.min(...coreTemps).toFixed(0);
+
+                          cpuResults.push(`封装: ${packageTemp}°C | 核心: 平均 ${avgCore}°C (${minCore}~${maxCore}°C)`);
+                      } else {
+                          cpuResults.push(`封装: ${packageTemp}°C`);
+                      }
+
+                      // 添加临界温度
+                      let crit = v.match(/(?<=\bcrit\b[^+]+\+)\d+/);
+                      if (crit) {
+                          cpuResults[cpuResults.length - 1] += ` | 临界: ${crit[0]}°C`;
+                      }
+                  } else {
+                      // 非 CPU 温度（主板、NVME等）放到其他结果中
+                      let tempStr = `${name}: ${temps[0].toFixed(0)}°C`;
+                      let crit = v.match(/(?<=\bcrit\b[^+]+\+)\d+/);
+                      if (crit) {
+                          tempStr += ` (临界: ${crit[0]}°C)`;
+                      }
+                      otherResults.push(tempStr);
                   }
+              });
+
+              // 只返回 CPU 相关温度，其他传感器信息不显示在这里
+              // （NVME温度会在NVME硬盘信息中单独显示）
+              if (cpuResults.length === 0) {
+                  return '未获取到CPU温度信息';
               }
 
-              // 核显温度
-              let igpuTemp = '';
-              const intelIgpuMatch = value.match(/(GFX|Graphics).*?\+\s*([\d\.]+)/i);
-              const amdIgpuMatch = value.match(/(junction|edge).*?\+\s*([\d\.]+)/i);
-        
-              if (intelIgpuMatch) {
-                  igpuTemp = `核显: ${intelIgpuMatch[2]}℃`;
-              } else if (amdIgpuMatch) {
-                  igpuTemp = `核显: ${amdIgpuMatch[2]}℃`;
+              // 如果有多个CPU（如双路服务器），分别显示
+              if (cpuResults.length > 1) {
+                  return cpuResults.map((temp, idx) => `CPU${idx}: ${temp}`).join(' | ');
+              } else {
+                  return cpuResults[0];
               }
-
-              if (coreTemps.length === 0) {
-                  const k10tempMatch = value.match(/k10temp-pci-\w+\n[^+]*\+\s*([\d\.]+)/);
-                  if (k10tempMatch) {
-                      coreTemps.push(`CPU温度: <strong>${k10tempMatch[1]}℃</strong>`);
-                  }
-              }
-
-              const groupedTemps = [];
-              for (let i = 0; i < coreTemps.length; i += 4) {
-                  groupedTemps.push(coreTemps.slice(i, i + 4).join(' | '));
-              }
-
-              const packageMatch = value.match(/(Package|SoC)\s*(id \d+)?.*?\+\s*([\d\.]+)/i);
-              const packageTemp = packageMatch ? `CPU Package: <strong>${packageMatch[3]}℃</strong>` : '';
-
-              const boardTempMatch = value.match(/(?:temp1|motherboard|sys).*?\+\s*([\d\.]+)/i);
-              const boardTemp = boardTempMatch ? `主板: <strong>${boardTempMatch[1]}℃</strong>` : '';
-
-              const combinedTemps = [
-                  igpuTemp,
-                  packageTemp,
-                  boardTemp
-              ].filter(Boolean).join(' | ');
-
-              const result = [
-                  groupedTemps.join('<br>'),
-                  combinedTemps
-              ].filter(Boolean).join('<br>');
-
-              return result || '未获取到温度信息';
-          }
-    },
-
-    {
-          itemId: 'HEXIN',
-          colspan: 2,
-          printBar: false,
-          title: gettext('核心频率'),
-          textField: 'cpusensors',
-          renderer: function(value) {
-              const freqMatches = value.matchAll(/^cpu MHz\s*:\s*([\d\.]+)/gm);
-              const frequencies = [];
-              
-              for (const match of freqMatches) {
-                  const coreNum = frequencies.length + 1;
-                  frequencies.push(`核心${coreNum}: <strong>${parseInt(match[1])} MHz</strong>`);
-              }
-              
-              if (frequencies.length === 0) {
-                  return '无法获取CPU频率信息';
-              }
-              
-              const groupedFreqs = [];
-              for (let i = 0; i < frequencies.length; i += 4) {
-                  const group = frequencies.slice(i, i + 4);
-                  groupedFreqs.push(group.join(' | '));
-              }
-              
-              return groupedFreqs.join('<br>');
            }
     },
-    
-    /* 检测不到相关参数的可以注释掉---需要的注释本行即可
-    // 风扇转速
+EOF
+
+    # 动态为每个 NVME 硬盘添加 JavaScript 代码
+    for i in $(seq 0 $((nvi - 1))); do
+        cat >> $tmpf << EOF
+
     {
-          itemId: 'RPM',
+          itemId: 'nvme${i}0',
           colspan: 2,
           printBar: false,
-          title: gettext('CPU风扇'),
-          textField: 'thermalstate',
+          title: gettext('NVME${i}'),
+          textField: 'nvme${i}',
           renderer:function(value){
-              const fan1 = value.match(/fan1:.*?\ ([\d.]+) R/)[1];
-              const fan2 = value.match(/fan2:.*?\ ([\d.]+) R/)[1];
-              if (fan1 === "0") {
-                fan11 = "停转";
-              } else {
-                fan11 = fan1 + " RPM";
-              }
-              if (fan2 === "0") {
-                fan22 = "停转";
-              } else {
-                fan22 = fan2 + " RPM";
-              }
-              return `CPU风扇: ${fan11} | 系统风扇: ${fan22}`
-            }
+              try{
+                  let  v = JSON.parse(value);
+
+                  // 检查是否为空 JSON（硬盘不存在或已直通）
+                  if (Object.keys(v).length === 0) {
+                      return '<span style="color: #888;">未检测到 NVME（可能已直通或移除）</span>';
+                  }
+
+                  // 检查型号
+                  let model = v.model_name;
+                  if (!model) {
+                      return '<span style="color: #f39c12;">NVME 信息不完整（建议检查连接状态）</span>';
+                  }
+
+                  // 构建显示内容
+                  let parts = [model];
+                  let hasData = false;
+
+                  // 温度
+                  if (v.temperature?.current !== undefined) {
+                      parts.push(v.temperature.current + '°C');
+                      hasData = true;
+                  }
+
+                  // 健康度和读写
+                  let log = v.nvme_smart_health_information_log;
+                  if (log) {
+                      // 健康度
+                      if (log.percentage_used !== undefined) {
+                          let health = '健康: ' + (100 - log.percentage_used) + '%';
+                          if (log.media_errors !== undefined && log.media_errors > 0) {
+                              health += ' <span style="color: #e74c3c;">(0E: ' + log.media_errors + ')</span>';
+                          }
+                          parts.push(health);
+                          hasData = true;
+                      }
+
+                      // 读写
+                      if (log.data_units_read && log.data_units_written) {
+                          let read = (log.data_units_read / 1956882).toFixed(1);
+                          let write = (log.data_units_written / 1956882).toFixed(1);
+                          parts.push('读写: ' + read + 'T / ' + write + 'T');
+                          hasData = true;
+                      }
+                  }
+
+                  // 通电时间
+                  if (v.power_on_time?.hours !== undefined) {
+                      let pot = '通电: ' + v.power_on_time.hours + '时';
+                      if (v.power_cycle_count) {
+                          pot += ' (次: ' + v.power_cycle_count + ')';
+                      }
+                      parts.push(pot);
+                      hasData = true;
+                  }
+
+                  // SMART 状态
+                  if (v.smart_status?.passed !== undefined) {
+                      parts.push('SMART: ' + (v.smart_status.passed ? '<span style="color: #27ae60;">正常</span>' : '<span style="color: #e74c3c;">警告!</span>'));
+                      hasData = true;
+                  }
+
+                  // 如果只有型号，没有其他数据，说明可能是权限或驱动问题
+                  if (!hasData) {
+                      return model + ' <span style="color: #888;">| 无法获取详细信息（检查 smartctl 权限或驱动）</span>';
+                  }
+
+                  return parts.join(' | ');
+
+              }catch(e){
+                  return '<span style="color: #888;">无法解析 NVME 信息（可能使用控制器直通）</span>';
+              };
+
+           }
     },
-    检测不到相关参数的可以注释掉---需要的注释本行即可  */
-
-    // /* 检测不到相关参数的可以注释掉---需要的注释本行即可
-    // NVME硬盘温度
-    {
-        itemId: 'nvme0-status',
-        colspan: 2,
-        printBar: false,
-        title: gettext('NVME硬盘'),
-        textField: 'nvme0_status',
-        renderer:function(value){
-            if (value.length > 0) {
-                value = value.replace(/Â/g, '');
-                let data = [];
-                let nvmeNumber = -1;
-
-                let nvmes = value.matchAll(/(^(?:Model|Total|Temperature:|Available Spare:|Percentage|Data|Power|Unsafe|Integrity Errors|nvme)[\s\S]*)+/gm);
-                
-                for (const nvme of nvmes) {
-                    if (/Model Number:/.test(nvme[1])) {
-                    nvmeNumber++; 
-                    data[nvmeNumber] = {
-                        Models: [],
-                        Integrity_Errors: [],
-                        Capacitys: [],
-                        Temperatures: [],
-                        Available_Spares: [],
-                        Useds: [],
-                        Reads: [],
-                        Writtens: [],
-                        Cycles: [],
-                        Hours: [],
-                        Shutdowns: [],
-                        States: [],
-                        r_kBs: [],
-                        r_awaits: [],
-                        w_kBs: [],
-                        w_awaits: [],
-                        utils: []
-                    };
-                    }
-
-                    let Models = nvme[1].matchAll(/^Model Number: *([ \S]*)$/gm);
-                    for (const Model of Models) {
-                        data[nvmeNumber]['Models'].push(Model[1]);
-                    }
-
-                    let Integrity_Errors = nvme[1].matchAll(/^Media and Data Integrity Errors: *([ \S]*)$/gm);
-                    for (const Integrity_Error of Integrity_Errors) {
-                        data[nvmeNumber]['Integrity_Errors'].push(Integrity_Error[1]);
-                    }
-
-                    let Capacitys = nvme[1].matchAll(/^(?=Total|Namespace)[^:]+Capacity:[^\[]*\[([ \S]*)\]$/gm);
-                    for (const Capacity of Capacitys) {
-                        data[nvmeNumber]['Capacitys'].push(Capacity[1]);
-                    }
-
-                    let Temperatures = nvme[1].matchAll(/^Temperature: *([\d]*)[ \S]*$/gm);
-                    for (const Temperature of Temperatures) {
-                        data[nvmeNumber]['Temperatures'].push(Temperature[1]);
-                    }
-
-                    let Available_Spares = nvme[1].matchAll(/^Available Spare: *([\d]*%)[ \S]*$/gm);
-                    for (const Available_Spare of Available_Spares) {
-                        data[nvmeNumber]['Available_Spares'].push(Available_Spare[1]);
-                    }
-
-                    let Useds = nvme[1].matchAll(/^Percentage Used: *([ \S]*)%$/gm);
-                    for (const Used of Useds) {
-                        data[nvmeNumber]['Useds'].push(Used[1]);
-                    }
-
-                    let Reads = nvme[1].matchAll(/^Data Units Read:[^\[]*\[([ \S]*)\]$/gm);
-                    for (const Read of Reads) {
-                        data[nvmeNumber]['Reads'].push(Read[1]);
-                    }
-
-                    let Writtens = nvme[1].matchAll(/^Data Units Written:[^\[]*\[([ \S]*)\]$/gm);
-                    for (const Written of Writtens) {
-                        data[nvmeNumber]['Writtens'].push(Written[1]);
-                    }
-
-                    let Cycles = nvme[1].matchAll(/^Power Cycles: *([ \S]*)$/gm);
-                    for (const Cycle of Cycles) {
-                        data[nvmeNumber]['Cycles'].push(Cycle[1]);
-                    }
-
-                    let Hours = nvme[1].matchAll(/^Power On Hours: *([ \S]*)$/gm);
-                    for (const Hour of Hours) {
-                        data[nvmeNumber]['Hours'].push(Hour[1]);
-                    }
-
-                    let Shutdowns = nvme[1].matchAll(/^Unsafe Shutdowns: *([ \S]*)$/gm);
-                    for (const Shutdown of Shutdowns) {
-                        data[nvmeNumber]['Shutdowns'].push(Shutdown[1]);
-                    }
-
-                    let States = nvme[1].matchAll(/^nvme\S+(( *\d+\.\d{2}){22})/gm);
-                    for (const State of States) {
-                        data[nvmeNumber]['States'].push(State[1]);
-                        const IO_array = [...State[1].matchAll(/\d+\.\d{2}/g)];
-                        if (IO_array.length > 0) {
-                            data[nvmeNumber]['r_kBs'].push(IO_array[1]);
-                            data[nvmeNumber]['r_awaits'].push(IO_array[4]);
-                            data[nvmeNumber]['w_kBs'].push(IO_array[7]);
-                            data[nvmeNumber]['w_awaits'].push(IO_array[10]);
-                            data[nvmeNumber]['utils'].push(IO_array[21]);
-                        }
-                    }
-
-                    let output = '';
-                    for (const [i, nvme] of data.entries()) {
-                        if (i > 0) output += '<br><br>';
-
-                        if (nvme.Models.length > 0) {
-                            output += `<strong>${nvme.Models[0]}</strong>`;
-
-                            if (nvme.Integrity_Errors.length > 0) {
-                                for (const nvmeIntegrity_Error of nvme.Integrity_Errors) {
-                                    if (nvmeIntegrity_Error != 0) {
-                                        output += ` (`;
-                                        output += `0E: ${nvmeIntegrity_Error}-故障！`;
-                                        if (nvme.Available_Spares.length > 0) {
-                                            output += ', ';
-                                            for (const Available_Spare of nvme.Available_Spares) {
-                                                output += `备用空间: ${Available_Spare}`;
-                                            }
-                                        }
-                                        output += `)`;
-                                    }
-                                }
-                            }
-                            output += '<br>';
-                        }
-
-                        if (nvme.Capacitys.length > 0) {
-                            for (const nvmeCapacity of nvme.Capacitys) {
-                                output += `容量: ${nvmeCapacity.replace(/ |,/gm, '')}`;
-                            }
-                        }
-
-                        if (nvme.Useds.length > 0) {
-                            output += ' | ';
-                            for (const nvmeUsed of nvme.Useds) {
-                                output += `寿命: <strong>${100-Number(nvmeUsed)}%</strong> `;
-                                if (nvme.Reads.length > 0) {
-                                    output += '(';
-                                    for (const nvmeRead of nvme.Reads) {
-                                        output += `已读${nvmeRead.replace(/ |,/gm, '')}`;
-                                        output += ')';
-                                    }
-                                }
-
-                                if (nvme.Writtens.length > 0) {
-                                    output = output.slice(0, -1);
-                                    output += ', ';
-                                    for (const nvmeWritten of nvme.Writtens) {
-                                        output += `已写${nvmeWritten.replace(/ |,/gm, '')}`;
-                                    }
-                                    output += ')';
-                                }
-                            }
-                        }
-
-                        if (nvme.Temperatures.length > 0) {
-                            output += ' | ';
-                            for (const nvmeTemperature of nvme.Temperatures) {
-                                output += `温度: <strong>${nvmeTemperature}°C</strong>`;
-                            }
-                        }
-
-                        if (nvme.States.length > 0) {
-                            if (nvme.Models.length > 0) {
-                                output += '\n';
-                            }
-
-                            output += 'I/O: ';
-                            if (nvme.r_kBs.length > 0 || nvme.r_awaits.length > 0) {
-                                output += '读-';
-                                if (nvme.r_kBs.length > 0) {
-                                    for (const nvme_r_kB of nvme.r_kBs) {
-                                        var nvme_r_mB = `${nvme_r_kB}` / 1024;
-                                        nvme_r_mB = nvme_r_mB.toFixed(2);
-                                        output += `速度${nvme_r_mB}MB/s`;
-                                    }
-                                }
-                                if (nvme.r_awaits.length > 0) {
-                                    for (const nvme_r_await of nvme.r_awaits) {
-                                        output += `, 延迟${nvme_r_await}ms / `;
-                                    }
-                                }
-                            }
-
-                            if (nvme.w_kBs.length > 0 || nvme.w_awaits.length > 0) {
-                                output += '写-';
-                                if (nvme.w_kBs.length > 0) {
-                                    for (const nvme_w_kB of nvme.w_kBs) {
-                                        var nvme_w_mB = `${nvme_w_kB}` / 1024;
-                                        nvme_w_mB = nvme_w_mB.toFixed(2);
-                                        output += `速度${nvme_w_mB}MB/s`;
-                                    }
-                                }
-                                if (nvme.w_awaits.length > 0) {
-                                    for (const nvme_w_await of nvme.w_awaits) {
-                                        output += `, 延迟${nvme_w_await}ms | `;
-                                    }
-                                }
-                            }
-
-                            if (nvme.utils.length > 0) {
-                                for (const nvme_util of nvme.utils) {
-                                    output += `负载${nvme_util}%`;
-                                }
-                            }
-                        }
-
-                        if (nvme.Cycles.length > 0) {
-                            output += '\n';
-                            for (const nvmeCycle of nvme.Cycles) {
-                                output += `通电: ${nvmeCycle.replace(/ |,/gm, '')}次`;
-                            }
-
-                            if (nvme.Shutdowns.length > 0) {
-                                output += ', ';
-                                for (const nvmeShutdown of nvme.Shutdowns) {
-                                    output += `不安全断电${nvmeShutdown.replace(/ |,/gm, '')}次`;
-                                    break
-                                }
-                            }
-
-                            if (nvme.Hours.length > 0) {
-                                output += ', ';
-                                for (const nvmeHour of nvme.Hours) {
-                                    output += `累计${nvmeHour.replace(/ |,/gm, '')}小时`;
-                                }
-                            }
-                        }
-                    //output = output.slice(0, -3);
-                }
-                return output.replace(/\n/g, '<br>');
-            }
-
-            return output;
-        } else {
-            return `提示: 未安装 NVME 或已直通 NVME 控制器！`;
-        }
-    }
-},
-    // 检测不到相关参数的可以注释掉---需要的注释本行即可  */
-
-    // SATA硬盘温度
-    {
-        itemId: 'hdd-temperatures',
-        colspan: 2,
-        printBar: false,
-        title: gettext('SATA硬盘'),
-        textField: 'hdd_temperatures',
-        renderer: function(value) {
-            if (value.length > 0) {
-               try {
-               const jsonData = JSON.parse(value);
-            if (jsonData.standy === true) {
-               return '休眠中';
-               }
-            let output = '';
-            if (jsonData.model_name) {
-            output = `<strong>${jsonData.model_name}</strong><br>`;
-                    if (jsonData.temperature?.current !== undefined) {
-                       output += `温度: <strong>${jsonData.temperature.current}°C</strong>`;
-                    }
-                    if (jsonData.power_on_time?.hours !== undefined) {
-                       if (output.length > 0) output += ' | ';
-                       output += `通电: ${jsonData.power_on_time.hours}小时`;
-                    if (jsonData.power_cycle_count) {
-                       output += `, 次数: ${jsonData.power_cycle_count}`;
-                       }
-                    }
-                    if (jsonData.smart_status?.passed !== undefined) {
-                       if (output.length > 0) output += ' | ';
-                       output += 'SMART: ' + (jsonData.smart_status.passed ? '正常' : '警告!');
-                    }
-                       return output;
-                       }
-                       } catch (e) {
-                    }
-                    let outputs = [];
-                    let devices = value.matchAll(/(\s*(Model|Device Model|Vendor).*:\s*[\s\S]*?\n){1,2}^User.*\[([\s\S]*?)\]\n^\s*9[\s\S]*?\-\s*([\d]+)[\s\S]*?(\n(^19[0,4][\s\S]*?$){1,2}|\s{0}$)/gm);
-                    for (const device of devices) {
-                    let devicemodel = '';
-                    if (device[1].indexOf("Family") !== -1) {
-                       devicemodel = device[1].replace(/.*Model Family:\s*([\s\S]*?)\n^Device Model:\s*([\s\S]*?)\n/m, '$1 - $2');
-                    } else if (device[1].match(/Vendor/)) {
-                       devicemodel = device[1].replace(/.*Vendor:\s*([\s\S]*?)\n^.*Model:\s*([\s\S]*?)\n/m, '$1 $2');
-                    } else {
-                       devicemodel = device[1].replace(/.*(Model|Device Model):\s*([\s\S]*?)\n/m, '$2');
-                    }
-                    let capacity = device[3] ? device[3].replace(/ |,/gm, '') : "未知容量";
-                    let powerOnHours = device[4] || "未知";
-                    let deviceOutput = '';
-                    if (value.indexOf("Min/Max") !== -1) {
-                       let devicetemps = device[6]?.matchAll(/19[0,4][\s\S]*?\-\s*(\d+)(\s\(Min\/Max\s(\d+)\/(\d+)\)$|\s{0}$)/gm);
-                       for (const devicetemp of devicetemps || []) {
-                         deviceOutput = `<strong>${devicemodel}</strong><br>容量: ${capacity} | 已通电: ${powerOnHours}小时 | 温度: <strong>${devicetemp[1]}°C</strong>`;
-                         outputs.push(deviceOutput);
-                      }
-                    } else if (value.indexOf("Temperature") !== -1 || value.match(/Airflow_Temperature/)) {
-                       let devicetemps = device[6]?.matchAll(/19[0,4][\s\S]*?\-\s*(\d+)/gm);
-                    for (const devicetemp of devicetemps || []) {
-                       deviceOutput = `<strong>${devicemodel}</strong><br>容量: ${capacity} | 已通电: ${powerOnHours}小时 | 温度: <strong>${devicetemp[1]}°C</strong>`;
-                       outputs.push(deviceOutput);
-                    }
-                    } else {
-                       if (value.match(/\/dev\/sd[a-z]/)) {
-                           deviceOutput = `<strong>${devicemodel}</strong><br>容量: ${capacity} | 已通电: ${powerOnHours}小时 | 提示: 设备存在但未报告温度信息`;
-                           outputs.push(deviceOutput);
-                       } else {
-                           deviceOutput = `<strong>${devicemodel}</strong><br>容量: ${capacity} | 已通电: ${powerOnHours}小时 | 提示: 未检测到温度传感器`;
-                           outputs.push(deviceOutput);
-                       }
-                      }
-                    }
-                    if (!outputs.length && value.length > 0) {
-                       let fallbackDevices = value.matchAll(/(\/dev\/sd[a-z]).*?Model:([\s\S]*?)\n/gm);
-                       for (const fallbackDevice of fallbackDevices || []) {
-                         outputs.push(`${fallbackDevice[2].trim()}<br>提示: 设备存在但无法获取完整信息`);
-                       }
-                    }
-                    return outputs.length ? outputs.join('<br>') : '提示: 检测到硬盘但无法识别详细信息';
-            } else {
-                return '提示: 未安装硬盘或已直通硬盘控制器';
-        }
-    }
-},
 EOF
+    done
+
+    # 动态为每个 SATA 硬盘添加 JavaScript 代码
+    for i in $(seq 0 $((sdi - 1))); do
+        # 获取硬盘类型（固态/机械）
+        sd="/dev/sd$(echo {a..z} | cut -d' ' -f$((i+1)))"
+        sdsn=$(basename $sd 2>/dev/null)
+        sdcr=/sys/block/$sdsn/queue/rotational
+        if [ -f $sdcr ] && [ "$(cat $sdcr)" = "0" ]; then
+            sdtype="固态硬盘$i"
+        else
+            sdtype="机械硬盘$i"
+        fi
+
+        cat >> $tmpf << EOF
+
+    {
+          itemId: 'sd${i}0',
+          colspan: 2,
+          printBar: false,
+          title: gettext('${sdtype}'),
+          textField: 'sd${i}',
+          renderer:function(value){
+              try{
+                  let  v = JSON.parse(value);
+                  console.log(v)
+
+                  // 场景 1：硬盘休眠（节能模式）
+                  if (v.standy === true) {
+                      return '<span style="color: #27ae60;">💤 硬盘休眠中（省电模式）</span>'
+                  }
+
+                  // 场景 2：空 JSON（硬盘不存在或已直通）
+                  if (Object.keys(v).length === 0) {
+                      return '<span style="color: #888;">未检测到硬盘（可能已直通或移除）</span>';
+                  }
+
+                  // 场景 3：检查型号
+                  let model = v.model_name;
+                  if (!model) {
+                      return '<span style="color: #f39c12;">硬盘信息不完整（建议检查连接状态）</span>';
+                  }
+
+                  // 场景 4：构建正常显示内容
+                  let parts = [model];
+
+                  // 温度
+                  if (v.temperature?.current !== undefined) {
+                      parts.push('温度: ' + v.temperature.current + '°C');
+                  }
+
+                  // 通电时间
+                  if (v.power_on_time?.hours !== undefined) {
+                      let pot = '通电: ' + v.power_on_time.hours + '时';
+                      if (v.power_cycle_count) {
+                          pot += ',次: ' + v.power_cycle_count;
+                      }
+                      parts.push(pot);
+                  }
+
+                  // SMART 状态
+                  if (v.smart_status?.passed !== undefined) {
+                      parts.push('SMART: ' + (v.smart_status.passed ? '正常' : '<span style="color: #e74c3c;">警告!</span>'));
+                  }
+
+                  return parts.join(' | ');
+
+              }catch(e){
+                  // JSON 解析失败
+                  return '<span style="color: #888;">无法获取硬盘信息（可能使用 HBA 直通）</span>';
+              };
+           }
+    },
+EOF
+    done
+
 
     log_info "找到关键字pveversion的行号"
     # 显示匹配的行
@@ -1752,42 +1609,77 @@ EOF
     sed -i "${ln}r $tmpf" $pvemanagerlib
     # 显示修改结果
     # sed -n '/pveversion/,+30p' $pvemanagerlib
-    rm $tmpf
 
     log_info "修改页面高度"
-    disk_count=$(lsblk -d -o NAME | grep -cE 'sd[a-z]|nvme[0-9]')
+    # 统计添加了几条内容（2个基础项 + NVME + SATA）
+    addRs=$((2 + nvi + sdi))
 
-    # 让用户自定义高度变量
     echo
-    echo "检测到磁盘数量: $disk_count"
     echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-    echo "高度变量说明："
-    echo "  - 默认值: 69 (适用于大多数场景)"
-    echo "  - 推荐范围: 50-100"
-    echo "  - 如果您的CPU核心过多或想显示更多信息,可适当增大"
-    echo "  - 如果界面出现遮挡,可适当减小此值"
+    echo "检测到添加了 $addRs 条监控项 (2个基础项 + $nvi 个NVME + $sdi 个SATA)"
     echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-    echo
-    read -p "请输入高度增量值 (直接回车使用默认值 69): " height_multiplier
+    echo "请选择高度调整方式："
+    echo "  1. 自动计算 (推荐，参考 PVE 8 算法：28px/项)"
+    echo "  2. 手动设置 (自定义每项的高度增量)"
+    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    read -p "请输入选项 [1-2] (直接回车使用自动计算): " height_choice
 
-    # 验证输入是否为数字,如果不是或为空则使用默认值
-    if [[ -z "$height_multiplier" ]] || ! [[ "$height_multiplier" =~ ^[0-9]+$ ]]; then
-        height_multiplier=69
-        log_info "使用默认高度增量: 69"
+    case ${height_choice:-1} in
+        1)
+            # 自动计算：每项 28px
+            addHei=$((28 * addRs))
+            log_info "使用自动计算：$addRs 项 × 28px = ${addHei}px"
+            ;;
+        2)
+            # 手动设置
+            echo
+            echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+            echo "手动设置说明："
+            echo "  - 推荐值范围: 20-40 (默认 28)"
+            echo "  - 如果 CPU 核心很多或想显示更多信息，可适当增大"
+            echo "  - 如果界面出现遮挡，可适当减小此值"
+            echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+            read -p "请输入每项的高度增量 (px) [默认: 28]: " height_per_item
+
+            # 验证输入是否为数字，如果不是或为空则使用默认值 28
+            if [[ -z "$height_per_item" ]] || ! [[ "$height_per_item" =~ ^[0-9]+$ ]]; then
+                height_per_item=28
+                log_info "使用默认值: 28px/项"
+            else
+                log_info "使用自定义值: ${height_per_item}px/项"
+            fi
+
+            addHei=$((height_per_item * addRs))
+            log_success "计算结果：$addRs 项 × ${height_per_item}px = ${addHei}px"
+            ;;
+        *)
+            # 无效选项，使用自动计算
+            addHei=$((28 * addRs))
+            log_warn "无效选项，使用自动计算：${addHei}px"
+            ;;
+    esac
+
+    rm $tmpf
+
+    # 修改左栏高度（原高度 300）
+    log_step "修改左栏高度"
+    wph=$(sed -n -E "/widget\.pveNodeStatus/,+4{/height:/{s/[^0-9]*([0-9]+).*/\1/p;q}}" $pvemanagerlib)
+    if [ -n "$wph" ]; then
+        sed -i -E "/widget\.pveNodeStatus/,+4{/height:/{s#[0-9]+#$((wph + addHei))#}}" $pvemanagerlib
+        log_success "左栏高度: $wph → $((wph + addHei))"
     else
-        log_info "使用自定义高度增量: $height_multiplier"
+        log_warn "找不到左栏高度修改点"
     fi
 
-    height_increase=$((disk_count * height_multiplier))
-
-    node_status_new_height=$((400 + height_increase))
-    sed -i -r '/widget\.pveNodeStatus/,+5{/height/{s#[0-9]+#'$node_status_new_height'#}}' $pvemanagerlib
-    cpu_status_new_height=$((300 + height_increase))
-    sed -i -r '/widget\.pveCpuStatus/,+5{/height/{s#[0-9]+#'$cpu_status_new_height'#}}' $pvemanagerlib
-
-    log_info "修改后的高度值："
-    sed -n -e '/widget\.pveNodeStatus/,+5{/height/{p}}' \
-           -e '/widget\.pveCpuStatus/,+5{/height/{p}}' $pvemanagerlib
+    # 修改右栏高度和左栏一致，解决浮动错位（原高度 325）
+    log_step "修改右栏高度和左栏一致，解决浮动错位"
+    nph=$(sed -n -E '/nodeStatus:\s*nodeStatus/,+10{/minHeight:/{s/[^0-9]*([0-9]+).*/\1/p;q}}' "$pvemanagerlib")
+    if [ -n "$nph" ]; then
+        sed -i -E "/nodeStatus:\s*nodeStatus/,+10{/minHeight:/{s#[0-9]+#$((nph + addHei - (nph - wph)))#}}" $pvemanagerlib
+        log_success "右栏高度: $nph → $((nph + addHei - (nph - wph)))"
+    else
+        log_warn "找不到右栏高度修改点"
+    fi
 
     # 调整显示布局
     ln=$(expr $(sed -n -e '/widget.pveDcGuests/=' $pvemanagerlib) + 10)
@@ -1804,7 +1696,7 @@ EOF
             :loop
             N
             /\s*\)\s*\{/!b loop
-            s/(if\s*\([[:space:]]*res\s*===\s*null\s*(\|\|\s*res\s*===\s*undefined\s*)?(\|\|\s*!res\s*)?(\|\|\s*res\.data\.status\.toLowerCase\(\)\s*!==\s*['\''"]active['\''"]\s*)?[[:space:]]*\)\s*\{)/if(false){/
+            s/(if\s*\([[:space:]]*res\s*===\s*null\s*(\|\|\s*res\s*===\s*undefined\s*)?(\|\|\s*!res\s*)?(\|\|\s*res\.data\.status\.toLowerCase\(\)\s*!==\s*['\''"]active['\''"]\s*)?[[:space:]]*\)\s*\{)/if(false){ \/\/modbyshowtempfreq/
         }
     }' /usr/share/javascript/proxmox-widget-toolkit/proxmoxlib.js
 
@@ -2535,13 +2427,13 @@ show_menu() {
     show_menu_option "12" "内核管理 (内核切换/更新/清理)"
     show_menu_option "13" "PVE8 升级到 PVE9 (PVE8专用)"
     show_menu_option "14" "第三方工具集 (tteck社区工具)"
+    show_menu_option "15" "给作者点个Star吧，谢谢喵~"
     echo
     show_menu_option "0"  "退出脚本"
-    show_menu_option "520" "给作者点个Star吧，谢谢喵~"
     show_menu_footer
     echo
     echo "小贴士：新装系统推荐选择 7 进行一键配置"
-    echo -n "请输入您的选择 [0-14, 520]: "
+    echo -n "请输入您的选择 [0-15]: "
 }
 
 # 一键配置
@@ -2982,7 +2874,7 @@ main() {
             14)
                 third_party_tools_menu
                 ;;
-            520)
+            15)
                 echo "项目地址：https://github.com/Mapleawaa/PVE-Tools-9"
                 echo "有你真好~"
                 ;;
@@ -2993,7 +2885,7 @@ main() {
                 ;;
             *)
                 log_error "哎呀，这个选项不存在呢"
-                log_warn "请输入 0-14 之间的数字"
+                log_warn "请输入 0-15 之间的数字"
                 ;;
         esac
         
