@@ -45,23 +45,6 @@ bash <(curl -sSL https://ghfast.top/github.com/Mapleawaa/PVE-Tools-9/blob/main/P
 bash <(curl -sSL https://github.com/Mapleawaa/PVE-Tools-9/blob/main/PVE-Tools.sh)
 ```
 
----
-
-<div align="center">
-<strong> [新功能!] 自带小工具软件 </strong> 
-
-<img src="./images/little-tools.png"> </img>
-**工具来源**
-**作者**: tteck
-**项目地址**: https://github.com/tteck/Proxmox
-**许可证**: MIT License
-##### 感谢 **tteck** 为 Proxmox 社区贡献的优秀工具！
-*如需了解更多工具详情，请访问原项目：*
-https://github.com/tteck/Proxmox
-</div>
-
----
-
 ### 📖 项目简介
 
 PVE Tools 9 是专为 Proxmox VE 9.0 设计的一键配置工具，基于 Debian 13 (Trixie) 系统。本工具旨在简化 PVE 的初始配置过程，提供友好的用户界面和安全的操作体验。
@@ -111,7 +94,7 @@ PVE Tools 9 是专为 Proxmox VE 9.0 设计的一键配置工具，基于 Debian
 
 #### 系统要求
 
-- ✅ Proxmox VE 9.0 或更高版本
+- ✅ Proxmox VE 9.0 或更高版本 （Proxmox VE 8 仅可用升级功能）
 - ✅ Debian 13 (Trixie) 基础系统
 - ✅ Root 权限
 - ✅ 网络连接
@@ -162,7 +145,7 @@ sudo ./PVE-Tools.sh
 #### 🚀 更换软件源
 
 - **Debian 源**: 使用 DEB822 格式配置清华大学镜像
-- **企业源**: 自动注释 PVE 企业源（需付费）
+- **企业源**: 自动注释 PVE 企业源（此处是需付费可使用的源，普通用户无需使用此功能）
 - **Ceph 源**: 配置 Ceph 存储镜像源
 - **无订阅源**: 添加适用于社区版的免费源
 - **CT 模板源**: 加速容器模板下载
@@ -365,10 +348,11 @@ SOFTWARE.
 
 ### 🌟 如果这个项目对你有帮助，请给个 Star ⭐
 
-**用 ❤️ 由 AI Claude Code 和 Qwen3 联合打造**
+**用 ❤️ 由 AI Claude Code 联合打造**
 
+[**Vibe Coding]() - 一种新的编程方式
 [**Claude Code**](https://claude.ai/code) - Anthropic 官方 AI 编程助手
-[**Qwen3**](https://github.com/QwenLM/Qwen3) - 阿里云 Qwen 团队开发的大语言模型系列
+<!-- [**Qwen3**](https://github.com/QwenLM/Qwen3) - 阿里云 Qwen 团队开发的大语言模型系列 -->
 
 [![GitHub](https://img.shields.io/badge/GitHub-SovitxNetworks-181717?logo=github&logoColor=white)](https://github.com/Mapleawaa)
 
