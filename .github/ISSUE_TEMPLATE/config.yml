@@ -1,5 +1,5 @@
 blank_issues_enabled: false  # 禁用空白issue
 contact_links:
-  - name: "💬 讨论区"
-    url: https://github.com/Mapleawaa/PVE-Tools-9/discussions
+  - name: "直接与作者沟通"
+    url:  https://t.me/Omphalos2_bot
     about: "欢迎参与讨论"
