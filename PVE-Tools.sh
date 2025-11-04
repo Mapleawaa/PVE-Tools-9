@@ -1156,8 +1156,8 @@ cpu_add() {
     apt-get update
 
     log_step "开始安装所需工具..."
-    # 输入需要安装的软件包 (添加 hdparm 用于 SATA 硬盘休眠检测)
-    packages=(lm-sensors nvme-cli sysstat linux-cpupower hdparm smartmontools)
+    # 输入需要安装的软件包 (添加 hdparm 用于 SATA 硬盘休眠检测, apcupsd for UPS support)
+    packages=(lm-sensors nvme-cli sysstat linux-cpupower hdparm smartmontools apcupsd)
 
     # 查询软件包，判断是否安装
     for package in "${packages[@]}"; do
@@ -1237,6 +1237,7 @@ cpu_add() {
             echo -n 'pkgwatt:'
             [ -e /usr/sbin/turbostat ] && turbostat --quiet --cpu package --show "PkgWatt" -S sleep 0.25 2>&1 | tail -n1
         `;
+        $res->{ups_status} = `apcaccess status`;
 
 EOF
 
@@ -1598,6 +1599,40 @@ EOF
     },
 EOF
     done
+
+    # 添加UPS信息显示
+    cat >> $tmpf << 'EOF'
+
+    {
+        itemId: 'ups-status',
+        colspan: 2,
+        printBar: false,
+        title: gettext('UPS 信息'),
+        textField: 'ups_status',
+        cellWrap: true,
+        renderer: function(value) {
+            if (value.length > 0) {
+                try {
+                    const DATE    = value.match(/DATE\s*:\s*([\d\-]+ \d+:\d+:\d+)/)[1];
+                    const STATUS  = value.match(/STATUS\s*:\s*([A-Z]+)/)[1];
+                    const LINEV   = value.match(/OUTPUTV\s*:\s*([\d\.]+)/)[1];
+                    const LOADPCT = value.match(/LOADPCT\s*:\s*([\d\.]+)/)[1];
+                    const BCHARGE = value.match(/BCHARGE\s*:\s*([\d\.]+)/)[1];
+                    const TIMELEFT= value.match(/TIMELEFT\s*:\s*([\d\.]+)/)[1];
+                    const MODEL   = value.match(/MODEL\s*:\s*(.+)/)[1].trim();
+
+                    return `${MODEL}  | ${STATUS}  | ${DATE}<br>
+                            电量：${BCHARGE} %  | 剩余供电时间：${TIMELEFT} 分钟<br>
+                            电压：${LINEV} V  |  负载：${LOADPCT} %`;
+                } catch(e) {
+                    return 'UPS 信息解析失败:' + value;
+                }
+            } else {
+                return '提示: 未检测到 UPS 或 apcaccess 未运行';
+            }
+        }
+    },
+EOF
 
 
     log_info "找到关键字pveversion的行号"
