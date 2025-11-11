@@ -6,7 +6,7 @@
 # Auther:Maple 二次修改使用请不要删除此段注释
 
 # 版本信息
-CURRENT_VERSION="4.2.0"
+CURRENT_VERSION="4.2.1"
 VERSION_FILE_URL="https://raw.githubusercontent.com/Mapleawaa/PVE-Tools-9/main/VERSION"
 
 # 颜色定义 - 保持一致性
@@ -1208,11 +1208,21 @@ cpu_add() {
     backup_file "$nodes"
     backup_file "$pvemanagerlib"
     backup_file "$proxmoxlib"
-    
+
     # 备份当前版本文件
     cp "$nodes" "$nodes.$pvever.bak"
     cp "$pvemanagerlib" "$pvemanagerlib.$pvever.bak"
     cp "$proxmoxlib" "$proxmoxlib.$pvever.bak"
+
+    # 检测是否有 UPS 设备
+    log_info "检测 UPS 设备"
+    if command -v apcaccess >/dev/null 2>&1 && apcaccess status 2>/dev/null | grep -q "STATUS"; then
+        has_ups=true
+        log_success "检测到 UPS 设备，将添加 UPS 监控"
+    else
+        has_ups=false
+        log_info "未检测到 UPS 设备，跳过 UPS 监控"
+    fi
 
     # 生成系统变量 (参考 PVE 8 脚本的改进实现)
     tmpf=tmpfile.temp
@@ -1237,9 +1247,17 @@ cpu_add() {
             echo -n 'pkgwatt:'
             [ -e /usr/sbin/turbostat ] && turbostat --quiet --cpu package --show "PkgWatt" -S sleep 0.25 2>&1 | tail -n1
         `;
-        $res->{ups_status} = `apcaccess status`;
-
 EOF
+
+    # 如果检测到 UPS，添加 UPS 状态变量
+    if [ "$has_ups" = true ]; then
+        cat >> $tmpf << 'EOF'
+        $res->{ups_status} = `apcaccess status`;
+EOF
+    fi
+
+    # 添加空行结束变量定义
+    echo >> $tmpf
 
     # NVME 硬盘变量 (动态检测，参考 PVE 8 实现)
     log_info "检测系统中的 NVME 硬盘"
@@ -1600,8 +1618,9 @@ EOF
 EOF
     done
 
-    # 添加UPS信息显示
-    cat >> $tmpf << 'EOF'
+    # 如果检测到 UPS，添加 UPS 信息显示
+    if [ "$has_ups" = true ]; then
+        cat >> $tmpf << 'EOF'
 
     {
         itemId: 'ups-status',
@@ -1633,6 +1652,7 @@ EOF
         }
     },
 EOF
+    fi
 
 
     log_info "找到关键字pveversion的行号"
@@ -1646,12 +1666,18 @@ EOF
     # sed -n '/pveversion/,+30p' $pvemanagerlib
 
     log_info "修改页面高度"
-    # 统计添加了几条内容（2个基础项 + NVME + SATA）
-    addRs=$((2 + nvi + sdi))
+    # 统计添加了几条内容（2个基础项 + NVME + SATA + UPS）
+    if [ "$has_ups" = true ]; then
+        addRs=$((2 + nvi + sdi + 1))
+        ups_info="+ 1 个UPS"
+    else
+        addRs=$((2 + nvi + sdi))
+        ups_info=""
+    fi
 
     echo
     echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-    echo "检测到添加了 $addRs 条监控项 (2个基础项 + $nvi 个NVME + $sdi 个SATA)"
+    echo "检测到添加了 $addRs 条监控项 (2个基础项 + $nvi 个NVME + $sdi 个SATA $ups_info)"
     echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
     echo "请选择高度调整方式："
     echo "  1. 自动计算 (推荐，参考 PVE 8 算法：28px/项)"
@@ -1764,6 +1790,869 @@ fi
 
 }
 #--------------CPU、主板、硬盘温度显示----------------
+
+#--------------GRUB 配置管理工具----------------
+# 展示当前 GRUB 配置
+show_grub_config() {
+    log_info "当前 GRUB 配置信息"
+    log_step "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+
+    if [ ! -f "/etc/default/grub" ]; then
+        log_error "未找到 /etc/default/grub 文件"
+        return 1
+    fi
+
+    log_info "文件路径: /etc/default/grub"
+    log_info "当前内核参数:"
+
+    # 读取并显示 GRUB_CMDLINE_LINUX_DEFAULT
+    current_config=$(grep '^GRUB_CMDLINE_LINUX_DEFAULT=' /etc/default/grub | sed 's/GRUB_CMDLINE_LINUX_DEFAULT=//' | tr -d '"')
+
+    if [ -z "$current_config" ]; then
+        log_warn "未找到 GRUB_CMDLINE_LINUX_DEFAULT 配置"
+    else
+        log_success "GRUB_CMDLINE_LINUX_DEFAULT 内容:"
+        # 逐行显示参数
+        echo "$current_config" | tr ' ' '\n' | while read -r param; do
+            [ -n "$param" ] && log_info "  - $param"
+        done
+    fi
+
+    log_step "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+
+    # 检测关键参数
+    log_info "关键参数检测:"
+
+    # 检测 IOMMU
+    if echo "$current_config" | grep -q "intel_iommu=on\|amd_iommu=on"; then
+        log_success "  IOMMU: 已启用"
+    else
+        log_warn "  IOMMU: 未启用"
+    fi
+
+    # 检测 SR-IOV
+    if echo "$current_config" | grep -q "i915.enable_guc=3"; then
+        log_success "  SR-IOV (i915.enable_guc=3): 已配置"
+    else
+        log_info "  SR-IOV: 未配置"
+    fi
+
+    # 检测 GVT-g
+    if echo "$current_config" | grep -q "i915.enable_gvt=1"; then
+        log_success "  GVT-g (i915.enable_gvt=1): 已配置"
+    else
+        log_info "  GVT-g: 未配置"
+    fi
+
+    # 检测硬件直通
+    if echo "$current_config" | grep -q "iommu=pt"; then
+        log_success "  硬件直通 (iommu=pt): 已启用"
+    else
+        log_info "  硬件直通: 未启用"
+    fi
+
+    log_step "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+}
+
+# GRUB 配置备份
+backup_grub_with_note() {
+    local note="$1"
+    local backup_dir="/etc/pvetools9/backup/grub"
+    local timestamp=$(date +"%Y%m%d_%H%M%S")
+    local backup_file="${backup_dir}/${timestamp}_${note}.bak"
+
+    log_step "备份 GRUB 配置..."
+
+    # 创建备份目录
+    if [ ! -d "$backup_dir" ]; then
+        mkdir -p "$backup_dir" || {
+            log_error "无法创建备份目录: $backup_dir"
+            return 1
+        }
+        log_info "创建备份目录: $backup_dir"
+    fi
+
+    # 检查源文件
+    if [ ! -f "/etc/default/grub" ]; then
+        log_error "源文件不存在: /etc/default/grub"
+        return 1
+    fi
+
+    # 执行备份
+    cp "/etc/default/grub" "$backup_file" || {
+        log_error "备份失败"
+        return 1
+    }
+
+    log_success "GRUB 配置已备份"
+    log_info "备份文件: $backup_file"
+    log_info "备份时间: $(date '+%Y-%m-%d %H:%M:%S')"
+    log_info "备份备注: $note"
+
+    # 统计备份文件数量
+    local backup_count=$(ls -1 "$backup_dir"/*.bak 2>/dev/null | wc -l)
+    log_info "当前共有 $backup_count 个备份文件"
+
+    return 0
+}
+
+# 列出所有 GRUB 备份
+list_grub_backups() {
+    local backup_dir="/etc/pvetools9/backup/grub"
+
+    log_info "GRUB 配置备份列表"
+    log_step "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+
+    if [ ! -d "$backup_dir" ]; then
+        log_warn "备份目录不存在: $backup_dir"
+        log_tips "尚未创建任何备份"
+        return 0
+    fi
+
+    local backup_files=$(ls -1t "$backup_dir"/*.bak 2>/dev/null)
+
+    if [ -z "$backup_files" ]; then
+        log_warn "未找到任何备份文件"
+        return 0
+    fi
+
+    local count=1
+    echo "$backup_files" | while read -r backup_file; do
+        local filename=$(basename "$backup_file")
+        local filesize=$(du -h "$backup_file" | awk '{print $1}')
+        local filetime=$(stat -c '%y' "$backup_file" 2>/dev/null || stat -f '%Sm' "$backup_file")
+
+        log_info "备份 $count:"
+        log_info "  文件名: $filename"
+        log_info "  大小: $filesize"
+        log_info "  时间: $filetime"
+        log_step "  ────────────────────────────────────"
+
+        count=$((count + 1))
+    done
+
+    log_step "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+}
+
+# 恢复 GRUB 备份
+restore_grub_backup() {
+    local backup_dir="/etc/pvetools9/backup/grub"
+
+    list_grub_backups
+
+    if [ ! -d "$backup_dir" ] || [ -z "$(ls -A "$backup_dir"/*.bak 2>/dev/null)" ]; then
+        log_error "没有可恢复的备份文件"
+        pause_function
+        return 1
+    fi
+
+    echo
+    log_warn "请输入要恢复的备份文件名（完整文件名）:"
+    read -p "> " backup_filename
+
+    local backup_file="${backup_dir}/${backup_filename}"
+
+    if [ ! -f "$backup_file" ]; then
+        log_error "备份文件不存在: $backup_filename"
+        pause_function
+        return 1
+    fi
+
+    log_warn "即将恢复 GRUB 配置"
+    log_info "源文件: $backup_file"
+    log_info "目标文件: /etc/default/grub"
+
+    if ! confirm_action "确认恢复此备份"; then
+        log_info "用户取消恢复操作"
+        return 0
+    fi
+
+    # 在恢复前备份当前配置
+    backup_grub_with_note "恢复前自动备份"
+
+    # 执行恢复
+    cp "$backup_file" "/etc/default/grub" || {
+        log_error "恢复失败"
+        pause_function
+        return 1
+    }
+
+    log_success "GRUB 配置已恢复"
+
+    # 更新 GRUB
+    if confirm_action "是否立即更新 GRUB"; then
+        update-grub && log_success "GRUB 更新完成" || log_error "GRUB 更新失败"
+    fi
+
+    pause_function
+}
+#--------------GRUB 配置管理工具----------------
+
+#--------------核显虚拟化管理----------------
+# Intel 11-15代 SR-IOV 核显虚拟化配置
+igpu_sriov_setup() {
+    log_info "开始配置 Intel 11-15代 SR-IOV 核显虚拟化"
+
+    # 检查内核版本
+    kernel_version=$(uname -r | awk -F'-' '{print $1}')
+    kernel_major=$(echo $kernel_version | cut -d'.' -f1)
+    kernel_minor=$(echo $kernel_version | cut -d'.' -f2)
+
+    if [ "$kernel_major" -lt 6 ] || ([ "$kernel_major" -eq 6 ] && [ "$kernel_minor" -lt 8 ]); then
+        log_error "SR-IOV 需要内核版本 6.8 或更高"
+        log_tips "当前内核版本: $(uname -r)"
+        log_tips "请先使用内核管理功能升级到 6.8 内核"
+        pause_function
+        return 1
+    fi
+
+    log_success "内核版本检查通过: $(uname -r)"
+
+    # 展示当前 GRUB 配置
+    echo
+    show_grub_config
+    echo
+
+    # 危险性警告
+    log_step "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    log_error "【高危操作警告】SR-IOV 核显虚拟化配置"
+    log_step "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    log_warn "此操作属于【高危险性】系统配置，配置错误可能导致："
+    log_error "  - 系统无法正常启动（GRUB 配置错误）"
+    log_error "  - 核显完全不可用（参数配置错误）"
+    log_error "  - 虚拟机黑屏或无法启动（直通配置错误）"
+    log_error "  - 需要通过恢复模式修复系统"
+    log_step "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    echo
+    log_info "此功能将修改以下系统配置："
+    log_info "  1. 修改 GRUB 引导参数（启用 IOMMU 和 SR-IOV）"
+    log_info "  2. 加载 VFIO 内核模块"
+    log_info "  3. 下载并安装 i915-sriov-dkms 驱动（约 10MB）"
+    log_info "  4. 配置虚拟核显数量（VFs）"
+    echo
+    log_info "前置要求（请确认已完成）："
+    log_info "  ✓ BIOS 已开启 VT-d 虚拟化"
+    log_info "  ✓ BIOS 已开启 SR-IOV（如有此选项）"
+    log_info "  ✓ BIOS 已开启 Above 4GB（如有此选项）"
+    log_info "  ✓ BIOS 已关闭 Secure Boot 安全启动"
+    log_info "  ✓ CPU 为 Intel 11-15 代处理器"
+    echo
+    log_error "重要：物理核显 (00:02.0) 不能直通，否则所有虚拟核显将消失"
+    log_step "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    echo
+    log_warn "强烈建议："
+    log_tips "1. 在继续前先备份当前 GRUB 配置"
+    log_tips "2. 确保了解核显虚拟化的工作原理"
+    log_tips "3. 准备好通过 SSH 或物理访问恢复系统"
+    echo
+
+    # 询问是否要备份
+    if confirm_action "是否先备份当前 GRUB 配置（强烈推荐）"; then
+        echo
+        log_info "请输入备份备注（例如：SR-IOV配置前备份）："
+        read -p "> " backup_note
+        backup_note=${backup_note:-"SR-IOV配置前备份"}
+        backup_grub_with_note "$backup_note"
+        echo
+    fi
+
+    if ! confirm_action "确认继续配置 SR-IOV 核显虚拟化"; then
+        log_info "用户取消操作"
+        return 0
+    fi
+
+    # 安装必要的软件包
+    log_step "安装必要的软件包..."
+    apt-get update
+
+    log_info "安装 pve-headers..."
+    apt-get install -y "pve-headers-$(uname -r)" || {
+        log_error "安装 pve-headers 失败"
+        pause_function
+        return 1
+    }
+
+    log_info "安装构建工具..."
+    apt-get install -y build-essential dkms sysfsutils || {
+        log_error "安装构建工具失败"
+        pause_function
+        return 1
+    }
+
+    log_success "软件包安装完成"
+
+    # 备份并修改 GRUB 配置
+    log_step "配置 GRUB 引导参数..."
+    backup_file "/etc/default/grub"
+
+    # 检查是否已配置
+    if grep -q "i915.enable_guc=3.*i915.max_vfs=7" /etc/default/grub; then
+        log_warn "GRUB 已配置 SR-IOV 参数，跳过修改"
+    else
+        # 移除旧的配置（如果有 GVT-g 配置）
+        sed -i 's/i915.enable_gvt=1//g' /etc/default/grub
+
+        # 添加 SR-IOV 参数
+        sed -i '/^GRUB_CMDLINE_LINUX_DEFAULT=/c\GRUB_CMDLINE_LINUX_DEFAULT="quiet intel_iommu=on iommu=pt i915.enable_guc=3 i915.max_vfs=7 module_blacklist=xe"' /etc/default/grub
+
+        log_success "GRUB 配置已更新"
+    fi
+
+    # 更新 GRUB
+    log_step "更新 GRUB..."
+    update-grub || {
+        log_error "更新 GRUB 失败"
+        pause_function
+        return 1
+    }
+
+    # 配置内核模块
+    log_step "配置内核模块..."
+    backup_file "/etc/modules"
+
+    # 添加 VFIO 模块（如果未添加）
+    for module in vfio vfio_iommu_type1 vfio_pci vfio_virqfd; do
+        if ! grep -q "^$module$" /etc/modules; then
+            echo "$module" >> /etc/modules
+            log_info "已添加模块: $module"
+        fi
+    done
+
+    # 移除 kvmgt 模块（如果有 GVT-g 配置）
+    sed -i '/^kvmgt$/d' /etc/modules
+
+    log_success "内核模块配置完成"
+
+    # 更新 initramfs
+    log_step "更新 initramfs..."
+    update-initramfs -u -k all || {
+        log_warn "更新 initramfs 失败，但可以继续"
+    }
+
+    # 下载并安装 i915-sriov-dkms 驱动
+    log_step "下载 i915-sriov-dkms 驱动..."
+
+    dkms_version="2025.05.18"
+    dkms_url="https://github.com/strongtz/i915-sriov-dkms/releases/download/${dkms_version}/i915-sriov-dkms_${dkms_version}_amd64.deb"
+    dkms_file="/tmp/i915-sriov-dkms_${dkms_version}_amd64.deb"
+
+    # 检查是否已下载
+    if [ -f "$dkms_file" ]; then
+        log_info "驱动文件已存在，跳过下载"
+    else
+        log_info "从 GitHub 下载驱动..."
+        log_tips "如果下载失败，请检查网络或手动下载后放到 /tmp/ 目录"
+
+        wget -O "$dkms_file" "$dkms_url" || {
+            log_error "下载驱动失败"
+            log_tips "请手动下载: $dkms_url"
+            log_tips "并上传到 PVE 的 /tmp/ 目录后重试"
+            pause_function
+            return 1
+        }
+    fi
+
+    log_step "安装 i915-sriov-dkms 驱动..."
+    log_warn "驱动安装可能需要较长时间，请耐心等待..."
+
+    dpkg -i "$dkms_file" || {
+        log_error "安装驱动失败"
+        pause_function
+        return 1
+    }
+
+    # 验证驱动安装
+    log_step "验证驱动安装..."
+    if modinfo i915 2>/dev/null | grep -q "max_vfs"; then
+        log_success "i915-sriov 驱动安装成功"
+    else
+        log_error "驱动验证失败，请检查安装过程"
+        pause_function
+        return 1
+    fi
+
+    # 配置 VFs 数量
+    echo
+    log_step "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    log_info "配置虚拟核显（VFs）数量"
+    log_step "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    echo
+    log_info "虚拟核显数量范围: 1-7"
+    log_info "推荐配置："
+    log_info "  - 1 个 VF: 性能最强，适合单个高性能虚拟机"
+    log_info "  - 2-3 个 VF: 平衡性能，适合多个虚拟机"
+    log_info "  - 4-7 个 VF: 最多虚拟机数量，性能较弱"
+    echo
+    read -p "请输入 VFs 数量 [1-7, 默认: 3]: " vfs_num
+
+    # 验证输入
+    if [[ -z "$vfs_num" ]]; then
+        vfs_num=3
+    elif ! [[ "$vfs_num" =~ ^[1-7]$ ]]; then
+        log_error "无效的 VFs 数量，必须是 1-7"
+        pause_function
+        return 1
+    fi
+
+    log_info "配置 $vfs_num 个虚拟核显"
+
+    # 写入 sysfs.conf
+    echo "devices/pci0000:00/0000:00:02.0/sriov_numvfs = $vfs_num" > /etc/sysfs.conf
+    log_success "VFs 数量配置完成"
+
+    # 完成提示
+    echo
+    log_step "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    log_success "SR-IOV 核显虚拟化配置完成！"
+    log_step "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    echo
+    log_info "配置摘要："
+    log_info "  • 内核参数: intel_iommu=on iommu=pt i915.enable_guc=3 i915.max_vfs=7"
+    log_info "  • VFIO 模块: 已加载"
+    log_info "  • i915-sriov 驱动: 已安装"
+    log_info "  • 虚拟核显数量: $vfs_num 个"
+    echo
+    log_warn "下一步操作："
+    log_error "  1. 重启系统使配置生效"
+    log_info "  2. 重启后使用 '验证核显虚拟化状态' 检查配置"
+    log_info "  3. 在虚拟机配置中添加核显 SR-IOV 设备"
+    echo
+    log_error "重要提示："
+    log_warn "  • 物理核显 (00:02.0) 不能直通给虚拟机"
+    log_warn "  • 只能直通虚拟核显 (00:02.1 ~ 00:02.$vfs_num)"
+    log_warn "  • 虚拟机需要勾选 ROM-Bar 和 PCIE 选项"
+    echo
+    log_step "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+
+    if confirm_action "是否现在重启系统"; then
+        log_info "正在重启系统..."
+        reboot
+    else
+        log_warn "请记得手动重启系统以使配置生效"
+    fi
+}
+
+# Intel 6-10代 GVT-g 核显虚拟化配置
+igpu_gvtg_setup() {
+    log_info "开始配置 Intel 6-10代 GVT-g 核显虚拟化"
+
+    # 展示当前 GRUB 配置
+    echo
+    show_grub_config
+    echo
+
+    # 危险性警告
+    log_step "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    log_error "【高危操作警告】GVT-g 核显虚拟化配置"
+    log_step "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    log_warn "此操作属于【高危险性】系统配置，配置错误可能导致："
+    log_error "  - 系统无法正常启动（GRUB 配置错误）"
+    log_error "  - 核显完全不可用（参数配置错误）"
+    log_error "  - 虚拟机黑屏或无法启动（直通配置错误）"
+    log_error "  - 需要通过恢复模式修复系统"
+    log_step "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    echo
+    log_info "此功能将修改以下系统配置："
+    log_info "  1. 修改 GRUB 引导参数（启用 IOMMU 和 GVT-g）"
+    log_info "  2. 加载 VFIO 和 kvmgt 内核模块"
+    echo
+    log_info "前置要求（请确认已完成）："
+    log_info "  ✓ BIOS 已开启 VT-d 虚拟化"
+    log_info "  ✓ BIOS 已开启 SR-IOV（如有此选项）"
+    log_info "  ✓ BIOS 已开启 Above 4GB（如有此选项）"
+    log_info "  ✓ BIOS 已关闭 Secure Boot 安全启动"
+    log_info "  ✓ CPU 为 Intel 6-10 代处理器"
+    echo
+    log_info "支持的处理器代号："
+    log_info "  • Skylake (6代)"
+    log_info "  • Kaby Lake (7代)"
+    log_info "  • Coffee Lake (8代)"
+    log_info "  • Coffee Lake Refresh (9代)"
+    log_info "  • Comet Lake (10代)"
+    echo
+    log_error "特殊的处理器代号："
+    log_warn "  • Rocket Lake / Tiger Lake (11代) 因处在当前代与上一代交界"
+    log_warn "    部分型号支持，但是不保证兼容性，请谨慎使用"
+    log_step "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    echo
+    log_warn "强烈建议："
+    log_tips "1. 在继续前先备份当前 GRUB 配置"
+    log_tips "2. 确保了解核显虚拟化的工作原理"
+    log_tips "3. 准备好通过 SSH 或物理访问恢复系统"
+    echo
+
+    # 询问是否要备份
+    if confirm_action "是否先备份当前 GRUB 配置（强烈推荐）"; then
+        echo
+        log_info "请输入备份备注（例如：GVT-g配置前备份）："
+        read -p "> " backup_note
+        backup_note=${backup_note:-"GVT-g配置前备份"}
+        backup_grub_with_note "$backup_note"
+        echo
+    fi
+
+    if ! confirm_action "确认继续配置 GVT-g 核显虚拟化"; then
+        log_info "用户取消操作"
+        return 0
+    fi
+
+    # 备份并修改 GRUB 配置
+    log_step "配置 GRUB 引导参数..."
+    backup_file "/etc/default/grub"
+
+    # 检查是否已配置
+    if grep -q "i915.enable_gvt=1" /etc/default/grub; then
+        log_warn "GRUB 已配置 GVT-g 参数，跳过修改"
+    else
+        # 移除旧的 SR-IOV 配置（如果有）
+        sed -i 's/i915.enable_guc=3//g; s/i915.max_vfs=7//g; s/module_blacklist=xe//g' /etc/default/grub
+
+        # 添加 GVT-g 参数
+        sed -i '/^GRUB_CMDLINE_LINUX_DEFAULT=/c\GRUB_CMDLINE_LINUX_DEFAULT="quiet intel_iommu=on iommu=pt i915.enable_gvt=1 pcie_acs_override=downstream,multifunction"' /etc/default/grub
+
+        log_success "GRUB 配置已更新"
+    fi
+
+    # 更新 GRUB
+    log_step "更新 GRUB..."
+    update-grub || {
+        log_error "更新 GRUB 失败"
+        pause_function
+        return 1
+    }
+
+    # 配置内核模块
+    log_step "配置内核模块..."
+    backup_file "/etc/modules"
+
+    # 添加 VFIO 和 kvmgt 模块
+    for module in vfio vfio_iommu_type1 vfio_pci vfio_virqfd kvmgt; do
+        if ! grep -q "^$module$" /etc/modules; then
+            echo "$module" >> /etc/modules
+            log_info "已添加模块: $module"
+        fi
+    done
+
+    log_success "内核模块配置完成"
+
+    # 更新 initramfs
+    log_step "更新 initramfs..."
+    update-initramfs -u -k all || {
+        log_warn "更新 initramfs 失败，但可以继续"
+    }
+
+    # 完成提示
+    echo
+    log_step "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    log_success "GVT-g 核显虚拟化配置完成！"
+    log_step "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    echo
+    log_info "配置摘要："
+    log_info "  • 内核参数: intel_iommu=on iommu=pt i915.enable_gvt=1"
+    log_info "  • VFIO 模块: 已加载"
+    log_info "  • kvmgt 模块: 已加载"
+    echo
+    log_warn "下一步操作："
+    log_error "  1. 重启系统使配置生效"
+    log_info "  2. 重启后使用 '验证核显虚拟化状态' 检查配置"
+    log_info "  3. 在虚拟机配置中添加核显 GVT-g 设备（Mdev 类型）"
+    echo
+    log_info "常见 Mdev 类型："
+    log_info "  • i915-GVTg_V5_4: 低性能，可创建更多虚拟机"
+    log_info "  • i915-GVTg_V5_8: 高性能，推荐使用（UHD630 最多 2 个）"
+    echo
+    log_step "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+
+    if confirm_action "是否现在重启系统"; then
+        log_info "正在重启系统..."
+        reboot
+    else
+        log_warn "请记得手动重启系统以使配置生效"
+    fi
+}
+
+# 验证核显虚拟化状态
+igpu_verify() {
+    log_info "检查核显虚拟化状态"
+
+    echo
+    echo "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+    echo "  核显虚拟化状态检查"
+    echo "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+    echo
+
+    # 检查 IOMMU
+    log_step "1. 检查 IOMMU 状态..."
+    if dmesg | grep -qi "DMAR.*IOMMU\|iommu.*enabled"; then
+        log_success "IOMMU 已启用"
+        echo "  $(dmesg | grep -i "DMAR.*IOMMU\|iommu.*enabled" | head -3)"
+    else
+        log_error "IOMMU 未启用"
+        log_tips "请检查 BIOS 是否开启 VT-d"
+        log_tips "请检查 GRUB 配置是否包含 intel_iommu=on"
+    fi
+    echo
+
+    # 检查 VFIO 模块
+    log_step "2. 检查 VFIO 模块加载状态..."
+    if lsmod | grep -q vfio; then
+        log_success "VFIO 模块已加载"
+        echo "  $(lsmod | grep vfio)"
+    else
+        log_error "VFIO 模块未加载"
+        log_tips "请检查 /etc/modules 配置"
+    fi
+    echo
+
+    # 检查 SR-IOV
+    log_step "3. 检查 SR-IOV 虚拟核显..."
+    if lspci | grep -i "VGA.*Intel" | wc -l | grep -q "^[2-9]"; then
+        vf_count=$(($(lspci | grep -i "VGA.*Intel" | wc -l) - 1))
+        log_success "检测到 $vf_count 个虚拟核显 (SR-IOV)"
+        echo
+        lspci | grep -i "VGA.*Intel"
+        echo
+        log_tips "物理核显: 00:02.0 (不能直通)"
+        log_tips "虚拟核显: 00:02.1 ~ 00:02.$vf_count (可直通给虚拟机)"
+    else
+        log_warn "未检测到 SR-IOV 虚拟核显"
+    fi
+    echo
+
+    # 检查 GVT-g
+    log_step "4. 检查 GVT-g mdev 类型..."
+    if [ -d "/sys/bus/pci/devices/0000:00:02.0/mdev_supported_types" ]; then
+        mdev_types=$(ls /sys/bus/pci/devices/0000:00:02.0/mdev_supported_types 2>/dev/null | wc -l)
+        if [ "$mdev_types" -gt 0 ]; then
+            log_success "GVT-g 已启用，可用 Mdev 类型: $mdev_types 个"
+            echo
+            ls -1 /sys/bus/pci/devices/0000:00:02.0/mdev_supported_types
+        else
+            log_warn "GVT-g 未正确配置"
+        fi
+    else
+        log_warn "未检测到 GVT-g 支持"
+        log_tips "此 CPU 可能不支持 GVT-g 或未配置"
+    fi
+    echo
+
+    # 检查 kvmgt 模块（GVT-g 需要）
+    log_step "5. 检查 kvmgt 模块（GVT-g）..."
+    if lsmod | grep -q kvmgt; then
+        log_success "kvmgt 模块已加载（GVT-g 模式）"
+    else
+        log_info "kvmgt 模块未加载（SR-IOV 模式或未配置 GVT-g）"
+    fi
+    echo
+
+    # 检查 i915 驱动参数
+    log_step "6. 检查 i915 驱动参数..."
+    if [ -f "/sys/module/i915/parameters/enable_guc" ]; then
+        guc_value=$(cat /sys/module/i915/parameters/enable_guc)
+        if [ "$guc_value" = "3" ]; then
+            log_success "i915.enable_guc = 3 (SR-IOV 模式)"
+        else
+            log_info "i915.enable_guc = $guc_value"
+        fi
+    fi
+
+    if [ -f "/sys/module/i915/parameters/enable_gvt" ]; then
+        gvt_value=$(cat /sys/module/i915/parameters/enable_gvt)
+        if [ "$gvt_value" = "Y" ]; then
+            log_success "i915.enable_gvt = Y (GVT-g 模式)"
+        else
+            log_info "i915.enable_gvt = $gvt_value"
+        fi
+    fi
+    echo
+
+    # 总结
+    echo "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+    echo "  检查完成"
+    echo "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+
+    pause_function
+}
+
+# 移除核显虚拟化配置
+igpu_remove() {
+    log_warn "移除核显虚拟化配置"
+
+    echo
+    echo "${YELLOW}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+    echo "${RED}⚠️  警告 - 移除核显虚拟化配置${NC}"
+    echo "${YELLOW}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+    echo
+    echo "  ${RED}此操作将：${NC}"
+    echo "  • 恢复 GRUB 配置为默认值"
+    echo "  • 清理 /etc/modules 中的 VFIO 和 kvmgt 模块"
+    echo "  • 删除 /etc/sysfs.conf 中的 VFs 配置"
+    echo "  • 卸载 i915-sriov-dkms 驱动（如已安装）"
+    echo
+    echo "  ${YELLOW}注意：此操作不会自动重启系统${NC}"
+    echo
+    echo "${YELLOW}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+
+    if ! confirm_action "确认移除核显虚拟化配置"; then
+        log_info "用户取消操作"
+        return 0
+    fi
+
+    # 恢复 GRUB 配置
+    log_step "恢复 GRUB 配置..."
+    backup_file "/etc/default/grub"
+
+    # 移除所有核显虚拟化参数
+    sed -i 's/intel_iommu=on//g; s/iommu=pt//g; s/i915.enable_guc=3//g; s/i915.max_vfs=7//g; s/module_blacklist=xe//g; s/i915.enable_gvt=1//g; s/pcie_acs_override=downstream,multifunction//g' /etc/default/grub
+
+    # 清理多余空格
+    sed -i 's/  */ /g' /etc/default/grub
+
+    update-grub
+    log_success "GRUB 配置已恢复"
+
+    # 清理 /etc/modules
+    log_step "清理内核模块配置..."
+    backup_file "/etc/modules"
+
+    sed -i '/^vfio$/d; /^vfio_iommu_type1$/d; /^vfio_pci$/d; /^vfio_virqfd$/d; /^kvmgt$/d' /etc/modules
+    log_success "内核模块配置已清理"
+
+    # 清理 /etc/sysfs.conf
+    if [ -f "/etc/sysfs.conf" ]; then
+        log_step "清理 sysfs 配置..."
+        backup_file "/etc/sysfs.conf"
+        sed -i '/sriov_numvfs/d' /etc/sysfs.conf
+        log_success "sysfs 配置已清理"
+    fi
+
+    # 卸载 i915-sriov-dkms
+    log_step "检查 i915-sriov-dkms 驱动..."
+    if dpkg -l | grep -q i915-sriov-dkms; then
+        log_info "卸载 i915-sriov-dkms 驱动..."
+        dpkg -P i915-sriov-dkms || log_warn "卸载驱动失败，可能需要手动处理"
+        log_success "驱动已卸载"
+    else
+        log_info "未安装 i915-sriov-dkms 驱动，跳过"
+    fi
+
+    # 更新 initramfs
+    log_step "更新 initramfs..."
+    update-initramfs -u -k all
+
+    log_success "核显虚拟化配置已移除"
+
+    echo
+    log_step "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    log_success "配置移除完成"
+    log_step "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    echo
+    log_warn "请重启系统使更改生效"
+    echo
+
+    if confirm_action "是否现在重启系统"; then
+        log_info "正在重启系统..."
+        reboot
+    else
+        log_warn "请记得手动重启系统"
+    fi
+}
+
+# 核显高级功能菜单
+igpu_management_menu() {
+    while true; do
+        clear
+        show_banner
+
+        log_step "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+        log_info "              核显虚拟化高级功能"
+        log_step "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+        echo
+        log_error "【危险警告】核显虚拟化属于高危操作"
+        log_warn "配置错误可能导致系统无法启动，请务必提前备份 GRUB 配置"
+        echo
+        log_step "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+        echo
+        echo "  1. Intel 11-15代 SR-IOV 核显虚拟化"
+        echo "     支持: Rocket Lake, Alder Lake, Raptor Lake"
+        echo "     特性: 最多 7 个虚拟核显，性能较好"
+        echo
+        echo "  2. Intel 6-10代 GVT-g 核显虚拟化"
+        echo "     支持: Skylake ~ Comet Lake"
+        echo "     特性: 最多 2-8 个虚拟核显（取决于型号）"
+        echo
+        echo "  3. 验证核显虚拟化状态"
+        echo "     检查 IOMMU、VFIO、SR-IOV/GVT-g 配置"
+        echo
+        echo "  4. 移除核显虚拟化配置"
+        echo "     恢复默认配置，移除所有核显虚拟化设置"
+        echo
+        log_step "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+        echo "  GRUB 配置管理（强烈推荐使用）"
+        log_step "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+        echo
+        echo "  5. 查看当前 GRUB 配置"
+        echo "     展示当前的 GRUB 引导参数和关键配置"
+        echo
+        echo "  6. 备份 GRUB 配置"
+        echo "     备份到 /etc/pvetools9/backup/grub/"
+        echo
+        echo "  7. 查看 GRUB 备份列表"
+        echo "     列出所有已创建的备份文件"
+        echo
+        echo "  8. 恢复 GRUB 配置"
+        echo "     从备份文件恢复 GRUB 配置"
+        echo
+        log_step "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+        echo "  0. 返回主菜单"
+        log_step "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+        echo
+        read -p "请选择操作 [0-8]: " choice
+
+        case $choice in
+            1)
+                igpu_sriov_setup
+                ;;
+            2)
+                igpu_gvtg_setup
+                ;;
+            3)
+                igpu_verify
+                ;;
+            4)
+                igpu_remove
+                ;;
+            5)
+                show_grub_config
+                pause_function
+                ;;
+            6)
+                echo
+                log_info "请输入备份备注（例如：手动备份_测试）："
+                read -p "> " backup_note
+                backup_note=${backup_note:-"手动备份"}
+                backup_grub_with_note "$backup_note"
+                pause_function
+                ;;
+            7)
+                list_grub_backups
+                pause_function
+                ;;
+            8)
+                restore_grub_backup
+                ;;
+            0)
+                log_info "返回主菜单"
+                return 0
+                ;;
+            *)
+                log_error "无效的选择，请输入 0-8"
+                pause_function
+                ;;
+        esac
+    done
+}
+#--------------核显虚拟化管理----------------
 
 #---------PVE8/9添加ceph-squid源-----------
 pve9_ceph() {
@@ -2462,13 +3351,14 @@ show_menu() {
     show_menu_option "12" "内核管理 (内核切换/更新/清理)"
     show_menu_option "13" "PVE8 升级到 PVE9 (PVE8专用)"
     show_menu_option "14" "第三方工具集 (tteck社区工具)"
-    show_menu_option "15" "给作者点个Star吧，谢谢喵~"
+    show_menu_option "15" "核显高级功能 (Intel 核显虚拟化)"
+    show_menu_option "16" "给作者点个Star吧，谢谢喵~"
     echo
     show_menu_option "0"  "退出脚本"
     show_menu_footer
     echo
     echo "小贴士：新装系统推荐选择 7 进行一键配置"
-    echo -n "请输入您的选择 [0-15]: "
+    echo -n "请输入您的选择 [0-16]: "
 }
 
 # 一键配置
@@ -2910,6 +3800,9 @@ main() {
                 third_party_tools_menu
                 ;;
             15)
+                igpu_management_menu
+                ;;
+            16)
                 echo "项目地址：https://github.com/Mapleawaa/PVE-Tools-9"
                 echo "有你真好~"
                 ;;
@@ -2920,7 +3813,7 @@ main() {
                 ;;
             *)
                 log_error "哎呀，这个选项不存在呢"
-                log_warn "请输入 0-15 之间的数字"
+                log_warn "请输入 0-16 之间的数字"
                 ;;
         esac
         
