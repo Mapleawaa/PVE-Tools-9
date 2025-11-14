@@ -6,7 +6,7 @@
 # Auther:Maple 二次修改使用请不要删除此段注释
 
 # 版本信息
-CURRENT_VERSION="4.3.0"
+CURRENT_VERSION="5.0.0"
 VERSION_FILE_URL="https://raw.githubusercontent.com/Mapleawaa/PVE-Tools-9/main/VERSION"
 
 # 颜色定义 - 保持一致性
@@ -188,7 +188,7 @@ EOF
     echo "                    ═══════════════════════════════════════"
     echo "                           PVE 9.0 一键配置神器"
     echo "                            让 PVE 配置变得简单快乐"
-    echo "                             作者: Maple & Claude 4"
+    echo "                     作者: Maple & Claude 4.5 & 提交PR的你们"
     echo "                             当前版本: $CURRENT_VERSION"
     echo "                             最新版本: $remote_version"
     echo "                    ═══════════════════════════════════════"
@@ -1214,14 +1214,16 @@ cpu_add() {
     cp "$pvemanagerlib" "$pvemanagerlib.$pvever.bak"
     cp "$proxmoxlib" "$proxmoxlib.$pvever.bak"
 
-    # 检测是否有 UPS 设备
-    log_info "检测 UPS 设备"
-    if command -v apcaccess >/dev/null 2>&1 && apcaccess status 2>/dev/null | grep -q "STATUS"; then
-        has_ups=true
-        log_success "检测到 UPS 设备，将添加 UPS 监控"
+    log_info "是否启用 UPS 监控？"
+    echo -n "（如果没有 UPS 设备或不想显示，请选择 N，默认Y）(y/N): "
+    read -n 1 -r
+    echo
+    if [[ $REPLY =~ ^[Yy]$ ]]; then
+        enable_ups=true
+        log_success "已选择启用UPS监控"
     else
-        has_ups=false
-        log_info "未检测到 UPS 设备，跳过 UPS 监控"
+        enable_ups=false
+        log_info "已选择跳过UPS监控"
     fi
 
     # 生成系统变量 (参考 PVE 8 脚本的改进实现)
@@ -1249,14 +1251,13 @@ cpu_add() {
         `;
 EOF
 
-    # 如果检测到 UPS，添加 UPS 状态变量
-    if [ "$has_ups" = true ]; then
+    if [ "$enable_ups" = true ]; then
         cat >> $tmpf << 'EOF'
         $res->{ups_status} = `apcaccess status`;
 EOF
     fi
 
-    # 添加空行结束变量定义
+
     echo >> $tmpf
 
     # NVME 硬盘变量 (动态检测，参考 PVE 8 实现)
@@ -1571,7 +1572,7 @@ EOF
 
                   // 场景 1：硬盘休眠（节能模式）
                   if (v.standy === true) {
-                      return '<span style="color: #27ae60;">💤 硬盘休眠中（省电模式）</span>'
+                      return '<span style="color: #27ae60;">硬盘休眠中（省电模式）</span>'
                   }
 
                   // 场景 2：空 JSON（硬盘不存在或已直通）
@@ -1618,8 +1619,7 @@ EOF
 EOF
     done
 
-    # 如果检测到 UPS，添加 UPS 信息显示
-    if [ "$has_ups" = true ]; then
+    if [ "$enable_ups" = true ]; then
         cat >> $tmpf << 'EOF'
 
     {
@@ -1653,7 +1653,6 @@ EOF
     },
 EOF
     fi
-
 
     log_info "找到关键字pveversion的行号"
     # 显示匹配的行
@@ -3433,7 +3432,6 @@ select_mirror() {
 check_update() {
     log_info "正在检查更新..."
     
-    # 下载文件的函数（带超时）
     download_file() {
         local url="$1"
         local timeout=10
@@ -3450,20 +3448,13 @@ check_update() {
     # 显示进度提示
     echo -ne "[....] 正在检查更新...\033[0K\r"
     
-    # 首先尝试从GitHub下载版本文件
+    # 只使用 GitHub 源下载版本文件
     remote_content=$(download_file "$VERSION_FILE_URL")
-    
-    # 如果GitHub下载失败，自动尝试镜像源
-    if [ -z "$remote_content" ]; then
-        echo -ne "[WARN] GitHub连接失败，尝试镜像源...\033[0K\r"
-        mirror_url="https://ghfast.top/Mapleawaa/PVE-Tools-9/main/VERSION"
-        remote_content=$(download_file "$mirror_url")
-    fi
     
     # 清除进度显示
     echo -ne "\033[0K\r"
     
-    # 如果所有下载都失败
+    # 如果下载失败
     if [ -z "$remote_content" ]; then
         log_warn "网络连接失败，跳过版本检查"
         echo "提示：您可以手动访问以下地址检查更新："
@@ -3482,15 +3473,9 @@ check_update() {
         return
     fi
     
-    # 尝试获取详细的更新日志
+    # 获取详细的更新日志（只使用 GitHub 源）
     UPDATE_FILE_URL="https://raw.githubusercontent.com/Mapleawaa/PVE-Tools-9/main/UPDATE"
     detailed_changelog=$(download_file "$UPDATE_FILE_URL")
-    
-    # 如果GitHub的UPDATE文件获取失败，尝试镜像源
-    if [ -z "$detailed_changelog" ]; then
-        mirror_update_url="https://ghfast.top/Mapleawaa/PVE-Tools-9/main/UPDATE"
-        detailed_changelog=$(download_file "$mirror_update_url")
-    fi
     
     # 比较版本
     if [ "$(printf '%s\n' "$remote_version" "$CURRENT_VERSION" | sort -V | tail -n1)" != "$CURRENT_VERSION" ]; then
@@ -3521,6 +3506,98 @@ check_update() {
         log_success "当前已是最新版本 ($CURRENT_VERSION) 放心用吧"
     fi
 }
+
+# 版本检查函数 - 拉一坨屎在这里，这是镜像源的使用情景，但是大家好像都是用的 bash -sSl <(curl ...) 来跑脚本，所以就注释掉了。
+# check_update() {
+#     log_info "正在检查更新..."
+    
+#     download_file() {
+#         local url="$1"
+#         local timeout=10
+        
+#         if command -v curl &> /dev/null; then
+#             curl -s --connect-timeout $timeout --max-time $timeout "$url" 2>/dev/null
+#         elif command -v wget &> /dev/null; then
+#             wget -q -T $timeout -O - "$url" 2>/dev/null
+#         else
+#             echo ""
+#         fi
+#     }
+    
+#     # 显示进度提示
+#     echo -ne "[....] 正在检查更新...\033[0K\r"
+    
+#     # 首先尝试从GitHub下载版本文件
+#     remote_content=$(download_file "$VERSION_FILE_URL")
+    
+#     # 如果GitHub下载失败，自动尝试镜像源
+#     if [ -z "$remote_content" ]; then
+#         echo -ne "[WARN] GitHub连接失败，尝试镜像源...\033[0K\r"
+#         mirror_url="https://ghfast.top/${UPDATE_FILE_URL}"
+#         remote_content=$(download_file "$mirror_url")
+#     fi
+    
+#     # 清除进度显示
+#     echo -ne "\033[0K\r"
+    
+#     # 如果所有下载都失败
+#     if [ -z "$remote_content" ]; then
+#         log_warn "网络连接失败，跳过版本检查"
+#         echo "提示：您可以手动访问以下地址检查更新："
+#         echo "https://github.com/Mapleawaa/PVE-Tools-9"
+#         echo "按回车键继续..."
+#         read -r
+#         return
+#     fi
+    
+#     # 提取版本号和更新日志
+#     remote_version=$(echo "$remote_content" | head -1 | tr -d '[:space:]')
+#     version_changelog=$(echo "$remote_content" | tail -n +2)
+    
+#     if [ -z "$remote_version" ]; then
+#         log_warn "获取的版本信息格式不正确"
+#         return
+#     fi
+    
+#     # 尝试获取详细的更新日志
+#     UPDATE_FILE_URL="https://raw.githubusercontent.com/Mapleawaa/PVE-Tools-9/main/UPDATE"
+#     detailed_changelog=$(download_file "$UPDATE_FILE_URL")
+    
+#     # 如果GitHub的UPDATE文件获取失败，尝试镜像源
+#     if [ -z "$detailed_changelog" ]; then
+#         mirror_update_url="https://ghfast.top/Mapleawaa/PVE-Tools-9/main/UPDATE"
+#         detailed_changelog=$(download_file "$mirror_update_url")
+#     fi
+    
+#     # 比较版本
+#     if [ "$(printf '%s\n' "$remote_version" "$CURRENT_VERSION" | sort -V | tail -n1)" != "$CURRENT_VERSION" ]; then
+#         echo "----------------------------------------------"
+#         echo "发现新版本！推荐更新哦，新增功能和修复BUG喵"
+#         echo "当前版本: $CURRENT_VERSION"
+#         echo "最新版本: $remote_version"
+#         echo "更新内容："
+        
+#         # 如果获取到了详细的更新日志，则显示详细内容，否则显示从VERSION文件中获取的内容
+#         if [ -n "$detailed_changelog" ]; then
+#             echo "$detailed_changelog"
+#         else
+#             # 格式化显示版本文件中的更新内容
+#             if [ -n "$version_changelog" ] && [ "$version_changelog" != "$remote_version" ]; then
+#                 echo "$version_changelog"
+#             else
+#                 echo "  - 请查看项目页面获取详细更新内容"
+#             fi
+#         fi
+        
+#         echo "----------------------------------------------"
+#         echo "请访问项目页面获取最新版本："
+#         echo "https://github.com/Mapleawaa/PVE-Tools-9"
+#         echo "按回车键继续..."
+#         read -r
+#     else
+#         log_success "当前已是最新版本 ($CURRENT_VERSION) 放心用吧"
+#     fi
+# }
 
 # 温度监控管理菜单
 temp_monitoring_menu() {
