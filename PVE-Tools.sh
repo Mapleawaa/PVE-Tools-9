@@ -8,6 +8,7 @@
 # 版本信息
 CURRENT_VERSION="4.3.0"
 VERSION_FILE_URL="https://raw.githubusercontent.com/Mapleawaa/PVE-Tools-9/main/VERSION"
+GIT_MIRROR_URL="https://ghfast.top/"
 
 # 颜色定义 - 保持一致性
 RED='\033[0;31m'
@@ -3456,7 +3457,7 @@ check_update() {
     # 如果GitHub下载失败，自动尝试镜像源
     if [ -z "$remote_content" ]; then
         echo -ne "[WARN] GitHub连接失败，尝试镜像源...\033[0K\r"
-        mirror_url="https://ghfast.top/Mapleawaa/PVE-Tools-9/main/VERSION"
+        mirror_url="${GIT_MIRROR_URL}$VERSION_FILE_URL"
         remote_content=$(download_file "$mirror_url")
     fi
     
@@ -3488,7 +3489,7 @@ check_update() {
     
     # 如果GitHub的UPDATE文件获取失败，尝试镜像源
     if [ -z "$detailed_changelog" ]; then
-        mirror_update_url="https://ghfast.top/Mapleawaa/PVE-Tools-9/main/UPDATE"
+        mirror_update_url="${GIT_MIRROR_URL}${UPDATE_FILE_URL}"
         detailed_changelog=$(download_file "$mirror_update_url")
     fi
     
