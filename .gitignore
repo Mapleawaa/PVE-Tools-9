@@ -35,3 +35,6 @@ Proxmox-Helper-Script/
 
 # Ignore Claude code files
 .claude/
+
+# Ignore Codex code files
+AGENTS.md
