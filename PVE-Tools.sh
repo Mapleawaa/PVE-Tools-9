@@ -2132,10 +2132,25 @@ igpu_sriov_setup() {
 
     # 下载并安装 i915-sriov-dkms 驱动
     echo "下载 i915-sriov-dkms 驱动..."
+    echo "  提示: 请在浏览器访问 https://github.com/strongtz/i915-sriov-dkms/releases 选择匹配的版本"
+    echo "  一般建议选择最新的 release 版本以兼容最新的内核版本"
+    echo "  输入格式：例如：2025.11.10"
+    echo "  不输入回车的默认版本为 2025.11.10，可能不兼容老版本内核，故障表现在无法虚拟出 VFs" 
 
-    dkms_version="2025.05.18"
-    dkms_url="https://github.com/strongtz/i915-sriov-dkms/releases/download/${dkms_version}/i915-sriov-dkms_${dkms_version}_amd64.deb"
-    dkms_file="/tmp/i915-sriov-dkms_${dkms_version}_amd64.deb"
+    default_dkms_version="2025.11.10"
+    read -p "请输入要安装的 release 版本号 [默认: ${default_dkms_version}]: " dkms_version_input
+    dkms_version_input=$(echo "$dkms_version_input" | xargs)
+
+    if [ -z "$dkms_version_input" ]; then
+        dkms_version_input="$default_dkms_version"
+    fi
+
+    # release 标签可能以 v 打头，但 deb 文件名不包含 v
+    dkms_asset_version=$(echo "$dkms_version_input" | sed 's/^[vV]//')
+    dkms_tag="$dkms_version_input"
+
+    dkms_url="https://github.com/strongtz/i915-sriov-dkms/releases/download/${dkms_tag}/i915-sriov-dkms_${dkms_asset_version}_amd64.deb"
+    dkms_file="/tmp/i915-sriov-dkms_${dkms_asset_version}_amd64.deb"
 
     # 检查是否已下载
     if [ -f "$dkms_file" ]; then
