@@ -1392,6 +1392,9 @@ EOF
               let cpuResults = [];
               let otherResults = [];
 
+              const cpuSensorRegex = /(CORETEMP|K10TEMP|ZENPOWER|ZENPOWER3|K8TEMP|FAM15H|ZENPROBE)/i;
+              const amdLabelRegex = /\bT(CTL|DIE|CCD|CCD\d+|Sx|LOOP)\b/i;
+
               b.forEach(function(v){
                   // 风扇转速数据
                   let fandata = v.match(/(?<=:\s+)[1-9]\d*(?=\s+RPM\s+)/ig);
@@ -1409,8 +1412,10 @@ EOF
 
                   temps = temps.map(t => parseFloat(t));
 
-                  // 只处理 CPU 温度（coretemp）
-                  if (/coretemp/i.test(name)) {
+                  // 只处理 CPU 温度（Intel coretemp 或 AMD 相关传感器）
+                  const isCpuSensor = cpuSensorRegex.test(name) || amdLabelRegex.test(v);
+
+                  if (isCpuSensor) {
                       let packageTemp = temps[0].toFixed(0);
 
                       if (temps.length > 1) {
@@ -2022,20 +2027,17 @@ igpu_sriov_setup() {
     echo -e "${RED}  - 虚拟机黑屏或无法启动（直通配置错误）${NC}"
     echo -e "${RED}  - 需要通过恢复模式修复系统${NC}"
     echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-    echo
     echo "此功能将修改以下系统配置："
     echo "  1. 修改 GRUB 引导参数（启用 IOMMU 和 SR-IOV）"
     echo "  2. 加载 VFIO 内核模块"
     echo "  3. 下载并安装 i915-sriov-dkms 驱动（约 10MB）"
     echo "  4. 配置虚拟核显数量（VFs）"
-    echo
     echo "前置要求（请确认已完成）："
     echo "  ✓ BIOS 已开启 VT-d 虚拟化"
     echo "  ✓ BIOS 已开启 SR-IOV（如有此选项）"
     echo "  ✓ BIOS 已开启 Above 4GB（如有此选项）"
     echo "  ✓ BIOS 已关闭 Secure Boot 安全启动"
     echo "  ✓ CPU 为 Intel 11-15 代处理器"
-    echo
     echo -e "${RED}重要：物理核显 (00:02.0) 不能直通，否则所有虚拟核显将消失${NC}"
     echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
     echo
@@ -2539,9 +2541,7 @@ igpu_remove() {
     echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
     echo -e "${GREEN}✓ 核显虚拟化配置已移除${NC}"
     echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-    echo
     echo -e "${YELLOW}提示: 请重启系统使更改生效${NC}"
-    echo
 
     if confirm_action "是否现在重启系统"; then
         echo "正在重启系统..."
@@ -2560,42 +2560,30 @@ igpu_management_menu() {
         echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
         echo "              核显虚拟化高级功能"
         echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-        echo
         echo -e "${RED}【危险警告】核显虚拟化属于高危操作${NC}"
         echo -e "${YELLOW}配置错误可能导致系统无法启动，请务必提前备份 GRUB 配置${NC}"
-        echo
         echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-        echo
         echo "  1. Intel 11-15代 SR-IOV 核显虚拟化"
         echo "     支持: Rocket Lake, Alder Lake, Raptor Lake"
         echo "     特性: 最多 7 个虚拟核显，性能较好"
-        echo
         echo "  2. Intel 6-10代 GVT-g 核显虚拟化"
         echo "     支持: Skylake ~ Comet Lake"
         echo "     特性: 最多 2-8 个虚拟核显（取决于型号）"
-        echo
         echo "  3. 验证核显虚拟化状态"
         echo "     检查 IOMMU、VFIO、SR-IOV/GVT-g 配置"
-        echo
         echo "  4. 移除核显虚拟化配置"
         echo "     恢复默认配置，移除所有核显虚拟化设置"
-        echo
         echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
         echo "  GRUB 配置管理（强烈推荐使用）"
         echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-        echo
         echo "  5. 查看当前 GRUB 配置"
         echo "     展示当前的 GRUB 引导参数和关键配置"
-        echo
         echo "  6. 备份 GRUB 配置"
         echo "     备份到 /etc/pvetools9/backup/grub/"
-        echo
         echo "  7. 查看 GRUB 备份列表"
         echo "     列出所有已创建的备份文件"
-        echo
         echo "  8. 恢复 GRUB 配置"
         echo "     从备份文件恢复 GRUB 配置"
-        echo
         echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
         echo "  0. 返回主菜单"
         echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
