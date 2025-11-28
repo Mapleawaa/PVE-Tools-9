@@ -7,10 +7,6 @@
 [![Proxmox VE](https://img.shields.io/badge/Proxmox-VE%209.0-E57000?logo=proxmox&logoColor=white)](https://www.proxmox.com/)
 [![Debian](https://img.shields.io/badge/Debian-13%20(Trixie)-A81D33?logo=debian&logoColor=white)](https://www.debian.org/)
 
-**🌍 语言选择**
-
-[🇺🇸 English](./docs/README-EN.md) | [🇨🇳 中文](./README.md)
-
 ---
 ```
 ██████╗ ██╗   ██╗███████╗    ████████╗ ██████╗  ██████╗ ██╗     ███████╗     █████╗ 
@@ -20,18 +16,13 @@
 ██║      ╚████╔╝ ███████╗       ██║   ╚██████╔╝╚██████╔╝███████╗███████║     █████╔╝
 ╚═╝       ╚═══╝  ╚══════╝       ╚═╝    ╚═════╝  ╚═════╝ ╚══════╝╚══════╝     ╚════╝ 
 ```
- 🎉  500 Stars 撒花 🎉 
+ 🎉  500 Stars 撒花 🎉  Ciallo～(∠・ω<)⌒★
 **你的下一个简单好用，简洁易用的 PVE9 配置脚本**
 ![展示](/images/main-shot.png)
 </div>
 
----
 ### 🚪 开门见山
 #### 中国大陆网络
-
-> [!WARNING]
-> 请不要多次拉取文件，无论镜像站还是源站。否则会被服务器拒绝导致影响心情。
-
 ```
 bash <(curl -sSL https://ghfast.top/github.com/Mapleawaa/PVE-Tools-9/blob/main/PVE-Tools.sh)
 ```
@@ -39,6 +30,10 @@ bash <(curl -sSL https://ghfast.top/github.com/Mapleawaa/PVE-Tools-9/blob/main/P
 ```
 bash <(curl -sSL https://github.com/Mapleawaa/PVE-Tools-9/blob/main/PVE-Tools.sh)
 ```
+> [!WARNING]
+> 请不要多次拉取文件，无论镜像站还是源站。否则会被服务器拒绝导致影响心情。
+
+---
 
 ### 公告
 
@@ -55,6 +50,8 @@ bash <(curl -sSL https://github.com/Mapleawaa/PVE-Tools-9/blob/main/PVE-Tools.sh
 ### 📖 项目简介
 
 PVE Tools 9 是专为 Proxmox VE 9.0 设计的一键配置工具，基于 Debian 13 (Trixie) 系统。本工具旨在简化 PVE 的初始配置过程，提供友好的用户界面和安全的操作体验。
+
+English Readme is comming soon...
 
 <div align="center">
 
