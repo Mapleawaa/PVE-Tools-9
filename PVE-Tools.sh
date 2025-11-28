@@ -8,6 +8,7 @@
 # 版本信息
 CURRENT_VERSION="5.0.0"
 VERSION_FILE_URL="https://raw.githubusercontent.com/Mapleawaa/PVE-Tools-9/main/VERSION"
+UPDATE_FILE_URL="https://raw.githubusercontent.com/Mapleawaa/PVE-Tools-9/main/UPDATE"
 
 # 颜色定义 - 保持一致性
 RED='\033[0;31m'
@@ -21,11 +22,11 @@ ORANGE='\033[0;33m'
 NC='\033[0m'
 
 # UI 界面一致性常量
-UI_BORDER="------------------------------------------------"
-UI_DIVIDER="------------------------------------------------"
-UI_FOOTER="------------------------------------------------"
-UI_HEADER="------------------------------------------------"
-UI_FOOTER_SHORT="------------------------------------------------"
+UI_BORDER="═════════════════════════════════════════════════"
+UI_DIVIDER="═════════════════════════════════════════════════"
+UI_FOOTER="═════════════════════════════════════════════════"
+UI_HEADER="═════════════════════════════════════════════════"
+UI_FOOTER_SHORT="═════════════════════════════════════════════════"
 
 # 镜像源配置
 MIRROR_USTC="https://mirrors.ustc.edu.cn/proxmox/debian/pve"
@@ -37,6 +38,16 @@ SELECTED_MIRROR=""
 CT_MIRROR_USTC="https://mirrors.ustc.edu.cn/proxmox"
 CT_MIRROR_TUNA="https://mirrors.tuna.tsinghua.edu.cn/proxmox"
 CT_MIRROR_OFFICIAL="http://download.proxmox.com"
+
+# 自动更新网络检测配置
+CF_TRACE_URL="https://www.cloudflare.com/cdn-cgi/trace"
+GITHUB_MIRROR_PREFIX="https://ghfast.top/"
+USE_MIRROR_FOR_UPDATE=0
+USER_COUNTRY_CODE=""
+
+# 快速虚拟机下载脚本配置
+FASTPVE_INSTALLER_URL="https://raw.githubusercontent.com/kspeeder/fastpve/main/fastpve-install.sh"
+FASTPVE_PROJECT_URL="https://github.com/kspeeder/fastpve"
 
 # 日志函数
 log_info() {
@@ -174,6 +185,36 @@ show_progress_bar() {
     printf "${CYAN}]${NC} ${percentage}%% $message\r"
 }
 
+# 通过 Cloudflare Trace 检测地区，决定是否启用镜像源
+detect_network_region() {
+    local timeout=5
+    USER_COUNTRY_CODE=""
+    USE_MIRROR_FOR_UPDATE=0
+
+    if ! command -v curl &> /dev/null; then
+        return 1
+    fi
+
+    local trace_output
+    trace_output=$(curl -s --connect-timeout $timeout --max-time $timeout "$CF_TRACE_URL" 2>/dev/null)
+    if [[ -z "$trace_output" ]]; then
+        return 1
+    fi
+
+    local loc
+    loc=$(echo "$trace_output" | awk -F= '/^loc=/{print $2}' | tr -d '\r')
+    if [[ -z "$loc" ]]; then
+        return 1
+    fi
+
+    USER_COUNTRY_CODE="$loc"
+    if [[ "$USER_COUNTRY_CODE" == "CN" ]]; then
+        USE_MIRROR_FOR_UPDATE=1
+    fi
+
+    return 0
+}
+
 # 显示横幅
 show_banner() {
     clear
@@ -185,13 +226,12 @@ show_banner() {
 ██║      ╚████╔╝ ███████╗       ██║   ╚██████╔╝╚██████╔╝███████╗███████║     █████╔╝
 ╚═╝       ╚═══╝  ╚══════╝       ╚═╝    ╚═════╝  ╚═════╝ ╚══════╝╚══════╝     ╚════╝ 
 EOF
-    echo "                    ═══════════════════════════════════════"
-    echo "                           PVE 9.0 一键配置神器"
-    echo "                            让 PVE 配置变得简单快乐"
-    echo "                     作者: Maple & Claude 4.5 & 提交PR的你们"
-    echo "                             当前版本: $CURRENT_VERSION"
-    echo "                             最新版本: $remote_version"
-    echo "                    ═══════════════════════════════════════"
+    echo "═════════════════════════════════════════════════"
+    echo "PVE-Tools-9 一键脚本"
+    echo "让每个人都能体验虚拟化技术的的便利。"
+    echo "作者: Maple & Claude 4.5 & 提交PR的你们"
+    echo "当前版本: $CURRENT_VERSION | 最新版本: $remote_version"
+    echo "═════════════════════════════════════════════════"
     echo
 }
 
@@ -690,10 +730,11 @@ change_sources() {
     
     # 询问用户是否要更换安全更新源
     log_info "安全更新源选择"
+    echo "═════════════════════════════════════════════════"
     echo "  安全更新源包含重要的系统安全补丁，选择合适的源很重要："
     echo "  1) 使用官方安全源 (推荐，更新最及时，但可能较慢)"
     echo "  2) 使用镜像站安全源 (速度快，但可能有延迟)"
-    echo ""
+    echo "═════════════════════════════════════════════════"
     
     read -p "  请选择 [1-2] (默认: 1): " security_choice
     security_choice=${security_choice:-1}
@@ -992,7 +1033,6 @@ disable_pass() {
 hw_passth() {
     while :; do
         clear
-        show_banner
         show_menu_header "配置硬件直通"
         show_menu_option "1" "开启硬件直通"
         show_menu_option "2" "关闭硬件直通"
@@ -1029,7 +1069,6 @@ cpupower() {
     governors=`cat /sys/devices/system/cpu/cpu0/cpufreq/scaling_available_governors`
     while :; do
         clear
-        show_banner
         show_menu_header "设置CPU电源模式"
         echo "  1. 设置CPU模式 conservative  保守模式   [变身老年机]"
         echo "  2. 设置CPU模式 ondemand       按需模式  [默认]"
@@ -2019,13 +2058,13 @@ igpu_sriov_setup() {
 
     # 危险性警告
     echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-    echo -e "${RED}【高危操作警告】SR-IOV 核显虚拟化配置${NC}"
+    echo -e "【高危操作警告】SR-IOV 核显虚拟化配置"
     echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-    echo -e "${YELLOW}此操作属于【高危险性】系统配置，配置错误可能导致：${NC}"
-    echo -e "${RED}  - 系统无法正常启动（GRUB 配置错误）${NC}"
-    echo -e "${RED}  - 核显完全不可用（参数配置错误）${NC}"
-    echo -e "${RED}  - 虚拟机黑屏或无法启动（直通配置错误）${NC}"
-    echo -e "${RED}  - 需要通过恢复模式修复系统${NC}"
+    echo -e "此操作属于【高危险性】系统配置，配置错误可能导致："
+    echo -e "  - 系统无法正常启动（GRUB 配置错误）"
+    echo -e "  - 核显完全不可用（参数配置错误）"
+    echo -e "  - 虚拟机黑屏或无法启动（直通配置错误）"
+    echo -e "  - 需要通过恢复模式修复系统"
     echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
     echo "此功能将修改以下系统配置："
     echo "  1. 修改 GRUB 引导参数（启用 IOMMU 和 SR-IOV）"
@@ -2038,10 +2077,10 @@ igpu_sriov_setup() {
     echo "  ✓ BIOS 已开启 Above 4GB（如有此选项）"
     echo "  ✓ BIOS 已关闭 Secure Boot 安全启动"
     echo "  ✓ CPU 为 Intel 11-15 代处理器"
-    echo -e "${RED}重要：物理核显 (00:02.0) 不能直通，否则所有虚拟核显将消失${NC}"
+    echo -e "重要：物理核显 (00:02.0) 不能直通，否则所有虚拟核显将消失"
     echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
     echo
-    echo -e "${YELLOW}强烈建议：${NC}"
+    echo -e "强烈建议："
     echo "  提示: 1. 在继续前先备份当前 GRUB 配置"
     echo "  提示: 2. 确保了解核显虚拟化的工作原理"
     echo "  提示: 3. 准备好通过 SSH 或物理访问恢复系统"
@@ -2075,12 +2114,12 @@ igpu_sriov_setup() {
 
     echo "安装构建工具..."
     apt-get install -y build-essential dkms sysfsutils || {
-        echo -e "${RED}安装构建工具失败${NC}"
+        echo -e "安装构建工具失败"
         pause_function
         return 1
     }
 
-    echo -e "${GREEN}✓ 软件包安装完成${NC}"
+    echo -e "✓ 软件包安装完成"
 
     # 备份并修改 GRUB 配置
     echo "配置 GRUB 引导参数..."
@@ -2088,7 +2127,7 @@ igpu_sriov_setup() {
 
     # 检查是否已配置
     if grep -q "i915.enable_guc=3.*i915.max_vfs=7" /etc/default/grub; then
-        echo -e "${YELLOW}GRUB 已配置 SR-IOV 参数，跳过修改${NC}"
+        echo -e "GRUB 已配置 SR-IOV 参数，跳过修改"
     else
         # 移除旧的配置（如果有 GVT-g 配置）
         sed -i 's/i915.enable_gvt=1//g' /etc/default/grub
@@ -2096,13 +2135,13 @@ igpu_sriov_setup() {
         # 添加 SR-IOV 参数
         sed -i '/^GRUB_CMDLINE_LINUX_DEFAULT=/c\GRUB_CMDLINE_LINUX_DEFAULT="quiet intel_iommu=on iommu=pt i915.enable_guc=3 i915.max_vfs=7 module_blacklist=xe"' /etc/default/grub
 
-        echo -e "${GREEN}✓ GRUB 配置已更新${NC}"
+        echo -e "✓ GRUB 配置已更新"
     fi
 
     # 更新 GRUB
     echo "更新 GRUB..."
     update-grub || {
-        echo -e "${RED}更新 GRUB 失败${NC}"
+        echo -e "更新 GRUB 失败"
         pause_function
         return 1
     }
@@ -2122,12 +2161,12 @@ igpu_sriov_setup() {
     # 移除 kvmgt 模块（如果有 GVT-g 配置）
     sed -i '/^kvmgt$/d' /etc/modules
 
-    echo -e "${GREEN}✓ 内核模块配置完成${NC}"
+    echo -e "✓ 内核模块配置完成"
 
     # 更新 initramfs
     echo "更新 initramfs..."
     update-initramfs -u -k all || {
-        echo -e "${YELLOW}更新 initramfs 失败，但可以继续${NC}"
+        echo -e "更新 initramfs 失败，但可以继续"
     }
 
     # 下载并安装 i915-sriov-dkms 驱动
@@ -2160,7 +2199,7 @@ igpu_sriov_setup() {
         echo "  提示: 如果下载失败，请检查网络或手动下载后放到 /tmp/ 目录"
 
         wget -O "$dkms_file" "$dkms_url" || {
-            echo -e "${RED}下载驱动失败${NC}"
+            echo -e "下载驱动失败"
             echo "  提示: 请手动下载: $dkms_url"
             echo "  提示: 并上传到 PVE 的 /tmp/ 目录后重试"
             pause_function
@@ -2169,10 +2208,10 @@ igpu_sriov_setup() {
     fi
 
     echo "安装 i915-sriov-dkms 驱动..."
-    echo -e "${YELLOW}驱动安装可能需要较长时间，请耐心等待...${NC}"
+    echo -e "驱动安装可能需要较长时间，请耐心等待..."
 
     dpkg -i "$dkms_file" || {
-        echo -e "${RED}安装驱动失败${NC}"
+        echo -e "安装驱动失败"
         pause_function
         return 1
     }
@@ -2180,9 +2219,9 @@ igpu_sriov_setup() {
     # 验证驱动安装
     echo "验证驱动安装..."
     if modinfo i915 2>/dev/null | grep -q "max_vfs"; then
-        echo -e "${GREEN}✓ i915-sriov 驱动安装成功${NC}"
+        echo -e "✓ i915-sriov 驱动安装成功"
     else
-        echo -e "${RED}驱动验证失败，请检查安装过程${NC}"
+        echo -e "驱动验证失败，请检查安装过程"
         pause_function
         return 1
     fi
@@ -2205,7 +2244,7 @@ igpu_sriov_setup() {
     if [[ -z "$vfs_num" ]]; then
         vfs_num=3
     elif ! [[ "$vfs_num" =~ ^[1-7]$ ]]; then
-        echo -e "${RED}无效的 VFs 数量，必须是 1-7${NC}"
+        echo -e "无效的 VFs 数量，必须是 1-7"
         pause_function
         return 1
     fi
@@ -2214,12 +2253,12 @@ igpu_sriov_setup() {
 
     # 写入 sysfs.conf
     echo "devices/pci0000:00/0000:00:02.0/sriov_numvfs = $vfs_num" > /etc/sysfs.conf
-    echo -e "${GREEN}✓ VFs 数量配置完成${NC}"
+    echo -e "✓ VFs 数量配置完成"
 
     # 完成提示
     echo
     echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-    echo -e "${GREEN}✓ SR-IOV 核显虚拟化配置完成！${NC}"
+    echo -e "✓ SR-IOV 核显虚拟化配置完成！"
     echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
     echo
     echo "配置摘要："
@@ -2228,15 +2267,15 @@ igpu_sriov_setup() {
     echo "  • i915-sriov 驱动: 已安装"
     echo "  • 虚拟核显数量: $vfs_num 个"
     echo
-    echo -e "${YELLOW}下一步操作：${NC}"
-    echo -e "${RED}  1. 重启系统使配置生效${NC}"
+    echo -e "下一步操作："
+    echo -e "  1. 重启系统使配置生效"
     echo "  2. 重启后使用 '验证核显虚拟化状态' 检查配置"
     echo "  3. 在虚拟机配置中添加核显 SR-IOV 设备"
     echo
-    echo -e "${RED}重要提示：${NC}"
-    echo -e "${YELLOW}  • 物理核显 (00:02.0) 不能直通给虚拟机${NC}"
-    echo -e "${YELLOW}  • 只能直通虚拟核显 (00:02.1 ~ 00:02.$vfs_num)${NC}"
-    echo -e "${YELLOW}  • 虚拟机需要勾选 ROM-Bar 和 PCIE 选项${NC}"
+    echo -e "重要提示："
+    echo -e "  • 物理核显 (00:02.0) 不能直通给虚拟机"
+    echo -e "  • 只能直通虚拟核显 (00:02.1 ~ 00:02.$vfs_num)"
+    echo -e "  • 虚拟机需要勾选 ROM-Bar 和 PCIE 选项"
     echo
     echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 
@@ -2244,7 +2283,7 @@ igpu_sriov_setup() {
         echo "正在重启系统..."
         reboot
     else
-        echo -e "${YELLOW}请记得手动重启系统以使配置生效${NC}"
+        echo -e "请记得手动重启系统以使配置生效"
     fi
 }
 
@@ -2259,13 +2298,13 @@ igpu_gvtg_setup() {
 
     # 危险性警告
     echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-    echo -e "${RED}【高危操作警告】GVT-g 核显虚拟化配置${NC}"
+    echo -e "【高危操作警告】GVT-g 核显虚拟化配置"
     echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-    echo -e "${YELLOW}此操作属于【高危险性】系统配置，配置错误可能导致：${NC}"
-    echo -e "${RED}  - 系统无法正常启动（GRUB 配置错误）${NC}"
-    echo -e "${RED}  - 核显完全不可用（参数配置错误）${NC}"
-    echo -e "${RED}  - 虚拟机黑屏或无法启动（直通配置错误）${NC}"
-    echo -e "${RED}  - 需要通过恢复模式修复系统${NC}"
+    echo -e "此操作属于【高危险性】系统配置，配置错误可能导致："
+    echo -e "  - 系统无法正常启动（GRUB 配置错误）"
+    echo -e "  - 核显完全不可用（参数配置错误）"
+    echo -e "  - 虚拟机黑屏或无法启动（直通配置错误）"
+    echo -e "  - 需要通过恢复模式修复系统"
     echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
     echo
     echo "此功能将修改以下系统配置："
@@ -2286,12 +2325,12 @@ igpu_gvtg_setup() {
     echo "  • Coffee Lake Refresh (9代)"
     echo "  • Comet Lake (10代)"
     echo
-    echo -e "${RED}特殊的处理器代号：${NC}"
-    echo -e "${YELLOW}  • Rocket Lake / Tiger Lake (11代) 因处在当前代与上一代交界${NC}"
-    echo -e "${YELLOW}    部分型号支持，但是不保证兼容性，请谨慎使用${NC}"
+    echo -e "特殊的处理器代号："
+    echo -e "  • Rocket Lake / Tiger Lake (11代) 因处在当前代与上一代交界"
+    echo -e "    部分型号支持，但是不保证兼容性，请谨慎使用"
     echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
     echo
-    echo -e "${YELLOW}强烈建议：${NC}"
+    echo -e "强烈建议："
     echo "  提示: 1. 在继续前先备份当前 GRUB 配置"
     echo "  提示: 2. 确保了解核显虚拟化的工作原理"
     echo "  提示: 3. 准备好通过 SSH 或物理访问恢复系统"
@@ -2318,7 +2357,7 @@ igpu_gvtg_setup() {
 
     # 检查是否已配置
     if grep -q "i915.enable_gvt=1" /etc/default/grub; then
-        echo -e "${YELLOW}GRUB 已配置 GVT-g 参数，跳过修改${NC}"
+        echo -e "GRUB 已配置 GVT-g 参数，跳过修改"
     else
         # 移除旧的 SR-IOV 配置（如果有）
         sed -i 's/i915.enable_guc=3//g; s/i915.max_vfs=7//g; s/module_blacklist=xe//g' /etc/default/grub
@@ -2326,13 +2365,13 @@ igpu_gvtg_setup() {
         # 添加 GVT-g 参数
         sed -i '/^GRUB_CMDLINE_LINUX_DEFAULT=/c\GRUB_CMDLINE_LINUX_DEFAULT="quiet intel_iommu=on iommu=pt i915.enable_gvt=1 pcie_acs_override=downstream,multifunction"' /etc/default/grub
 
-        echo -e "${GREEN}✓ GRUB 配置已更新${NC}"
+        echo -e "✓ GRUB 配置已更新"
     fi
 
     # 更新 GRUB
     echo "更新 GRUB..."
     update-grub || {
-        echo -e "${RED}更新 GRUB 失败${NC}"
+        echo -e "更新 GRUB 失败"
         pause_function
         return 1
     }
@@ -2349,18 +2388,18 @@ igpu_gvtg_setup() {
         fi
     done
 
-    echo -e "${GREEN}✓ 内核模块配置完成${NC}"
+    echo -e "✓ 内核模块配置完成"
 
     # 更新 initramfs
     echo "更新 initramfs..."
     update-initramfs -u -k all || {
-        echo -e "${YELLOW}更新 initramfs 失败，但可以继续${NC}"
+        echo -e "更新 initramfs 失败，但可以继续"
     }
 
     # 完成提示
     echo
     echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-    echo -e "${GREEN}✓ GVT-g 核显虚拟化配置完成！${NC}"
+    echo -e "✓ GVT-g 核显虚拟化配置完成！"
     echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
     echo
     echo "配置摘要："
@@ -2368,8 +2407,8 @@ igpu_gvtg_setup() {
     echo "  • VFIO 模块: 已加载"
     echo "  • kvmgt 模块: 已加载"
     echo
-    echo -e "${YELLOW}下一步操作：${NC}"
-    echo -e "${RED}  1. 重启系统使配置生效${NC}"
+    echo -e "下一步操作："
+    echo -e "  1. 重启系统使配置生效"
     echo "  2. 重启后使用 '验证核显虚拟化状态' 检查配置"
     echo "  3. 在虚拟机配置中添加核显 GVT-g 设备（Mdev 类型）"
     echo
@@ -2383,7 +2422,7 @@ igpu_gvtg_setup() {
         echo "正在重启系统..."
         reboot
     else
-        echo -e "${YELLOW}请记得手动重启系统以使配置生效${NC}"
+        echo -e "请记得手动重启系统以使配置生效"
     fi
 }
 
@@ -2398,10 +2437,10 @@ igpu_verify() {
     # 检查 IOMMU
     echo "1. 检查 IOMMU 状态..."
     if dmesg | grep -qi "DMAR.*IOMMU\|iommu.*enabled"; then
-        echo -e "  ${GREEN}✓${NC} IOMMU 已启用"
+        echo -e "  ✓ IOMMU 已启用"
         echo "  $(dmesg | grep -i "DMAR.*IOMMU\|iommu.*enabled" | head -3)"
     else
-        echo -e "  ${RED}✗${NC} IOMMU 未启用"
+        echo -e "  ✗ IOMMU 未启用"
         echo "  提示: 请检查 BIOS 是否开启 VT-d"
         echo "  提示: 请检查 GRUB 配置是否包含 intel_iommu=on"
     fi
@@ -2410,10 +2449,10 @@ igpu_verify() {
     # 检查 VFIO 模块
     echo "2. 检查 VFIO 模块加载状态..."
     if lsmod | grep -q vfio; then
-        echo -e "  ${GREEN}✓${NC} VFIO 模块已加载"
+        echo -e "  ✓ VFIO 模块已加载"
         echo "  $(lsmod | grep vfio)"
     else
-        echo -e "  ${RED}✗${NC} VFIO 模块未加载"
+        echo -e "  ✗ VFIO 模块未加载"
         echo "  提示: 请检查 /etc/modules 配置"
     fi
     echo
@@ -2422,14 +2461,14 @@ igpu_verify() {
     echo "3. 检查 SR-IOV 虚拟核显..."
     if lspci | grep -i "VGA.*Intel" | wc -l | grep -q "^[2-9]"; then
         vf_count=$(($(lspci | grep -i "VGA.*Intel" | wc -l) - 1))
-        echo -e "  ${GREEN}✓${NC} 检测到 $vf_count 个虚拟核显 (SR-IOV)"
+        echo -e "  ✓ 检测到 $vf_count 个虚拟核显 (SR-IOV)"
         echo
         lspci | grep -i "VGA.*Intel"
         echo
         echo "  提示: 物理核显 00:02.0 不能直通"
         echo "  提示: 虚拟核显 00:02.1 ~ 00:02.$vf_count 可直通给虚拟机"
     else
-        echo -e "  ${YELLOW}!${NC} 未检测到 SR-IOV 虚拟核显"
+        echo -e "  ! 未检测到 SR-IOV 虚拟核显"
     fi
     echo
 
@@ -2438,14 +2477,14 @@ igpu_verify() {
     if [ -d "/sys/bus/pci/devices/0000:00:02.0/mdev_supported_types" ]; then
         mdev_types=$(ls /sys/bus/pci/devices/0000:00:02.0/mdev_supported_types 2>/dev/null | wc -l)
         if [ "$mdev_types" -gt 0 ]; then
-            echo -e "  ${GREEN}✓${NC} GVT-g 已启用，可用 Mdev 类型: $mdev_types 个"
+            echo -e "  ✓ GVT-g 已启用，可用 Mdev 类型: $mdev_types 个"
             echo
             ls -1 /sys/bus/pci/devices/0000:00:02.0/mdev_supported_types
         else
-            echo -e "  ${YELLOW}!${NC} GVT-g 未正确配置"
+            echo -e "  ! GVT-g 未正确配置"
         fi
     else
-        echo -e "  ${YELLOW}!${NC} 未检测到 GVT-g 支持"
+        echo -e "  ! 未检测到 GVT-g 支持"
         echo "  提示: 此 CPU 可能不支持 GVT-g 或未配置"
     fi
     echo
@@ -2453,7 +2492,7 @@ igpu_verify() {
     # 检查 kvmgt 模块（GVT-g 需要）
     echo "5. 检查 kvmgt 模块（GVT-g）..."
     if lsmod | grep -q kvmgt; then
-        echo -e "  ${GREEN}✓${NC} kvmgt 模块已加载（GVT-g 模式）"
+        echo -e "  ✓ kvmgt 模块已加载（GVT-g 模式）"
     else
         echo "  kvmgt 模块未加载（SR-IOV 模式或未配置 GVT-g）"
     fi
@@ -2464,7 +2503,7 @@ igpu_verify() {
     if [ -f "/sys/module/i915/parameters/enable_guc" ]; then
         guc_value=$(cat /sys/module/i915/parameters/enable_guc)
         if [ "$guc_value" = "3" ]; then
-            echo -e "  ${GREEN}✓${NC} i915.enable_guc = 3 (SR-IOV 模式)"
+            echo -e "  ✓ i915.enable_guc = 3 (SR-IOV 模式)"
         else
             echo "  i915.enable_guc = $guc_value"
         fi
@@ -2473,7 +2512,7 @@ igpu_verify() {
     if [ -f "/sys/module/i915/parameters/enable_gvt" ]; then
         gvt_value=$(cat /sys/module/i915/parameters/enable_gvt)
         if [ "$gvt_value" = "Y" ]; then
-            echo -e "  ${GREEN}✓${NC} i915.enable_gvt = Y (GVT-g 模式)"
+            echo -e "  ✓ i915.enable_gvt = Y (GVT-g 模式)"
         else
             echo "  i915.enable_gvt = $gvt_value"
         fi
@@ -2492,16 +2531,16 @@ igpu_verify() {
 igpu_remove() {
     echo
     echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-    echo -e "${RED}⚠️  警告 - 移除核显虚拟化配置${NC}"
+    echo -e " 警告 - 移除核显虚拟化配置"
     echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
     echo
-    echo -e "  ${RED}此操作将：${NC}"
+    echo -e "  此操作将："
     echo "  • 恢复 GRUB 配置为默认值"
     echo "  • 清理 /etc/modules 中的 VFIO 和 kvmgt 模块"
     echo "  • 删除 /etc/sysfs.conf 中的 VFs 配置"
     echo "  • 卸载 i915-sriov-dkms 驱动（如已安装）"
     echo
-    echo -e "  ${YELLOW}注意：此操作不会自动重启系统${NC}"
+    echo -e "  注意：此操作不会自动重启系统"
     echo
     echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 
@@ -2521,21 +2560,21 @@ igpu_remove() {
     sed -i 's/  */ /g' /etc/default/grub
 
     update-grub
-    echo -e "${GREEN}✓${NC} GRUB 配置已恢复"
+    echo -e "  ✓ GRUB 配置已恢复"
 
     # 清理 /etc/modules
     echo "清理内核模块配置..."
     backup_file "/etc/modules"
 
     sed -i '/^vfio$/d; /^vfio_iommu_type1$/d; /^vfio_pci$/d; /^vfio_virqfd$/d; /^kvmgt$/d' /etc/modules
-    echo -e "${GREEN}✓${NC} 内核模块配置已清理"
+    echo -e "  ✓ 内核模块配置已清理"
 
     # 清理 /etc/sysfs.conf
     if [ -f "/etc/sysfs.conf" ]; then
         echo "清理 sysfs 配置..."
         backup_file "/etc/sysfs.conf"
         sed -i '/sriov_numvfs/d' /etc/sysfs.conf
-        echo -e "${GREEN}✓${NC} sysfs 配置已清理"
+        echo -e "  ✓ sysfs 配置已清理"
     fi
 
     # 卸载 i915-sriov-dkms
@@ -2543,7 +2582,7 @@ igpu_remove() {
     if dpkg -l | grep -q i915-sriov-dkms; then
         echo "卸载 i915-sriov-dkms 驱动..."
         dpkg -P i915-sriov-dkms || echo -e "${YELLOW}警告: 卸载驱动失败，可能需要手动处理${NC}"
-        echo -e "${GREEN}✓${NC} 驱动已卸载"
+        echo -e "✓ 驱动已卸载"
     else
         echo "未安装 i915-sriov-dkms 驱动，跳过"
     fi
@@ -2554,9 +2593,9 @@ igpu_remove() {
 
     echo
     echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-    echo -e "${GREEN}✓ 核显虚拟化配置已移除${NC}"
+    echo -e "✓ 核显虚拟化配置已移除"
     echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-    echo -e "${YELLOW}提示: 请重启系统使更改生效${NC}"
+    echo -e "提示: 请重启系统使更改生效"
 
     if confirm_action "是否现在重启系统"; then
         echo "正在重启系统..."
@@ -2570,13 +2609,11 @@ igpu_remove() {
 igpu_management_menu() {
     while true; do
         clear
-        show_banner
-
         echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
         echo "              核显虚拟化高级功能"
         echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-        echo -e "${RED}【危险警告】核显虚拟化属于高危操作${NC}"
-        echo -e "${YELLOW}配置错误可能导致系统无法启动，请务必提前备份 GRUB 配置${NC}"
+        echo -e "【危险警告】核显虚拟化属于高危操作"
+        echo -e "配置错误可能导致系统无法启动，请务必提前备份 GRUB 配置"
         echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
         echo "  1. Intel 11-15代 SR-IOV 核显虚拟化"
         echo "     支持: Rocket Lake, Alder Lake, Raptor Lake"
@@ -2642,7 +2679,7 @@ igpu_management_menu() {
                 return 0
                 ;;
             *)
-                echo -e "${RED}无效的选择，请输入 0-8${NC}"
+                echo -e "无效的选择，请输入 0-8"
                 pause_function
                 ;;
         esac
@@ -2750,327 +2787,131 @@ remove_ceph() {
 
 #---------第三方小工具管理-----------
 # 小工具配置
-TOOLS_DIR="./Tools"
-TOOLS_SOURCE_URL="https://github.com/tteck/Proxmox/raw/main/misc"
-TOOLS_AUTHOR="tteck"
-TOOLS_REPO="https://github.com/tteck/Proxmox"
-
-# 小工具列表（名称|描述）
-declare -A TOOLS_LIST=(
-    ["post-pbs-install.sh"]="PBS 安装后配置|Post PBS Installation Setup"
-    ["post-pve-install.sh"]="PVE 安装后配置|Post PVE Installation Setup"
-    ["scaling-governor.sh"]="CPU 调频策略配置|CPU Scaling Governor Setup"
-    ["cron-update-lxcs.sh"]="定时更新 LXC 容器|Cron Update LXC Containers"
-    ["host-backup.sh"]="主机备份工具|Host Backup Tool"
-    ["kernel-clean.sh"]="内核清理工具|Kernel Cleanup Tool"
-    ["kernel-pin.sh"]="内核版本固定|Kernel Version Pin"
-    ["clean-lxcs.sh"]="清理 LXC 容器|Clean LXC Containers"
-    ["fstrim.sh"]="SSD Trim 优化|SSD Trim Optimization"
-    ["update-lxcs.sh"]="更新 LXC 容器|Update LXC Containers"
-    ["monitor-all.sh"]="全局监控工具|Monitor All Services"
-    ["netdata.sh"]="Netdata 监控安装|Netdata Monitoring Setup"
-    ["microcode.sh"]="CPU 微码更新|CPU Microcode Update"
-)
-
-# 检查并创建工具目录
-check_tools_directory() {
-    if [[ ! -d "$TOOLS_DIR" ]]; then
-        log_info "创建工具目录: $TOOLS_DIR"
-        mkdir -p "$TOOLS_DIR"
-    fi
-}
-
-# 下载所有小工具
-download_tools() {
-    log_step "开始下载第三方小工具集..."
-    check_tools_directory
-
-    echo
-    log_info "工具来源: $TOOLS_AUTHOR - $TOOLS_REPO"
-    log_info "下载位置: $TOOLS_DIR"
-    echo
-
-    local total=${#TOOLS_LIST[@]}
-    local current=0
-    local success=0
-    local failed=0
-
-    for tool_name in "${!TOOLS_LIST[@]}"; do
-        current=$((current + 1))
-        local tool_url="$TOOLS_SOURCE_URL/$tool_name"
-        local tool_path="$TOOLS_DIR/$tool_name"
-
-        # 显示进度
-        show_progress_bar $current $total "下载: $tool_name"
-
-        # 使用 curl 下载（带进度和超时）
-        if command -v curl &> /dev/null; then
-            if curl -fsSL --connect-timeout 10 --max-time 60 \
-                -o "$tool_path" "$tool_url" 2>/dev/null; then
-                chmod +x "$tool_path"
-                success=$((success + 1))
-            else
-                failed=$((failed + 1))
-                log_warn "下载失败: $tool_name"
-            fi
-        else
-            # 备用 wget
-            if wget -q -O "$tool_path" "$tool_url" 2>/dev/null; then
-                chmod +x "$tool_path"
-                success=$((success + 1))
-            else
-                failed=$((failed + 1))
-                log_warn "下载失败: $tool_name"
-            fi
-        fi
-    done
-
-    echo  # 进度条后换行
-    echo
-
-    if [[ $success -eq $total ]]; then
-        log_success "所有工具下载完成！成功: $success/$total"
-    elif [[ $success -gt 0 ]]; then
-        log_warn "部分工具下载完成。成功: $success, 失败: $failed"
-    else
-        log_error "工具下载失败！请检查网络连接"
-        return 1
-    fi
-
-    log_info "工具已保存到: $(cd "$TOOLS_DIR" && pwd)"
-    return 0
-}
-
-# 检查工具是否已下载
-check_tools_downloaded() {
-    if [[ ! -d "$TOOLS_DIR" ]] || [[ $(ls -1 "$TOOLS_DIR"/*.sh 2>/dev/null | wc -l) -eq 0 ]]; then
-        return 1
-    fi
-    return 0
-}
-
-# 显示已下载的工具列表
-list_downloaded_tools() {
-    log_info "已下载的工具:"
-    echo
-
-    local index=1
-    for tool_name in "${!TOOLS_LIST[@]}"; do
-        local tool_path="$TOOLS_DIR/$tool_name"
-        local desc_full="${TOOLS_LIST[$tool_name]}"
-        local desc_cn=$(echo "$desc_full" | cut -d'|' -f1)
-        local desc_en=$(echo "$desc_full" | cut -d'|' -f2)
-
-        if [[ -f "$tool_path" ]]; then
-            printf "  %-2s. %-30s %s\n" "$index" "$desc_cn" "($desc_en)"
-            printf "      文件: %s\n" "$tool_name"
-        else
-            printf "  %-2s. %-30s %s\n" "$index" "$desc_cn" "(未下载)"
-        fi
-
-        index=$((index + 1))
-        echo
-    done
-}
-
-# 执行小工具
-run_tool() {
-    local tool_name="$1"
-    local tool_path="$TOOLS_DIR/$tool_name"
-
-    if [[ ! -f "$tool_path" ]]; then
-        log_error "工具不存在: $tool_name"
-        return 1
-    fi
-
-    if [[ ! -x "$tool_path" ]]; then
-        log_warn "工具不可执行，尝试添加执行权限..."
-        chmod +x "$tool_path"
-    fi
-
-    local desc_full="${TOOLS_LIST[$tool_name]}"
-    local desc_cn=$(echo "$desc_full" | cut -d'|' -f1)
-
-    echo
-    log_step "准备执行工具: $desc_cn"
-    log_info "工具文件: $tool_name"
-    log_info "工具路径: $tool_path"
-    echo
-
-    echo "${UI_BORDER}"
-    log_warn "注意事项："
-    echo "  1. 此工具来自第三方项目: $TOOLS_AUTHOR"
-    echo "  2. 工具执行可能修改系统配置"
-    echo "  3. 建议先了解工具功能再使用"
-    echo "  4. 项目地址: $TOOLS_REPO"
-    echo "${UI_DIVIDER}"
-
-    read -p "确认执行此工具吗？(y/N): " confirm
-    if [[ "$confirm" != "y" && "$confirm" != "Y" ]]; then
-        log_info "已取消工具执行"
-        return 0
-    fi
-
-    echo
-    log_step "开始执行工具..."
-    echo "${UI_BORDER}"
-
-    # 记录执行日志
-    log_info "工具执行开始: $tool_name ($(date '+%Y-%m-%d %H:%M:%S'))"
-
-    # 执行工具并捕获输出
-    if bash "$tool_path"; then
-        echo "${UI_BORDER}"
-        log_success "工具执行完成: $desc_cn"
-        log_info "工具执行结束: $tool_name ($(date '+%Y-%m-%d %H:%M:%S'))"
-    else
-        echo "${UI_BORDER}"
-        log_error "工具执行失败: $desc_cn"
-        log_error "工具执行失败: $tool_name (退出码: $?)"
-    fi
-}
-
-# 小工具选择菜单
-tools_selection_menu() {
-    while true; do
-        clear
-        show_banner
-        show_menu_header "第三方小工具管理"
-
-        echo "  工具来源: $TOOLS_AUTHOR"
-        echo "  项目地址: $TOOLS_REPO"
-        echo "${UI_DIVIDER}"
-
-        # 显示工具列表
-        local index=1
-        local -a tool_names=()
-
-        for tool_name in $(echo "${!TOOLS_LIST[@]}" | tr ' ' '\n' | sort); do
-            tool_names[$index]=$tool_name
-            local desc_full="${TOOLS_LIST[$tool_name]}"
-            local desc_cn=$(echo "$desc_full" | cut -d'|' -f1)
-            local tool_path="$TOOLS_DIR/$tool_name"
-
-            if [[ -f "$tool_path" ]]; then
-                show_menu_option "$index" "$desc_cn ✓"
-            else
-                show_menu_option "$index" "$desc_cn ✗"
-            fi
-
-            index=$((index + 1))
-        done
-
-        echo "${UI_DIVIDER}"
-        show_menu_option "r" "重新下载所有工具"
-        show_menu_option "l" "列出工具详情"
-        show_menu_option "0" "返回主菜单"
-        show_menu_footer
-        echo
-
-        read -p "请选择工具 [0-${#TOOLS_LIST[@]}] 或 [r/l]: " choice
-        echo
-
-        case $choice in
-            0)
-                break
-                ;;
-            r)
-                download_tools
-                pause_function
-                ;;
-            l)
-                list_downloaded_tools
-                pause_function
-                ;;
-            [1-9]|[1-9][0-9])
-                if [[ $choice -le ${#TOOLS_LIST[@]} ]] && [[ -n "${tool_names[$choice]}" ]]; then
-                    run_tool "${tool_names[$choice]}"
-                else
-                    log_error "无效选择"
-                fi
-                pause_function
-                ;;
-            *)
-                log_error "无效选择，请重新输入"
-                pause_function
-                ;;
-        esac
-    done
-}
-
-# 第三方工具主入口
-third_party_tools_menu() {
+# FastPVE - PVE 虚拟机快速下载
+fastpve_quick_download_menu() {
     clear
     show_banner
+    show_menu_header "PVE 虚拟机快速下载 (FastPVE)"
 
-    # 显示重要警告信息
-    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-    echo -e "${RED}⚠️  重要提示  ⚠️${NC}"
-    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    echo "  FastPVE 由社区开发者 @kspeeder 维护，提供热门 PVE 虚拟机模板快速拉取能力。"
+    echo "  本功能将直接运行 FastPVE 官方脚本，请在执行前确保信任该来源。"
     echo
-    log_warn "此处提到的脚本已经不再更新，使用可能会出现问题"
+    echo "  项目地址: $FASTPVE_PROJECT_URL"
+    echo "  安装脚本: $FASTPVE_INSTALLER_URL"
     echo
-    echo -e "${YELLOW}存在这里的意义仅是为了提示您：${NC}"
-    echo "  有第三方社区提供了更完善的脚本工具集"
-    echo
-    echo -e "${GREEN}推荐访问以下地址获取最新可用脚本：${NC}"
-    echo -e "${CYAN}  👉 https://community-scripts.github.io/ProxmoxVE/scripts${NC}"
-    echo
-    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-    echo
-    read -p "按任意键继续 (或输入 'q' 返回主菜单): " -n 1 continue_choice
-    echo
+    echo -e "${RED}⚠️  重要提示:${NC} 这是第三方脚本，出现任何问题请前往 FastPVE 项目反馈，别找我喔~"
+    echo -e "${YELLOW}    我们只负责帮你下载并执行，后续操作和风险请自行承担。${NC}"
+    echo "${UI_DIVIDER}"
+    echo "  使用说明："
+    echo "    • FastPVE 会拉取独立菜单，按提示选择需要的虚拟机模板"
+    echo "    • 需要互联网访问 GitHub（大陆环境自动优先使用镜像源）"
+    echo "    • 本脚本仅负责下载并执行 FastPVE，具体操作由 FastPVE 完成"
+    echo "${UI_DIVIDER}"
 
-    if [[ "$continue_choice" == "q" || "$continue_choice" == "Q" ]]; then
+    read -p "是否立即运行 FastPVE 脚本？(y/N): " confirm
+    confirm=${confirm:-N}
+    if [[ "$confirm" != "y" && "$confirm" != "Y" ]]; then
+        log_info "已取消执行 FastPVE"
         return 0
     fi
 
-    # 检查是否已下载工具
-    if ! check_tools_downloaded; then
-        clear
-        show_banner
-        show_menu_header "第三方小工具管理"
+    local fastpve_url="$FASTPVE_INSTALLER_URL"
+    local fastpve_mirror_url="${GITHUB_MIRROR_PREFIX}${FASTPVE_INSTALLER_URL}"
+    local preferred_url="$fastpve_url"
+    local fallback_url="$fastpve_mirror_url"
+    local preferred_label="GitHub"
+    local fallback_label="加速镜像"
 
-        echo "  检测到您还未下载第三方工具集"
-        echo
-        log_warn "注意: 这些工具来自旧版仓库，可能存在兼容性问题"
-        echo
-        log_info "工具来源: $TOOLS_AUTHOR (已停止更新)"
-        log_info "项目地址: $TOOLS_REPO"
-        log_info "工具数量: ${#TOOLS_LIST[@]} 个"
-        echo
-        echo "  这些工具包括:"
-        echo "    • PVE/PBS 安装后配置"
-        echo "    • CPU 调频策略管理"
-        echo "    • LXC 容器管理"
-        echo "    • 内核管理工具"
-        echo "    • 系统监控工具"
-        echo "    • 等等..."
-        echo
-        echo "${UI_DIVIDER}"
-
-        read -p "是否立即下载工具集？(Y/n): " download_confirm
-        download_confirm=${download_confirm:-Y}
-
-        if [[ "$download_confirm" == "Y" || "$download_confirm" == "y" ]]; then
-            echo
-            download_tools
-            pause_function
-
-            # 下载成功后进入工具菜单
-            if check_tools_downloaded; then
-                tools_selection_menu
-            fi
+    if detect_network_region; then
+        if [[ $USE_MIRROR_FOR_UPDATE -eq 1 ]]; then
+            preferred_url="$fastpve_mirror_url"
+            fallback_url="$fastpve_url"
+            preferred_label="加速镜像"
+            fallback_label="GitHub"
+            log_info "检测到中国大陆网络环境，优先使用 FastPVE 加速镜像下载"
         else
-            log_info "已取消下载"
-            return 0
+            if [[ -n "$USER_COUNTRY_CODE" ]]; then
+                log_info "检测到当前地区: $USER_COUNTRY_CODE，将通过 GitHub 下载 FastPVE"
+            else
+                log_info "网络检测成功，将通过 GitHub 下载 FastPVE"
+            fi
         fi
     else
-        # 已下载，直接进入工具菜单
-        tools_selection_menu
+        log_warn "无法检测网络地区，默认使用 GitHub 下载 FastPVE"
     fi
+
+    local -a download_cmd
+    local downloader_name=""
+    if command -v curl &> /dev/null; then
+        download_cmd=(curl -fsSL --connect-timeout 10 --max-time 60 -o)
+        downloader_name="curl"
+    elif command -v wget &> /dev/null; then
+        download_cmd=(wget -q -O)
+        downloader_name="wget"
+    else
+        log_error "未检测到 curl 或 wget，无法下载 FastPVE 脚本"
+        return 1
+    fi
+
+    local tmp_script
+    if ! tmp_script=$(mktemp /tmp/fastpve-install.XXXXXX.sh); then
+        log_error "无法创建临时文件，FastPVE 启动失败"
+        return 1
+    fi
+
+    log_info "使用 $preferred_label 下载 FastPVE 安装脚本 (下载器: $downloader_name)..."
+    if ! "${download_cmd[@]}" "$tmp_script" "$preferred_url"; then
+        log_warn "$preferred_label 下载失败，尝试改用 $fallback_label..."
+        : > "$tmp_script"
+        if ! "${download_cmd[@]}" "$tmp_script" "$fallback_url"; then
+            log_error "FastPVE 安装脚本下载失败，请检查网络或稍后重试"
+            rm -f "$tmp_script"
+            return 1
+        fi
+    fi
+
+    chmod +x "$tmp_script"
+    echo
+    log_step "FastPVE 脚本即将运行，请根据 FastPVE 菜单提示选择虚拟机模板"
+    echo "${UI_BORDER}"
+    sh "$tmp_script"
+    local run_status=$?
+    echo "${UI_BORDER}"
+
+    rm -f "$tmp_script"
+
+    if [[ $run_status -eq 0 ]]; then
+        log_success "FastPVE 虚拟机快速下载脚本执行完成"
+    else
+        log_error "FastPVE 脚本执行失败 (退出码: $run_status)"
+    fi
+
+    return $run_status
 }
-#---------第三方小工具管理-----------
+#---------FastPVE 虚拟机快速下载-----------
+
+# 社区第三方工具集合提示
+third_party_tools_menu() {
+    clear
+    show_menu_header "第三方工具集 (Community Scripts)"
+
+    echo "  这里推荐一个由社区维护的庞大脚本集合，覆盖 Proxmox 安装、容器/虚拟机模版、监控等各种高级玩法。"
+    echo
+    echo "  项目主页: https://community-scripts.github.io/ProxmoxVE/"
+    echo "  GitHub 仓库: https://github.com/community-scripts/ProxmoxVE"
+    echo
+    echo -e "${RED}⚠️  重要提示:${NC} 该工具集完全由第三方维护，与 PVE-Tools 项目无关。"
+    echo -e "${YELLOW}    如果脚本运行出现问题，请直接前往上述项目反馈，不要来找我喔~${NC}"
+    echo
+    echo "  使用建议："
+    echo "    • 全站为英文界面，可配合浏览器或翻译软件使用，中文用户建议提前准备。"
+    echo "    • 网站中包含大量脚本和功能说明，建议按需阅读说明后再执行。"
+    echo "    • 执行任何第三方脚本前，请务必备份关键配置并了解潜在风险。"
+    echo "${UI_DIVIDER}"
+    read -p "按任意键返回主菜单..." -n 1 _
+    echo
+}
+#---------社区第三方工具集合-----------
 
 # PVE8 to PVE9 升级功能
 pve8_to_pve9_upgrade() {
@@ -3330,31 +3171,36 @@ show_system_info() {
 
 # 主菜单
 show_menu() {
-    show_menu_header "请选择您需要的功能："
-    show_menu_option "1"  "更换软件源 (强烈推荐，让下载飞起来)"
-    show_menu_option "2"  "删除订阅弹窗 (告别烦人提醒)"
-    show_menu_option "3"  "合并 local 与 local-lvm (小硬盘救星)"
-    show_menu_option "4"  "删除 Swap 分区 (释放更多空间)"
-    show_menu_option "5"  "更新系统 (保持最新状态)"
-    show_menu_option "6"  "显示系统信息 (查看运行状况)"
+    show_banner 
+    show_menu_option "请选择您需要的功能："
+    show_menu_option "1"  "更换软件源"
+    show_menu_option "2"  "删除订阅弹窗"
+    show_menu_option "3"  "合并 local 与 local-lvm"
+    show_menu_option "4"  "删除 Swap 分区"
+    show_menu_option "5"  "更新系统"
+    show_menu_option "6"  "显示系统信息"
     echo
-    show_menu_option "7"  "一键配置 (换源+删弹窗+更新，懒人必选，推荐在SSH下使用)"
+    show_menu_option "7"  "一键配置"
+    show_menu_option "      换源+删弹窗+更新，懒人必选，推荐在SSH下使用"
     echo
-    show_menu_option "8"  "硬件直通配置 (PCI设备直通设置)"
-    show_menu_option "9"  "CPU电源模式 (调整CPU性能模式)"
+    show_menu_option "8"  "硬件直通配置"
+    show_menu_option "9"  "CPU电源模式"
     show_menu_option "10" "温度监控管理 (CPU/硬盘监控设置)"
-    show_menu_option "11" "Ceph管理 (存储相关配置)"
+    show_menu_option "11" "Ceph管理"
     show_menu_option "12" "内核管理 (内核切换/更新/清理)"
     show_menu_option "13" "PVE8 升级到 PVE9 (PVE8专用)"
-    show_menu_option "14" "第三方工具集 (tteck社区工具)"
-    show_menu_option "15" "核显高级功能 (Intel 核显虚拟化)"
-    show_menu_option "16" "给作者点个Star吧，谢谢喵~"
-    echo
+    echo 
+    show_menu_option "14" "PVE 虚拟机快速下载 (FastPVE)"
+    show_menu_option "15" "第三方工具集 (Community Scripts)"
+    show_menu_option "16" "Intel 核显核显虚拟化"
+    show_menu_option "17" "Intel 核显直通"
+    show_menu_option "18" "NVIDIA 显卡直通/虚拟化"
+    
+    show_menu_option "19" "给作者点个Star吧，谢谢喵~"
     show_menu_option "0"  "退出脚本"
     show_menu_footer
-    echo
-    echo "小贴士：新装系统推荐选择 7 进行一键配置"
-    echo -n "请输入您的选择 [0-16]: "
+    echo "小贴士：装机前先吃饭"
+    echo -n "请输入您的选择 [0-19]: "
 }
 
 # 一键配置
@@ -3369,7 +3215,7 @@ quick_setup() {
     update_system
     echo
     log_success "一键配置全部完成！您的 PVE 已经完美优化"
-    echo -e "${CYAN}现在您可以愉快地使用 PVE 了！${NC}"
+    echo -e "现在您可以愉快地使用 PVE 了！"
 }
 
 # 通用UI函数
@@ -3395,7 +3241,6 @@ show_menu_option() {
 select_mirror() {
     while true; do
         clear
-        show_banner
         show_menu_header "请选择镜像源"
         show_menu_option "1" "中科大镜像源"
         show_menu_option "2" "清华Tuna镜像源" 
@@ -3450,9 +3295,40 @@ check_update() {
     
     # 显示进度提示
     echo -ne "[....] 正在检查更新...\033[0K\r"
-    
-    # 只使用 GitHub 源下载版本文件
-    remote_content=$(download_file "$VERSION_FILE_URL")
+
+    local prefer_mirror=0
+    local preferred_version_url="$VERSION_FILE_URL"
+    local preferred_update_url="$UPDATE_FILE_URL"
+    local mirror_version_url="${GITHUB_MIRROR_PREFIX}${VERSION_FILE_URL}"
+    local mirror_update_url="${GITHUB_MIRROR_PREFIX}${UPDATE_FILE_URL}"
+
+    if detect_network_region; then
+        prefer_mirror=$USE_MIRROR_FOR_UPDATE
+        if [[ $prefer_mirror -eq 1 ]]; then
+            log_info "当前地区为： $USER_COUNTRY_CODE，使用镜像源检查更新...请等待 3 秒"
+            # log_info "检测到中国大陆网络环境，将优先使用镜像源检查更新"
+            preferred_version_url="$mirror_version_url"
+            preferred_update_url="$mirror_update_url"
+        else
+            if [[ -n "$USER_COUNTRY_CODE" ]]; then
+                log_info "检测到当前地区为: $USER_COUNTRY_CODE，将使用 GitHub 源检查更新"
+            fi
+        fi
+    else
+        log_warn "无法获取网络地区信息，默认使用 GitHub 源检查更新"
+    fi
+
+    remote_content=$(download_file "$preferred_version_url")
+
+    if [ -z "$remote_content" ]; then
+        if [[ $prefer_mirror -eq 1 ]]; then
+            log_warn "镜像源连接失败，尝试使用 GitHub 源..."
+            remote_content=$(download_file "$VERSION_FILE_URL")
+        else
+            log_warn "GitHub 连接失败，尝试使用镜像源..."
+            remote_content=$(download_file "$mirror_version_url")
+        fi
+    fi
     
     # 清除进度显示
     echo -ne "\033[0K\r"
@@ -3475,10 +3351,18 @@ check_update() {
         log_warn "获取的版本信息格式不正确"
         return
     fi
-    
-    # 获取详细的更新日志（只使用 GitHub 源）
-    UPDATE_FILE_URL="https://raw.githubusercontent.com/Mapleawaa/PVE-Tools-9/main/UPDATE"
-    detailed_changelog=$(download_file "$UPDATE_FILE_URL")
+
+    detailed_changelog=$(download_file "$preferred_update_url")
+
+    if [ -z "$detailed_changelog" ]; then
+        if [[ $prefer_mirror -eq 1 ]]; then
+            log_warn "镜像源更新日志获取失败，尝试使用 GitHub 源..."
+            detailed_changelog=$(download_file "$UPDATE_FILE_URL")
+        else
+            log_warn "GitHub 更新日志获取失败，尝试使用镜像源..."
+            detailed_changelog=$(download_file "$mirror_update_url")
+        fi
+    fi
     
     # 比较版本
     if [ "$(printf '%s\n' "$remote_version" "$CURRENT_VERSION" | sort -V | tail -n1)" != "$CURRENT_VERSION" ]; then
@@ -3606,7 +3490,6 @@ check_update() {
 temp_monitoring_menu() {
     while true; do
         clear
-        show_banner
         show_menu_header "温度监控管理"
         show_menu_option "1" "配置温度监控 (CPU/硬盘温度显示)"
         show_menu_option "2" "移除温度监控 (移除温度监控功能)"
@@ -3644,7 +3527,7 @@ temp_monitoring_menu() {
 # 自定义温度监控配置
 custom_temp_monitoring() {
     clear
-    show_banner
+
     
     # Define options
     declare -A options
@@ -3776,7 +3659,7 @@ custom_temp_monitoring() {
 ceph_management_menu() {
     while true; do
         clear
-        show_banner
+
         show_menu_header "Ceph管理"
         show_menu_option "1" "添加ceph-squid源 (PVE8/9专用)"
         show_menu_option "2" "添加ceph-quincy源 (PVE7/8专用)"
@@ -3811,6 +3694,30 @@ ceph_management_menu() {
     done
 }
 
+#英特尔核显直通
+intel_gpu_passthrough() {
+    log_step "开始 Intel 核显直通配置"
+    log_step "诶？怎么没进度了？"
+    log_tips "前面有个小纸条，捡起来："
+    log_error "该功能尚在开发中，敬请期待！"
+    log_tips "如果您急需该功能，请前往作者的GitHub提交pr 谢谢喵"
+    echo -e "3秒后自动回城 …"
+    sleep 3
+    main "$@"
+}
+
+# NVIDIA显卡管理菜单
+nvidia_gpu_management_menu() {
+
+    log_step "诶？怎么没进度了？"
+    log_tips "前面有个小纸条，捡起来："
+    log_error "该功能尚在开发中，敬请期待！"
+    log_tips "如果您急需该功能，请前往作者的GitHub提交pr 谢谢喵"
+    echo -e "3秒后自动回城 …"
+    sleep 3
+    main "$@"
+}
+
 # 主程序
 main() {
     check_root
@@ -3824,7 +3731,7 @@ main() {
     select_mirror
     
     while true; do
-        show_banner
+
         show_menu
         read -n 2 choice
         echo
@@ -3871,12 +3778,21 @@ main() {
                 pve8_to_pve9_upgrade
                 ;;
             14)
-                third_party_tools_menu
+                fastpve_quick_download_menu
                 ;;
             15)
-                igpu_management_menu
+                third_party_tools_menu
                 ;;
             16)
+                igpu_management_menu
+                ;;
+            17)
+                intel_gpu_passthrough
+                ;;
+            18)
+                nvidia_gpu_management_menu
+                ;;
+            19)
                 echo "项目地址：https://github.com/Mapleawaa/PVE-Tools-9"
                 echo "有你真好~"
                 ;;
@@ -3887,7 +3803,7 @@ main() {
                 ;;
             *)
                 log_error "哎呀，这个选项不存在呢"
-                log_warn "请输入 0-16 之间的数字"
+                log_warn "请输入 0-19 之间的数字"
                 ;;
         esac
         
