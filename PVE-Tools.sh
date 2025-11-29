@@ -34,6 +34,11 @@ MIRROR_TUNA="https://mirrors.tuna.tsinghua.edu.cn/proxmox/debian/pve"
 MIRROR_DEBIAN="https://deb.debian.org/debian"
 SELECTED_MIRROR=""
 
+# ceph 模板源配置
+CEPH_MIRROR_USTC="https://mirrors.ustc.edu.cn/proxmox/debian/ceph-squid"
+CEPH_MIRROR_TUNA="https://mirrors.tuna.tsinghua.edu.cn/proxmox/debian/ceph-squid"
+CEPH_MIRROR_OFFICIAL="http://download.proxmox.com/debian/ceph-squid"
+
 # CT 模板源配置
 CT_MIRROR_USTC="https://mirrors.ustc.edu.cn/proxmox"
 CT_MIRROR_TUNA="https://mirrors.tuna.tsinghua.edu.cn/proxmox"
@@ -713,17 +718,20 @@ change_sources() {
         $MIRROR_USTC)
             debian_mirror="https://mirrors.ustc.edu.cn/debian"
             pve_mirror="$MIRROR_USTC"
+            ceph_mirror="$CEPH_MIRROR_USTC"
             ct_mirror="$CT_MIRROR_USTC"
             ;;
         $MIRROR_TUNA)
             debian_mirror="https://mirrors.tuna.tsinghua.edu.cn/debian"
             pve_mirror="$MIRROR_TUNA"
+            ceph_mirror="$CEPH_MIRROR_TUNA"
             ct_mirror="$CT_MIRROR_TUNA"
             ;;
         $MIRROR_DEBIAN)
             debian_mirror="https://deb.debian.org/debian"
             debian_security_mirror="https://security.debian.org/debian-security"
             pve_mirror="https://ftp.debian.org/debian"
+            ceph_mirror="$CEPH_MIRROR_OFFICIAL"
             ct_mirror="$CT_MIRROR_OFFICIAL"
             ;;
     esac
@@ -808,9 +816,9 @@ EOF
         backup_file "/etc/apt/sources.list.d/ceph.sources"
         cat > /etc/apt/sources.list.d/ceph.sources << EOF
 Types: deb
-URIs: $pve_mirror
+URIs: $ceph_mirror
 Suites: trixie
-Components: main
+Components: no-subscription
 Signed-By: /usr/share/keyrings/proxmox-archive-keyring.gpg
 EOF
     fi
