@@ -1682,24 +1682,69 @@ EOF
         textField: 'ups_status',
         cellWrap: true,
         renderer: function(value) {
-            if (value.length > 0) {
-                try {
-                    const DATE    = value.match(/DATE\s*:\s*([\d\-]+ \d+:\d+:\d+)/)[1];
-                    const STATUS  = value.match(/STATUS\s*:\s*([A-Z]+)/)[1];
-                    const LINEV   = value.match(/OUTPUTV\s*:\s*([\d\.]+)/)[1];
-                    const LOADPCT = value.match(/LOADPCT\s*:\s*([\d\.]+)/)[1];
-                    const BCHARGE = value.match(/BCHARGE\s*:\s*([\d\.]+)/)[1];
-                    const TIMELEFT= value.match(/TIMELEFT\s*:\s*([\d\.]+)/)[1];
-                    const MODEL   = value.match(/MODEL\s*:\s*(.+)/)[1].trim();
-
-                    return `${MODEL}  | ${STATUS}  | ${DATE}<br>
-                            电量：${BCHARGE} %  | 剩余供电时间：${TIMELEFT} 分钟<br>
-                            电压：${LINEV} V  |  负载：${LOADPCT} %`;
-                } catch(e) {
-                    return 'UPS 信息解析失败:' + value;
-                }
-            } else {
+            if (!value || value.length === 0) {
                 return '提示: 未检测到 UPS 或 apcaccess 未运行';
+            }
+
+            try {
+                const DATE_MATCH      = value.match(/DATE\s*:\s*([^\n]+)/m);
+                const STATUS_MATCH    = value.match(/STATUS\s*:\s*([A-Z]+)/m);
+                const OUTPUTV_MATCH   = value.match(/OUTPUTV\s*:\s*([\d\.]+)/m);
+                const LINEV_MATCH     = value.match(/LINEV\s*:\s*([\d\.]+)/m);
+                const LOADPCT_MATCH   = value.match(/LOADPCT\s*:\s*([\d\.]+)/m);
+                const BCHARGE_MATCH   = value.match(/BCHARGE\s*:\s*([\d\.]+)/m);
+                const TIMELEFT_MATCH  = value.match(/TIMELEFT\s*:\s*([\d\.]+)/m);
+                const NOMPOWER_MATCH  = value.match(/NOMPOWER\s*:\s*([\d\.]+)/m);
+                const MODEL_MATCH     = value.match(/MODEL\s*:\s*(.+)/m);
+
+                const DATE       = DATE_MATCH ? DATE_MATCH[1].trim() : '未知时间';
+                const STATUS     = STATUS_MATCH ? STATUS_MATCH[1] : 'UNKNOWN';
+                const VOLTAGE    = (OUTPUTV_MATCH || LINEV_MATCH) ? (OUTPUTV_MATCH || LINEV_MATCH)[1] : '-';
+                const LOADPCT    = LOADPCT_MATCH ? parseFloat(LOADPCT_MATCH[1]) : NaN;
+                const LOADPCT_TXT= isNaN(LOADPCT) ? '-' : LOADPCT_MATCH[1];
+                const BCHARGE    = BCHARGE_MATCH ? BCHARGE_MATCH[1] : '-';
+                const TIMELEFT   = TIMELEFT_MATCH ? TIMELEFT_MATCH[1] : '-';
+                const NOMPOWER   = NOMPOWER_MATCH ? parseFloat(NOMPOWER_MATCH[1]) : NaN;
+                const MODEL      = MODEL_MATCH ? MODEL_MATCH[1].trim() : '未知型号';
+
+                let powerStatusText = '';
+                switch (STATUS) {
+                    case 'ONLINE':
+                        powerStatusText = '市电供电正常';
+                        break;
+                    case 'ONBATT':
+                        powerStatusText = '电池供电中（市电中断）';
+                        break;
+                    case 'CHRG':
+                        powerStatusText = '电池充电中';
+                        break;
+                    case 'DISCHRG':
+                        powerStatusText = '电池放电中';
+                        break;
+                    default:
+                        powerStatusText = '状态: ' + STATUS;
+                        break;
+                }
+
+                let totalPowerText = '-';
+                let currentPowerText = '-';
+
+                if (!isNaN(NOMPOWER) && NOMPOWER > 0) {
+                    const totalPowerW = NOMPOWER;
+                    totalPowerText = totalPowerW.toFixed(0) + ' W';
+
+                    if (!isNaN(LOADPCT)) {
+                        const currentPowerW = totalPowerW * LOADPCT / 100;
+                        currentPowerText = currentPowerW.toFixed(0) + ' W';
+                    }
+                }
+
+                return `${MODEL} | ${powerStatusText} | ${DATE}<br>
+                        电量: ${BCHARGE} % | 剩余供电时间: ${TIMELEFT} 分钟<br>
+                        电压: ${VOLTAGE} V | 负载: ${LOADPCT_TXT} %<br>
+                        额定功率: ${totalPowerText} | 估算当前功率: ${currentPowerText}`;
+            } catch(e) {
+                return 'UPS 信息解析失败: ' + value;
             }
         }
     },
