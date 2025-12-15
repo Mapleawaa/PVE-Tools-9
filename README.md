@@ -28,11 +28,9 @@ bash <(curl -sSL https://github.com/Mapleawaa/PVE-Tools-9/blob/main/PVE-Tools.sh
 
 ### 公告
 
-> [!NOTE]
-> 本项目功能已较为稳定，目前处于 **低频维护阶段**：
-> 新增的 Issue 通常会在 **1–2 周**的维护周期内统一处理，**请不要催促处理**。 
-> 暂不计划新增功能，如有好点子，欢迎 PR  
-> 本人目前在兼顾学业，因此 **无法提供即时响应**
+> [!IMPORTANT]
+> 显卡拆分/直通 已新开仓库使用其他语言编写脚本。
+> 详细请看 👉 [N卡拆分仓库](https://github.com/Mapleawaa/NVIDIA-vGPU-Script-For-PVE) | [显卡直通脚本仓库](https://github.com/Mapleawaa/GPU-Pathrough-Script-For-PVE)
 
 > [!WARNING]
 > 3.0.0 起已加入 Proxmox 安全软件源，建议尽快更新以避免潜在安全风险。
