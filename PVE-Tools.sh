@@ -2244,20 +2244,54 @@ igpu_sriov_setup() {
     dkms_url="https://github.com/strongtz/i915-sriov-dkms/releases/download/${dkms_tag}/i915-sriov-dkms_${dkms_asset_version}_amd64.deb"
     dkms_file="/tmp/i915-sriov-dkms_${dkms_asset_version}_amd64.deb"
 
+    dkms_mirror_url="${GITHUB_MIRROR_PREFIX}$dkms_url"
+
     # 检查是否已下载
     if [ -f "$dkms_file" ]; then
         echo "驱动文件已存在，跳过下载"
     else
-        echo "从 GitHub 下载驱动..."
-        echo "  提示: 如果下载失败，请检查网络或手动下载后放到 /tmp/ 目录"
+        local preferred_url="$dkms_url"
+        local fallback_url="$dkms_mirror_url"
+        local preferred_label="GitHub"
+        local fallback_label="加速镜像"
 
-        wget -O "$dkms_file" "$dkms_url" || {
-            echo -e "下载驱动失败"
-            echo "  提示: 请手动下载: $dkms_url"
-            echo "  提示: 并上传到 PVE 的 /tmp/ 目录后重试"
-            pause_function
+        if detect_network_region && [[ $USE_MIRROR_FOR_UPDATE -eq 1 ]]; then
+            preferred_url="$dkms_mirror_url"
+            fallback_url="$dkms_url"
+            preferred_label="加速镜像"
+            fallback_label="GitHub"
+            log_info "检测到大陆网络环境，优先使用镜像源下载驱动"
+        else
+            log_info "优先通过 $preferred_label 下载驱动"
+        fi
+
+        local -a download_cmd
+        local downloader_name=""
+        if command -v curl &> /dev/null; then
+            download_cmd=(curl -fsSL --connect-timeout 15 --max-time 300 -o)
+            downloader_name="curl"
+        elif command -v wget &> /dev/null; then
+            download_cmd=(wget -q -O)
+            downloader_name="wget"
+        else
+            log_error "未检测到 curl 或 wget，无法下载驱动"
             return 1
-        }
+        fi
+
+        log_info "正在从 $preferred_label 下载 (使用 $downloader_name)..."
+        if ! "${download_cmd[@]}" "$dkms_file" "$preferred_url"; then
+            log_warn "$preferred_label 下载失败，尝试改用 $fallback_label..."
+            
+            if ! "${download_cmd[@]}" "$dkms_file" "$fallback_url"; then
+                log_error "驱动下载失败！"
+                echo "  提示: 请检查网络，或者手动下载并上传至: $dkms_file"
+                echo "  下载地址: $dkms_url"
+                rm -f "$dkms_file"
+                pause_function
+                return 1
+            fi
+        fi
+        log_success "驱动文件下载成功"
     fi
 
     echo "安装 i915-sriov-dkms 驱动..."
