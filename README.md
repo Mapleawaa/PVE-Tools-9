@@ -19,7 +19,7 @@ bash <(curl -sSL https://ghfast.top/github.com/Mapleawaa/PVE-Tools-9/blob/main/P
 ```
 #### 国际网络
 ```
-bash <(curl -sSL https://github.com/Mapleawaa/PVE-Tools-9/blob/main/PVE-Tools.sh)
+bash <(curl -sSL https://raw.githubusercontent.com/Mapleawaa/PVE-Tools-9/refs/heads/main/PVE-Tools.sh)
 ```
 > [!WARNING]
 > 请不要多次拉取文件，无论镜像站还是源站。否则会被服务器拒绝导致影响心情。
