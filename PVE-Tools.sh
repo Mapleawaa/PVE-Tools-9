@@ -237,7 +237,6 @@ EOF
     echo "作者: Maple & Claude 4.5 & 提交PR的你们"
     echo "当前版本: $CURRENT_VERSION | 最新版本: $remote_version"
     echo "═════════════════════════════════════════════════"
-    echo
 }
 
 # 检查是否为 root 用户
@@ -3232,7 +3231,6 @@ show_menu() {
     show_menu_option "4"  "删除 Swap 分区"
     show_menu_option "5"  "更新系统"
     show_menu_option "6"  "显示系统信息"
-    echo
     show_menu_option "7"  "一键配置"
     show_menu_option "      换源+删弹窗+更新，懒人必选，推荐在SSH下使用"
     echo
