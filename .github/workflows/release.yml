@@ -5,6 +5,9 @@ on:
       - 'v[0-9]+.[0-9]+.[0-9]+'
       - 'v[0-9]+.[0-9]+.[0-9]+-stable'
 
+permissions:
+  contents: write
+
 jobs:
   release:
     runs-on: ubuntu-latest
@@ -27,6 +30,17 @@ jobs:
         run: |
           sed -i "s/CURRENT_VERSION=\".*\"/CURRENT_VERSION=\"${{ steps.get_version.outputs.VERSION }}\"/" PVE-Tools.sh
           
+      - name: Install shc
+        run: |
+          sudo add-apt-repository ppa:neurobin/ppa -y
+          sudo apt-get update
+          sudo apt-get install shc -y
+
+      - name: Compile script to binary
+        run: |
+          shc -f PVE-Tools.sh -o pve-tools
+          chmod +x pve-tools
+          
       - name: Commit version changes
         run: |
           git config --local user.email "action@github.com"
@@ -44,31 +58,48 @@ jobs:
         id: release_notes
         run: |
           # 生成基于提交历史的发布说明
-          LATEST_TAG=$(git describe --tags --abbrev=0)
-          PREVIOUS_TAG=$(git describe --tags --abbrev=0 $(git rev-list --tags --skip=1 --max-count=1))
-          CHANGELOG=$(git log --pretty=format:"%h - %s (%an)" $PREVIOUS_TAG..$LATEST_TAG)
+          LATEST_TAG=${{ github.ref_name }}
+          # 尝试获取前一个 tag，如果没有则为空
+          PREVIOUS_TAG=$(git describe --tags --abbrev=0 $(git rev-list --tags --skip=1 --max-count=1) 2>/dev/null || echo "")
+          
+          if [ -z "$PREVIOUS_TAG" ]; then
+            CHANGELOG=$(git log --pretty=format:"- %s (%an)" $LATEST_TAG)
+          else
+            CHANGELOG=$(git log --pretty=format:"- %s (%an)" $PREVIOUS_TAG..$LATEST_TAG)
+          fi
+          
           echo "CHANGELOG<<EOF" >> $GITHUB_OUTPUT
           echo "$CHANGELOG" >> $GITHUB_OUTPUT
           echo "EOF" >> $GITHUB_OUTPUT
           
       - name: Create GitHub Release
-        uses: actions/create-release@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        uses: softprops/action-gh-release@v1
         with:
           tag_name: ${{ github.ref }}
-          release_name: Release ${{ github.ref }}
+          name: Release ${{ github.ref_name }}
           body: |
             ## 版本 ${{ steps.get_version.outputs.VERSION }}
             
-            自动发布
-            
+            ### 更新日志
             ${{ steps.release_notes.outputs.CHANGELOG }}
             
-            ## 安装方式
+            ### 使用方法
             
+            **方式一：直接运行脚本 (推荐)**
             ```bash
-            bash <(curl -sSL https://github.com/Mapleawaa/PVE-Tools-9/blob/main/PVE-Tools.sh)
+            bash -c "$(curl -fsSL https://raw.githubusercontent.com/Mapleawaa/PVE-Tools-9/main/PVE-Tools.sh)"
             ```
+            
+            **方式二：下载二进制文件**
+            下载下方 Assets 中的 `pve-tools`，赋予执行权限后运行：
+            ```bash
+            chmod +x pve-tools
+            ./pve-tools
+            ```
+          files: |
+            pve-tools
+            PVE-Tools.sh
           draft: false
           prerelease: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

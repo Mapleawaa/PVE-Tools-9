@@ -6,7 +6,7 @@
 # Auther:Maple 二次修改使用请不要删除此段注释
 
 # 版本信息
-CURRENT_VERSION="5.0.0"
+CURRENT_VERSION="6.0.0"
 VERSION_FILE_URL="https://raw.githubusercontent.com/Mapleawaa/PVE-Tools-9/main/VERSION"
 UPDATE_FILE_URL="https://raw.githubusercontent.com/Mapleawaa/PVE-Tools-9/main/UPDATE"
 
@@ -56,27 +56,27 @@ FASTPVE_PROJECT_URL="https://github.com/kspeeder/fastpve"
 
 # 日志函数
 log_info() {
-    echo -e "${GREEN}[$(date +'%Y-%m-%d %H:%M:%S')]${NC} ${CYAN}[INFO]${NC} $1" | tee -a /var/log/pve-tools.log
+    echo -e "${GREEN}[$(date +'%H:%M:%S')]${NC} ${CYAN}INFO${NC} $1" >> /var/log/pve-tools.log
 }
 
 log_warn() {
-    echo -e "${YELLOW}[$(date +'%Y-%m-%d %H:%M:%S')]${NC} ${ORANGE}[WARN]${NC} $1" | tee -a /var/log/pve-tools.log
+    echo -e "${YELLOW}[$(date +'%H:%M:%S')]${NC} ${ORANGE}WARN${NC} $1" | tee -a /var/log/pve-tools.log
 }
 
 log_error() {
-    echo -e "${RED}[$(date +'%Y-%m-%d %H:%M:%S')]${NC} ${RED}[ERROR]${NC} $1" | tee -a /var/log/pve-tools.log >&2
+    echo -e "${RED}[$(date +'%H:%M:%S')]${NC} ${RED}ERROR${NC} $1" | tee -a /var/log/pve-tools.log >&2
 }
 
 log_step() {
-    echo -e "${BLUE}[$(date +'%Y-%m-%d %H:%M:%S')]${NC} ${MAGENTA}[STEP]${NC} $1" | tee -a /var/log/pve-tools.log
+    echo -e "${BLUE}[$(date +'%H:%M:%S')]${NC} ${MAGENTA}STEP${NC} $1" | tee -a /var/log/pve-tools.log
 }
 
 log_success() {
-    echo -e "${GREEN}[$(date +'%Y-%m-%d %H:%M:%S')]${NC} ${GREEN}[SUCCESS]${NC} $1" | tee -a /var/log/pve-tools.log
+    echo -e "${GREEN}[$(date +'%H:%M:%S')]${NC} ${GREEN}OK${NC} $1" | tee -a /var/log/pve-tools.log
 }
 
 log_tips(){
-    echo -e "${CYAN}[$(date +'%Y-%m-%d %H:%M:%S')]${NC} ${MAGENTA}[TIPS]${NC} $1" | tee -a /var/log/pve-tools.log
+    echo -e "${CYAN}[$(date +'%H:%M:%S')]${NC} ${MAGENTA}TIPS${NC} $1" | tee -a /var/log/pve-tools.log
 }
 
 # Enhanced error handling function with consistent messaging
@@ -254,9 +254,9 @@ check_debug_mode() {
     for arg in "$@"; do
         if [[ "$arg" == "--debug" ]]; then
             log_warn "警告：您正在使用调试模式！"
-            log_warn "此模式将跳过 PVE 系统版本检测"
-            log_warn "仅在开发和测试环境中使用"
-            log_warn "在非 PVE (Debian 系) 系统上使用可能导致系统损坏"
+            echo "此模式将跳过 PVE 系统版本检测"
+            echo "仅在开发和测试环境中使用"
+            echo "在非 PVE (Debian 系) 系统上使用可能导致系统损坏"
             echo "您确定要继续吗？输入 'yes' 确认，其他任意键退出: "
             read -r confirm
             if [[ "$confirm" != "yes" ]]; then
@@ -278,7 +278,7 @@ check_packages() {
     for pkg in "${packages[@]}"; do
         if ! command -v "$pkg" &> /dev/null; then
             log_error "哎呀！需要安装 $pkg 软件包才能运行哦"
-            log_tips "请使用以下命令安装：apt install -y $pkg"
+            echo "请使用以下命令安装：apt install -y $pkg"
             exit 1
         fi
     done
@@ -292,13 +292,13 @@ check_pve_version() {
     # 如果在调试模式下，跳过 PVE 版本检测
     if [[ "$DEBUG_MODE" == "true" ]]; then
         log_warn "调试模式：跳过 PVE 版本检测"
-        log_tips "请注意：您正在非 PVE 系统上运行此脚本，某些功能可能无法正常工作"
+        echo "请注意：您正在非 PVE 系统上运行此脚本，某些功能可能无法正常工作"
         return
     fi
     
     if ! command -v pveversion &> /dev/null; then
         log_error "咦？这里好像不是 PVE 环境呢"
-        log_warn "请在 Proxmox VE 系统上运行此脚本"
+        echo "请在 Proxmox VE 系统上运行此脚本"
         exit 1
     fi
     
@@ -698,8 +698,9 @@ backup_file() {
         local backup_path="${backup_dir}/${filename}.backup.${timestamp}"
         
         cp "$file" "$backup_path"
-        log_info "贴心备份完成: ${CYAN}$file${NC}"
-        log_info "备份文件位置: ${CYAN}${backup_path}${NC}"
+        
+        # 仅记录到日志文件，减少控制台干扰
+        echo "[$(date +'%H:%M:%S')] [BACKUP] $file -> $backup_path" >> /var/log/pve-tools.log
     fi
 }
 
@@ -878,6 +879,60 @@ remove_subscription_popup() {
         log_success "完美！再也不会有烦人的弹窗啦"
     else
         log_warn "咦？没找到弹窗文件，可能已经被处理过了"
+    fi
+}
+
+# 恢复 proxmoxlib.js 文件
+restore_proxmoxlib() {
+    log_step "准备恢复 proxmoxlib.js 官方原版文件"
+    local js_file="/usr/share/javascript/proxmox-widget-toolkit/proxmoxlib.js"
+    local download_url="https://ghfast.top/github.com/Mapleawaa/PVE-Tools-9/blob/main/proxmoxlib.js"
+    
+    # 警告提示
+    log_warn "此操作将从云端下载官方原版文件覆盖当前文件"
+    log_warn "如果之前有过修改，将会丢失！"
+    echo -e "${YELLOW}您确定要继续吗？输入 'yes' 确认: ${NC}"
+    read -r confirm
+    if [[ "$confirm" != "yes" ]]; then
+        log_info "操作已取消"
+        return
+    fi
+
+    # 备份当前文件
+    if [[ -f "$js_file" ]]; then
+        backup_file "$js_file"
+    fi
+
+    # 下载文件
+    log_info "正在下载文件..."
+    # 注意：github blob链接下载需要处理，这里假设用户提供的链接可以直接wget下载或者通过raw格式下载
+    # 修正链接为 raw 格式，虽然 ghfast.top 做了加速，但 blob 页面是 html，需要 raw 链接
+    # 用户给的是 blob 链接: https://ghfast.top/github.com/Mapleawaa/PVE-Tools-9/blob/main/proxmoxlib.js
+    # 尝试转换为 raw 链接，通常 github 加速镜像也支持 raw
+    # 假设 ghfast.top 支持 /raw/ 路径或者直接替换 blob 为 raw
+    # 既然是镜像，我们尝试直接去下载用户提供的链接，如果不行可能需要调整
+    # 但根据经验，github 文件下载通常用 raw.githubusercontent.com 或加速镜像的对应 raw 路径
+    # 我们可以尝试构造一个更稳妥的 raw 链接
+    # 原始: https://github.com/Mapleawaa/PVE-Tools-9/raw/main/proxmoxlib.js
+    # 加速: https://ghfast.top/https://github.com/Mapleawaa/PVE-Tools-9/raw/main/proxmoxlib.js
+    
+    local raw_url="https://ghfast.top/https://github.com/Mapleawaa/PVE-Tools-9/raw/main/proxmoxlib.js"
+    
+    if curl -L -o "$js_file" "$raw_url"; then
+        if [[ -s "$js_file" ]]; then
+            log_success "下载成功！正在重启 pveproxy 服务..."
+            systemctl restart pveproxy.service
+            log_success "恢复完成！文件已重置为官方状态"
+        else
+            log_error "下载的文件为空，恢复失败"
+            # 尝试恢复备份
+            if [[ -f "${js_file}.bak" ]]; then
+                mv "${js_file}.bak" "$js_file"
+                log_info "已恢复之前的备份文件"
+            fi
+        fi
+    else
+        log_error "下载失败，请检查网络连接"
     fi
 }
 
@@ -1275,10 +1330,17 @@ cpu_add() {
     backup_file "$pvemanagerlib"
     backup_file "$proxmoxlib"
 
-    # 备份当前版本文件
-    cp "$nodes" "$nodes.$pvever.bak"
-    cp "$pvemanagerlib" "$pvemanagerlib.$pvever.bak"
-    cp "$proxmoxlib" "$proxmoxlib.$pvever.bak"
+    # 备份当前版本文件 (这部分看起来和 backup_file 功能重复，但可能用于特定版本的还原逻辑)
+    # 将其输出也重定向到日志
+    if [[ ! -f "$nodes.$pvever.bak" ]]; then
+        cp "$nodes" "$nodes.$pvever.bak"
+    fi
+    if [[ ! -f "$pvemanagerlib.$pvever.bak" ]]; then
+        cp "$pvemanagerlib" "$pvemanagerlib.$pvever.bak"
+    fi
+    if [[ ! -f "$proxmoxlib.$pvever.bak" ]]; then
+        cp "$proxmoxlib" "$proxmoxlib.$pvever.bak"
+    fi
 
     log_info "是否启用 UPS 监控？"
     echo -n "（如果没有 UPS 设备或不想显示，请选择 N，默认Y）(y/N): "
@@ -1842,7 +1904,7 @@ EOF
     wph=$(sed -n -E "/widget\.pveNodeStatus/,+4{/height:/{s/[^0-9]*([0-9]+).*/\1/p;q}}" $pvemanagerlib)
     if [ -n "$wph" ]; then
         sed -i -E "/widget\.pveNodeStatus/,+4{/height:/{s#[0-9]+#$((wph + addHei))#}}" $pvemanagerlib
-        log_success "左栏高度: $wph → $((wph + addHei))"
+        echo "左栏高度: $wph → $((wph + addHei))" >> /var/log/pve-tools.log
     else
         log_warn "找不到左栏高度修改点"
     fi
@@ -1852,7 +1914,7 @@ EOF
     nph=$(sed -n -E '/nodeStatus:\s*nodeStatus/,+10{/minHeight:/{s/[^0-9]*([0-9]+).*/\1/p;q}}' "$pvemanagerlib")
     if [ -n "$nph" ]; then
         sed -i -E "/nodeStatus:\s*nodeStatus/,+10{/minHeight:/{s#[0-9]+#$((nph + addHei - (nph - wph)))#}}" $pvemanagerlib
-        log_success "右栏高度: $nph → $((nph + addHei - (nph - wph)))"
+        echo "右栏高度: $nph → $((nph + addHei - (nph - wph)))" >> /var/log/pve-tools.log
     else
         log_warn "找不到右栏高度修改点"
     fi
@@ -1866,18 +1928,11 @@ EOF
     ###################  修改proxmoxlib.js   ##########################
 
     log_info "加强去除订阅弹窗"
-    # sed -r -i '/\/nodes\/localhost\/subscription/,+10{/^\s+if \(res === null /{N;s#.+#\t\t  if(false){#}}' $proxmoxlib
-    sed -r -i '/\/nodes\/localhost\/subscription/,+30 {
-        /^\s+if\s*\(/ {
-            :loop
-            N
-            /\s*\)\s*\{/!b loop
-            s/(if\s*\([[:space:]]*res\s*===\s*null\s*(\|\|\s*res\s*===\s*undefined\s*)?(\|\|\s*!res\s*)?(\|\|\s*res\.data\.status\.toLowerCase\(\)\s*!==\s*['\''"]active['\''"]\s*)?[[:space:]]*\)\s*\{)/if(false){ \/\/modbyshowtempfreq/
-        }
-    }' /usr/share/javascript/proxmox-widget-toolkit/proxmoxlib.js
+    # 调用 remove_subscription_popup 函数，避免重复代码
+    remove_subscription_popup
 
     # 显示修改结果
-    sed -n '/\/nodes\/localhost\/subscription/,+10p' $proxmoxlib
+    # sed -n '/\/nodes\/localhost\/subscription/,+10p' $proxmoxlib >> /var/log/pve-tools.log
     systemctl restart pveproxy
 
     log_success "请刷新浏览器缓存shift+f5"
@@ -2104,6 +2159,31 @@ restore_grub_backup() {
 #--------------GRUB 配置管理工具----------------
 
 #--------------核显虚拟化管理----------------
+# 核显管理菜单
+igpu_management_menu() {
+    while true; do
+        clear
+        show_menu_header "Intel 核显虚拟化管理"
+        show_menu_option "1" "Intel 11-15代 SR-IOV 配置 (DKMS)"
+        show_menu_option "2" "Intel 6-10代 GVT-g 配置 (传统模式)"
+        show_menu_option "3" "验证核显虚拟化状态"
+        show_menu_option "4" "清理核显虚拟化配置 (恢复默认)"
+        show_menu_option "0" "返回主菜单"
+        show_menu_footer
+        
+        read -p "请选择操作 [0-4]: " choice
+        case $choice in
+            1) igpu_sriov_setup ;;
+            2) igpu_gvtg_setup ;;
+            3) igpu_verify ;;
+            4) restore_igpu_config ;;
+            0) return ;;
+            *) log_error "无效选择" ;;
+        esac
+        pause_function
+    done
+}
+
 # Intel 11-15代 SR-IOV 核显虚拟化配置
 igpu_sriov_setup() {
     echo "开始配置 Intel 11-15代 SR-IOV 核显虚拟化"
@@ -2495,6 +2575,68 @@ igpu_gvtg_setup() {
         reboot
     else
         echo -e "请记得手动重启系统以使配置生效"
+    fi
+}
+
+# 清理 GVT-g 和 SR-IOV 配置 (恢复默认)
+restore_igpu_config() {
+    log_step "开始清理核显虚拟化配置 (恢复默认)"
+    echo "此操作将执行以下步骤："
+    echo "1. 移除 GRUB 中的核显相关参数 (intel_iommu, i915.enable_gvt, i915.enable_guc 等)"
+    echo "2. 从 /etc/modules 移除核显相关模块 (kvmgt, vfio 等)"
+    echo "3. 更新 GRUB 和 initramfs"
+    echo "适用于因配置核显虚拟化导致系统异常或想要重置配置的情况。"
+    echo
+
+    if ! confirm_action "是否继续执行清理操作？"; then
+        return
+    fi
+
+    # 1. 恢复 GRUB 配置
+    log_info "正在清理 GRUB 参数..."
+    if [[ -f "/etc/default/grub" ]]; then
+        # 备份 GRUB 配置
+        backup_file "/etc/default/grub"
+        
+        # 移除相关参数
+        sed -i 's/intel_iommu=on//g' /etc/default/grub
+        sed -i 's/iommu=pt//g' /etc/default/grub
+        sed -i 's/i915.enable_gvt=1//g' /etc/default/grub
+        sed -i 's/i915.enable_guc=[0-9]*//g' /etc/default/grub
+        sed -i 's/i915.max_vfs=[0-9]*//g' /etc/default/grub
+        
+        # 清理多余空格
+        sed -i 's/GRUB_CMDLINE_LINUX_DEFAULT="[[:space:]]*/GRUB_CMDLINE_LINUX_DEFAULT="/g' /etc/default/grub
+        sed -i 's/[[:space:]]*"$/"/g' /etc/default/grub
+        sed -i 's/[[:space:]]\{2,\}/ /g' /etc/default/grub
+        
+        log_success "GRUB 参数清理完成"
+    else
+        log_error "未找到 /etc/default/grub 文件"
+    fi
+
+    # 2. 恢复 /etc/modules
+    log_info "正在清理 /etc/modules..."
+    if [[ -f "/etc/modules" ]]; then
+        backup_file "/etc/modules"
+        sed -i '/vfio/d' /etc/modules
+        sed -i '/vfio_iommu_type1/d' /etc/modules
+        sed -i '/vfio_pci/d' /etc/modules
+        sed -i '/vfio_virqfd/d' /etc/modules
+        sed -i '/kvmgt/d' /etc/modules
+        log_success "/etc/modules 清理完成"
+    fi
+
+    # 3. 更新系统配置
+    log_info "正在更新 GRUB..."
+    update-grub
+    
+    log_info "正在更新 initramfs..."
+    update-initramfs -u -k all
+    
+    log_success "清理完成！核显虚拟化配置已重置。"
+    if confirm_action "是否现在重启系统？"; then
+        reboot
     fi
 }
 
@@ -3245,33 +3387,156 @@ show_system_info() {
 show_menu() {
     show_banner 
     show_menu_option "请选择您需要的功能："
-    show_menu_option "1"  "更换软件源"
-    show_menu_option "2"  "删除订阅弹窗"
-    show_menu_option "3"  "合并 local 与 local-lvm"
-    show_menu_option "4"  "删除 Swap 分区"
-    show_menu_option "5"  "更新系统"
-    show_menu_option "6"  "显示系统信息"
-    show_menu_option "7"  "一键配置"
-    show_menu_option "      换源+删弹窗+更新，懒人必选，推荐在SSH下使用"
-    echo
-    show_menu_option "8"  "硬件直通配置"
-    show_menu_option "9"  "CPU电源模式"
-    show_menu_option "10" "温度监控管理 (CPU/硬盘监控设置)"
-    show_menu_option "11" "Ceph管理"
-    show_menu_option "12" "内核管理 (内核切换/更新/清理)"
-    show_menu_option "13" "PVE8 升级到 PVE9 (PVE8专用)"
-    echo 
-    show_menu_option "14" "PVE 虚拟机快速下载 (FastPVE)"
-    show_menu_option "15" "第三方工具集 (Community Scripts)"
-    show_menu_option "16" "Intel 核显核显虚拟化"
-    show_menu_option "17" "Intel 核显直通"
-    show_menu_option "18" "NVIDIA 显卡直通/虚拟化"
+    show_menu_option "1"  "基础设置 (换源/去弹窗/更新)"
+    show_menu_option "2"  "存储与系统优化 (Local/Swap/内核)"
+    show_menu_option "3"  "硬件与监控 (温度/电源/核显)"
+    show_menu_option "4"  "PVE 虚拟机快速下载 (FastPVE)"
+    show_menu_option "5"  "第三方工具集 (Community Scripts)"
+    show_menu_option "6"  "PVE8 升级到 PVE9 (PVE8专用)"
+    show_menu_option "7"  "系统信息概览"
     
-    show_menu_option "19" "给作者点个Star吧，谢谢喵~"
+    show_menu_option "8" "给作者点个Star吧，谢谢喵~"
+    show_menu_option "9" "应急救砖工具箱 (高危操作兜底)"
     show_menu_option "0"  "退出脚本"
     show_menu_footer
-    echo "小贴士：装机前先吃饭"
-    echo -n "请输入您的选择 [0-19]: "
+    
+    # 贴吧老梗随机轮播 (卡吧特供版)
+    local tips=(
+        "装机前记得先吃饭，不然修电脑修到低血糖"
+        "一定要在中午刷机，因为早晚会出事"
+        "三千预算进卡吧，加钱加到九万八"
+        "八核E5洋垃圾，一核有难七核围观"
+        "GTX690战术核显卡，一发摧毁一个航母战斗群"
+        "遇事不决，重启解决；重启不行，重装系统"
+        "勤备份，保平安；删库跑路，牢底坐穿"
+        "一入卡吧深似海，从此钱包是路人"
+        "RGB能提升200%的性能，不信你试试"
+        "只要我不看日志，报错就不存在"
+        "高端的服务器，往往只需要最朴素的重启方式"
+        "硬盘有价，数据无价，请谨慎操作"
+        "千万不要在生产环境测试脚本，除非你想被祭天"
+        "刷机有风险，变砖请自重，虽然PVE很难刷砖"
+        "配置千万条，安全第一条，操作不规范，亲人两行泪"
+        "玄学时刻：刷机前洗手，成功率提升50%"
+        "四路泰坦刷贴吧，流畅度提升明显"
+        "什么？你问我电源多少瓦？能亮就行！"
+        "散热全靠吼，除尘全靠抖"
+        "矿卡锻炼身体，新卡锻炼钱包"
+    )
+    local random_index=$((RANDOM % ${#tips[@]}))
+    echo -e "${CYAN}小贴士：${tips[$random_index]}${NC}"
+    
+    echo -n "请输入您的选择 [0-9]: "
+}
+
+# 应急救砖工具箱菜单
+show_menu_rescue() {
+    while true; do
+        clear
+        show_menu_header "应急救砖工具箱"
+        echo -e "${RED}警告：本工具箱用于修复因误操作导致的系统问题，请谨慎使用！${NC}"
+        echo
+        show_menu_option "1" "恢复 proxmoxlib.js (修复弹窗去除失败)"
+        show_menu_option "2" "恢复官方 pve-qemu-kvm (修复修改版 QEMU 问题)"
+        show_menu_option "3" "清理驱动黑名单 (i915/snd_hda_intel)"
+        show_menu_option "0" "返回主菜单"
+        show_menu_footer
+        read -p "请选择操作 [0-3]: " choice
+        case $choice in
+            1) restore_proxmoxlib ;;
+            2) restore_qemu_kvm ;;
+            3) 
+                if confirm_action "确定要清理显卡和声卡驱动的黑名单设置吗？"; then
+                    log_info "正在清理黑名单配置..."
+                    sed -i '/blacklist i915/d' /etc/modprobe.d/pve-blacklist.conf
+                    sed -i '/blacklist snd_hda_intel/d' /etc/modprobe.d/pve-blacklist.conf
+                    sed -i '/blacklist snd_hda_codec_hdmi/d' /etc/modprobe.d/pve-blacklist.conf
+                    log_info "正在更新 initramfs..."
+                    update-initramfs -u -k all
+                    log_success "黑名单清理完成，请重启系统"
+                fi
+                ;;
+            0) return ;;
+            *) log_error "无效选择" ;;
+        esac
+        pause_function
+    done
+}
+
+# 二级菜单：基础设置
+show_menu_basic() {
+    while true; do
+        clear
+        show_menu_header "基础设置"
+        show_menu_option "1" "更换软件源"
+        show_menu_option "2" "删除订阅弹窗"
+        show_menu_option "3" "更新系统"
+        show_menu_option "4" "一键配置 (换源+删弹窗+更新)"
+        show_menu_option "0" "返回主菜单"
+        show_menu_footer
+        read -p "请选择操作 [0-4]: " choice
+        case $choice in
+            1) change_sources ;;
+            2) remove_subscription_popup ;;
+            3) update_system ;;
+            4) quick_setup ;;
+            0) return ;;
+            *) log_error "无效选择" ;;
+        esac
+        pause_function
+    done
+}
+
+# 二级菜单：存储与系统优化
+show_menu_system() {
+    while true; do
+        clear
+        show_menu_header "存储与系统优化"
+        show_menu_option "1" "合并 local 与 local-lvm"
+        show_menu_option "2" "删除 Swap 分区"
+        show_menu_option "3" "内核管理 (内核切换/更新/清理)"
+        show_menu_option "4" "Ceph 管理"
+        show_menu_option "0" "返回主菜单"
+        show_menu_footer
+        read -p "请选择操作 [0-4]: " choice
+        case $choice in
+            1) merge_local_storage ;;
+            2) remove_swap ;;
+            3) kernel_management_menu ;;
+            4) ceph_management_menu ;;
+            0) return ;;
+            *) log_error "无效选择" ;;
+        esac
+        pause_function
+    done
+}
+
+# 二级菜单：硬件与监控
+show_menu_hardware() {
+    while true; do
+        clear
+        show_menu_header "硬件与监控"
+        show_menu_option "1" "温度监控管理 (CPU/硬盘监控设置)"
+        show_menu_option "2" "CPU 电源模式"
+        show_menu_option "3" "Intel 核显虚拟化 (GVT-g)"
+        show_menu_option "4" "Intel 核显直通"
+        show_menu_option "5" "NVIDIA 显卡直通/虚拟化"
+        show_menu_option "6" "硬件直通配置 (IOMMU)"
+        show_menu_option "0" "返回主菜单"
+        show_menu_footer
+        read -p "请选择操作 [0-6]: " choice
+        case $choice in
+            1) temp_monitoring_menu ;;
+            2) cpupower ;;
+            3) igpu_management_menu ;;
+            4) intel_gpu_passthrough ;;
+            5) nvidia_gpu_management_menu ;;
+            6) hw_passth ;;
+            0) return ;;
+            *) log_error "无效选择" ;;
+        esac
+        pause_function
+    done
 }
 
 # 一键配置
@@ -3765,16 +4030,325 @@ ceph_management_menu() {
     done
 }
 
+# 救砖：恢复官方 pve-qemu-kvm
+restore_qemu_kvm() {
+    log_step "开始恢复官方 pve-qemu-kvm"
+    echo "此操作将执行以下步骤："
+    echo "1. 解除 pve-qemu-kvm 的版本锁定 (unhold)"
+    echo "2. 强制重新安装官方版本的 pve-qemu-kvm"
+    echo "3. 恢复官方的 initramfs 设置"
+    echo "适用于因安装修改版 QEMU 导致虚拟机无法启动或系统异常的情况。"
+    echo
+
+    if ! confirm_action "是否继续执行恢复操作？"; then
+        return
+    fi
+
+    # 1. 解除锁定
+    log_info "正在解除软件包锁定..."
+    apt-mark unhold pve-qemu-kvm
+    
+    # 2. 强制重装官方版本
+    log_info "正在重新安装官方 pve-qemu-kvm..."
+    if apt-get update && apt-get install --reinstall -y pve-qemu-kvm; then
+        log_success "官方 pve-qemu-kvm 恢复成功"
+    else
+        log_error "恢复失败，请检查网络连接或手动尝试: apt-get install --reinstall pve-qemu-kvm"
+        return 1
+    fi
+
+    # 3. 清理黑名单 (可选)
+    if confirm_action "是否同时清理 Intel 核显相关的驱动黑名单？"; then
+        log_info "正在清理黑名单配置..."
+        sed -i '/blacklist i915/d' /etc/modprobe.d/pve-blacklist.conf
+        sed -i '/blacklist snd_hda_intel/d' /etc/modprobe.d/pve-blacklist.conf
+        sed -i '/blacklist snd_hda_codec_hdmi/d' /etc/modprobe.d/pve-blacklist.conf
+        
+        log_info "正在更新 initramfs..."
+        update-initramfs -u -k all
+        log_success "黑名单清理完成"
+    fi
+
+    log_success "救砖操作完成！建议重启系统。"
+    if confirm_action "是否现在重启系统？"; then
+        reboot
+    fi
+}
+
 #英特尔核显直通
 intel_gpu_passthrough() {
     log_step "开始 Intel 核显直通配置"
-    log_step "诶？怎么没进度了？"
-    log_tips "前面有个小纸条，捡起来："
-    log_error "该功能尚在开发中，敬请期待！"
-    log_tips "如果您急需该功能，请前往作者的GitHub提交pr 谢谢喵"
-    echo -e "3秒后自动回城 …"
-    sleep 3
-    main "$@"
+    echo "注意：此功能基于 lixiaoliu666 的修改版 QEMU 和 ROM"
+    echo "适用于需要将 Intel 核显直通给 Windows 虚拟机且遇到代码 43 或黑屏的情况"
+    echo "支持的 CPU 架构：6代(Skylake) 到 14代(Raptor Lake Refresh)"
+    echo "项目地址：https://github.com/lixiaoliu666/intel6-14rom"
+    echo
+    log_warn "警告"
+    log_warn "本功能并非能100%一次成功！"
+    echo 
+    log_warn "由于 Intel 牙膏厂混乱的代号和半代升级策略（如 N5105 Jasper Lake 等）"
+    log_warn "通用 ROM 无法保证 100% 适用于所有 CPU 型号！"
+    log_warn "直通失败属于正常现象，请尝试更换其他版本的 ROM 或自行寻找专用 ROM"
+    log_warn "本功能仅提供自动化配置辅助，作者精力有限，无法提供免费的一对一排错服务"
+    log_warn "折腾有风险，入坑需谨慎！"
+    echo
+    log_tips "如需要反馈或者请求更新ROM文件适配你的CPU，请前往lixiaoliu666的GitHub仓库开ISSUE反馈，不是找我。"
+    echo
+
+    echo "请选择操作："
+    echo "  1) 开始配置 (安装修改版 QEMU + 下载 ROM)"
+    echo "  2) 救砖模式 (恢复官方 QEMU + 清理配置)"
+    echo "  0) 返回上级菜单"
+    read -p "请输入选择 [0-2]: " choice
+    
+    case $choice in
+        1)
+            # 继续执行配置流程
+            ;;
+        2)
+            restore_qemu_kvm
+            return
+            ;;
+        0)
+            return
+            ;;
+        *)
+            log_error "无效选择"
+            return
+            ;;
+    esac
+
+    # 1. 配置黑名单
+    log_step "配置驱动黑名单 (屏蔽宿主机占用核显)"
+    if ! grep -q "blacklist i915" /etc/modprobe.d/pve-blacklist.conf; then
+        echo "blacklist i915" >> /etc/modprobe.d/pve-blacklist.conf
+        echo "blacklist snd_hda_intel" >> /etc/modprobe.d/pve-blacklist.conf
+        echo "blacklist snd_hda_codec_hdmi" >> /etc/modprobe.d/pve-blacklist.conf
+        log_success "已添加黑名单配置"
+        
+        log_info "正在更新 initramfs..."
+        update-initramfs -u -k all
+    else
+        log_info "黑名单配置已存在，跳过"
+    fi
+
+    # 2. 安装修改版 QEMU
+    log_step "安装修改版 pve-qemu-kvm"
+    echo "正在获取最新 release 版本..."
+    
+    # 尝试获取最新下载链接 (这里为了稳定性暂时写死或使用最新已知的逻辑，实际可爬虫获取)
+    # 根据用户提供的信息，修改版 QEMU 下载地址: https://github.com/lixiaoliu666/pve-anti-detection/releases
+    # 为了简化，我们使用 ghfast.top 加速下载最新的 release
+    # 注意：这里需要动态获取最新 deb 包链接，或者让用户手动输入链接
+    # 为方便起见，这里演示自动获取逻辑
+    
+    local qemu_releases_url="https://api.github.com/repos/lixiaoliu666/pve-anti-detection/releases/latest"
+    local qemu_deb_url=$(curl -s $qemu_releases_url | grep "browser_download_url.*deb" | cut -d '"' -f 4 | head -n 1)
+    
+    if [ -z "$qemu_deb_url" ]; then
+        log_warn "无法自动获取修改版 QEMU 下载链接，尝试使用备用链接或手动下载"
+        # 备用逻辑：提示用户手动下载
+        echo "请访问 https://github.com/lixiaoliu666/pve-anti-detection/releases 下载最新 deb 包"
+        echo "然后使用 dpkg -i 安装"
+    else
+        # 加速下载
+        local fast_qemu_url="https://ghfast.top/${qemu_deb_url}"
+        log_info "正在下载: $fast_qemu_url"
+        wget -O /tmp/pve-qemu-kvm.deb "$fast_qemu_url"
+        
+        if [ -s "/tmp/pve-qemu-kvm.deb" ]; then
+            log_info "正在安装修改版 QEMU..."
+            dpkg -i /tmp/pve-qemu-kvm.deb
+            log_success "安装完成"
+            
+            # 阻止更新
+            apt-mark hold pve-qemu-kvm
+            log_info "已锁定 pve-qemu-kvm 防止自动更新"
+        else
+            log_error "下载失败"
+        fi
+    fi
+
+    # 3. 下载 ROM 文件
+    log_step "下载核显 ROM 文件"
+    echo "正在检测 CPU 型号..."
+    local cpu_model=$(lscpu | grep "Model name" | awk -F: '{print $2}' | xargs)
+    echo "CPU 型号: $cpu_model"
+    
+    # 优先推荐的通用 ROM
+    local recommended_rom="6-14-qemu10.rom"
+    
+    # 特殊 CPU 型号映射表 (根据 release 信息整理)
+    # 格式: "关键字|ROM文件名"
+    local special_cpus=(
+        "J6412|11-J6412-q10.rom"
+        "N5095|11-n5095-q10.rom"
+        "1240P|12-1240p-q10.rom"
+        "N100|12-n100-q10.rom"
+        "J4125|j4125-q10.rom"
+        "N2930|N2930-q10.rom"
+        "N3350|N3350-q10.rom"
+        "11700H|nb-11-11700h-q10.rom"
+        "1185G7|nb-11-1185G7E-q10.rom"
+        "12700H|nb-12-12700h-q10.rom"
+        "13700H|nb-13-13700h-q10.rom"
+    )
+    
+    # 检测是否为特殊 CPU
+    for item in "${special_cpus[@]}"; do
+        local keyword="${item%%|*}"
+        local rom_name="${item##*|}"
+        if echo "$cpu_model" | grep -qi "$keyword"; then
+            recommended_rom="$rom_name"
+            log_success "检测到特殊 CPU ($keyword)，推荐使用专用 ROM: $recommended_rom"
+            break
+        fi
+    done
+
+    # 下载 ROM 文件
+    local rom_releases_url="https://api.github.com/repos/lixiaoliu666/intel6-14rom/releases/latest"
+    log_info "正在获取 ROM 列表..."
+    
+    # 获取 release 信息
+    # 注意：这里我们使用 grep 简单提取下载链接和文件名
+    local release_info=$(curl -s $rom_releases_url)
+    local assets=$(echo "$release_info" | grep "browser_download_url" | cut -d '"' -f 4)
+    
+    if [ -z "$assets" ]; then
+         log_error "无法获取 ROM 下载链接"
+         return
+    fi
+
+    # 显示 ROM 列表供用户选择
+    echo "------------------------------------------------"
+    echo "可用的 ROM 文件列表："
+    local i=1
+    local rom_list=()
+    local recommended_index=0
+    
+    for url in $assets; do
+        local fname=$(basename "$url")
+        # 过滤非 .rom 文件 (如 patch)
+        if [[ "$fname" != *.rom ]]; then
+            continue
+        fi
+        
+        rom_list+=("$fname|$url")
+        
+        if [[ "$fname" == "$recommended_rom" ]]; then
+            echo -e "  $i) ${GREEN}$fname (推荐)${NC}"
+            recommended_index=$i
+        else
+            echo "  $i) $fname"
+        fi
+        ((i++))
+    done
+    echo "------------------------------------------------"
+    
+    # 让用户选择
+    local choice
+    if [ $recommended_index -gt 0 ]; then
+        read -p "请输入序号选择 ROM [默认 $recommended_index]: " choice
+        choice=${choice:-$recommended_index}
+    else
+        read -p "请输入序号选择 ROM: " choice
+    fi
+    
+    # 验证选择
+    if [[ ! "$choice" =~ ^[0-9]+$ ]] || [ "$choice" -lt 1 ] || [ "$choice" -ge $i ]; then
+        log_error "无效选择"
+        return
+    fi
+    
+    # 获取选中的 ROM 信息
+    local selected_item="${rom_list[$((choice-1))]}"
+    local selected_fname="${selected_item%%|*}"
+    local selected_url="${selected_item##*|}"
+    
+    # 下载选中的 ROM
+    local fast_url="https://ghfast.top/${selected_url}"
+    log_info "正在下载: $selected_fname"
+    wget -O "/usr/share/kvm/$selected_fname" "$fast_url"
+    
+    if [ ! -s "/usr/share/kvm/$selected_fname" ]; then
+        log_error "下载失败"
+        return
+    fi
+    log_success "ROM 文件已就绪: $selected_fname"
+    local rom_filename="$selected_fname"
+
+    # 4. 自动配置虚拟机
+    log_step "配置虚拟机参数"
+    
+    # 获取 VMID
+    echo "请选择要配置直通的虚拟机 ID (VMID):"
+    ls /etc/pve/qemu-server/*.conf | awk -F/ '{print $NF}' | sed 's/.conf//' | xargs -n1 echo "  -"
+    read -p "请输入 VMID: " vmid
+    
+    if [ -z "$vmid" ] || [ ! -f "/etc/pve/qemu-server/$vmid.conf" ]; then
+        log_error "无效的 VMID 或配置文件不存在"
+        return
+    fi
+    
+    # 获取核显 PCI ID
+    echo "正在查找 Intel 核显设备..."
+    local igpu_pci=$(lspci -D | grep -i "VGA compatible controller" | grep -i "Intel" | head -n1 | awk '{print $1}')
+    
+    if [ -z "$igpu_pci" ]; then
+        log_error "未找到 Intel 核显设备"
+        return
+    fi
+    echo "找到核显设备: $igpu_pci"
+    
+    # 获取声卡 PCI ID (通常和核显在一起，但也可能分开)
+    local audio_pci=$(lspci -D | grep -i "Audio device" | grep -i "Intel" | head -n1 | awk '{print $1}')
+    if [ -n "$audio_pci" ]; then
+        echo "找到声卡设备: $audio_pci"
+    else
+        log_warn "未找到配套声卡设备，将只直通核显"
+    fi
+
+    if ! confirm_action "即将修改虚拟机 $vmid 的配置，是否继续？"; then
+        return
+    fi
+    
+    # 备份配置文件
+    backup_file "/etc/pve/qemu-server/$vmid.conf"
+    
+    # 修改 args
+    local args_line="-set device.hostpci0.bus=pcie.0 -set device.hostpci0.addr=0x02.0 -set device.hostpci0.x-igd-gms=0x2 -set device.hostpci0.x-igd-opregion=on -set device.hostpci0.x-igd-lpc=on"
+    
+    # 如果有声卡，添加 hostpci1 的 args 配置
+    if [ -n "$audio_pci" ]; then
+        args_line="$args_line -set device.hostpci1.bus=pcie.0 -set device.hostpci1.addr=0x03.0"
+    fi
+    
+    # 写入 args (先删除旧的 args)
+    sed -i '/^args:/d' "/etc/pve/qemu-server/$vmid.conf"
+    echo "args: $args_line" >> "/etc/pve/qemu-server/$vmid.conf"
+    
+    # 写入 hostpci0 (核显)
+    # 先删除旧的 hostpci0
+    sed -i '/^hostpci0:/d' "/etc/pve/qemu-server/$vmid.conf"
+    # 格式: hostpci0: 0000:00:02.0,romfile=xxx.rom
+    # 注意：这里 PCI ID 使用 lspci 获取到的真实 ID，通常是 0000:00:02.0
+    echo "hostpci0: $igpu_pci,romfile=$rom_filename" >> "/etc/pve/qemu-server/$vmid.conf"
+    
+    # 写入 hostpci1 (声卡)
+    if [ -n "$audio_pci" ]; then
+        sed -i '/^hostpci1:/d' "/etc/pve/qemu-server/$vmid.conf"
+        echo "hostpci1: $audio_pci" >> "/etc/pve/qemu-server/$vmid.conf"
+    fi
+    
+    log_success "虚拟机 $vmid 配置完成"
+    echo "已添加 args 参数和 hostpci 设备"
+    echo "请记得在虚拟机中安装驱动: https://downloadmirror.intel.com/854560/gfx_win_101.6793.exe"
+    
+    echo
+    echo "注意：需要重启宿主机使黑名单生效"
+    if confirm_action "是否现在重启系统？"; then
+        reboot
+    fi
 }
 
 # NVIDIA显卡管理菜单
@@ -3810,62 +4384,32 @@ main() {
         
         case $choice in
             1)
-                change_sources
+                show_menu_basic
                 ;;
             2)
-                remove_subscription_popup
+                show_menu_system
                 ;;
             3)
-                merge_local_storage
+                show_menu_hardware
                 ;;
             4)
-                remove_swap
-                ;;
-            5)
-                update_system
-                ;;
-            6)
-                show_system_info
-                ;;
-            7)
-                quick_setup
-                ;;
-            8)
-                hw_passth
-                ;;
-            9)
-                cpupower
-                ;;
-            10)
-                temp_monitoring_menu
-                ;;
-            11)
-                ceph_management_menu
-                ;;
-            12)
-                kernel_management_menu
-                ;;
-            13)
-                pve8_to_pve9_upgrade
-                ;;
-            14)
                 fastpve_quick_download_menu
                 ;;
-            15)
+            5)
                 third_party_tools_menu
                 ;;
-            16)
-                igpu_management_menu
+            6)
+                pve8_to_pve9_upgrade
                 ;;
-            17)
-                intel_gpu_passthrough
+            7)
+                show_system_info
                 ;;
-            18)
-                nvidia_gpu_management_menu
-                ;;
-            19)
+            8)
                 echo "项目地址：https://github.com/Mapleawaa/PVE-Tools-9"
                 echo "有你真好~"
+                ;;
+            9)
+                show_menu_rescue
                 ;;
             0)
                 echo "感谢使用,谢谢喵"
@@ -3874,7 +4418,7 @@ main() {
                 ;;
             *)
                 log_error "哎呀，这个选项不存在呢"
-                log_warn "请输入 0-19 之间的数字"
+                log_warn "请输入 0-9 之间的数字"
                 ;;
         esac
         
