@@ -853,7 +853,27 @@ remove_subscription_popup() {
     local js_file="/usr/share/javascript/proxmox-widget-toolkit/proxmoxlib.js"
     if [[ -f "$js_file" ]]; then
         backup_file "$js_file"
-        sed -Ezi.bak "s/(Ext.Msg.show\(\{\s+title: gettext\('No valid sub)/void\(\{ \/\/\1/g" "$js_file"
+        
+        # 修复逻辑：
+        # 新版 PVE 的 proxmoxlib.js 在 Ext.Msg.show 调用前有大量换行和空格
+        # 原有的 sed 正则 "Ext.Msg.show\(\{\s+title" 可能因为换行符匹配失败
+        # 新方案：直接将判断条件中的 !== 'active' 改为 == 'active'，从逻辑上短路
+        # 匹配模式：res.data.status.toLowerCase() !== 'active'
+        # 这种方式比替换 Ext.Msg.show 更稳定，且代码侵入性更小
+
+        if grep -q "res.data.status.toLowerCase() !== 'active'" "$js_file"; then
+             sed -i "s/res.data.status.toLowerCase() !== 'active'/res.data.status.toLowerCase() == 'active'/g" "$js_file"
+             log_success "策略A生效：修改了判断逻辑"
+        elif grep -q "Ext.Msg.show({" "$js_file"; then
+             # 备用方案：如果找不到特定判断逻辑，尝试旧方法的宽泛匹配，但增强兼容性
+             # 使用 perl 替代 sed 以更好地支持多行匹配
+             perl -i -0777 -pe "s/(Ext\.Msg\.show\(\{\s+title: gettext\('No valid sub)/void\(\{ \/\/\1/g" "$js_file"
+             log_success "策略B生效：屏蔽了弹窗函数"
+        else
+             log_error "未找到匹配的代码片段，可能文件版本已更新"
+             return 1
+        fi
+
         systemctl restart pveproxy.service
         log_success "完美！再也不会有烦人的弹窗啦"
     else
