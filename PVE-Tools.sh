@@ -6,7 +6,7 @@
 # Auther:Maple 二次修改使用请不要删除此段注释
 
 # 版本信息
-CURRENT_VERSION="6.0.0"
+CURRENT_VERSION="6.0.1"
 VERSION_FILE_URL="https://raw.githubusercontent.com/Mapleawaa/PVE-Tools-9/main/VERSION"
 UPDATE_FILE_URL="https://raw.githubusercontent.com/Mapleawaa/PVE-Tools-9/main/UPDATE"
 
@@ -1428,7 +1428,8 @@ EOF
 
         \$res->{sd$sdi} = \`
             if [ -b $sd ]; then
-                if $hddisk && hdparm -C $sd | grep -iq 'standby'; then
+                # 增加 SAS 盘检测，SAS 盘不使用 hdparm 检测休眠，防止误报
+                if $hddisk && ! smartctl -i $sd | grep -q "Transport protocol:.*SAS" && hdparm -C $sd 2>/dev/null | grep -iq 'standby'; then
                     echo '{"standy": true}'
                 else
                     smartctl $sd -a -j
