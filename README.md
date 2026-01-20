@@ -8,7 +8,7 @@
 [![Proxmox VE](https://img.shields.io/badge/Proxmox-VE%209.0-E57000?logo=proxmox&logoColor=white)](https://www.proxmox.com/)
 [![Debian](https://img.shields.io/badge/Debian-13%20(Trixie)-A81D33?logo=debian&logoColor=white)](https://www.debian.org/)
 
- 🎉  500 Stars 撒花 🎉  Ciallo～(∠・ω<)⌒★
+ 🎉  1K Stars 撒花 🎉 好耶 ！！！🎉  Ciallo～(∠・ω<)⌒★
 ![展示](/images/main-shot.png)
 </div>
 
