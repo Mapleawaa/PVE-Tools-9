@@ -2286,9 +2286,11 @@ igpu_sriov_setup() {
         sed -i 's/i915.enable_gvt=1//g' /etc/default/grub
 
         # 添加 SR-IOV 参数
+        # 针对 6.8+ 内核，必须屏蔽 xe 驱动以防止冲突
+        # 参考: https://github.com/strongtz/i915-sriov-dkms
         sed -i '/^GRUB_CMDLINE_LINUX_DEFAULT=/c\GRUB_CMDLINE_LINUX_DEFAULT="quiet intel_iommu=on iommu=pt i915.enable_guc=3 i915.max_vfs=7 module_blacklist=xe"' /etc/default/grub
 
-        echo -e "✓ GRUB 配置已更新"
+        echo -e "✓ GRUB 配置已更新 (已添加 module_blacklist=xe 以兼容 PVE 9.1)"
     fi
 
     # 更新 GRUB
