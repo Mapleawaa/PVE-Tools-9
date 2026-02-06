@@ -3562,17 +3562,14 @@ show_system_info() {
 show_menu() {
     show_banner 
     show_menu_option "请选择您需要的功能："
-    show_menu_option "1"  "基础设置 (换源/去弹窗/更新)"
-    show_menu_option "2"  "存储与系统优化 (Local/Swap/内核)"
-    show_menu_option "3"  "硬件与监控 (温度/电源/核显)"
-    show_menu_option "4"  "PVE 虚拟机快速下载 (FastPVE)"
-    show_menu_option "5"  "第三方工具集 (Community Scripts)"
-    show_menu_option "6"  "PVE8 升级到 PVE9 (PVE8专用)"
-    show_menu_option "7"  "系统信息概览"
-    
-    show_menu_option "8" "给作者点个Star吧，谢谢喵~"
-    show_menu_option "9" "应急救砖工具箱 (高危操作兜底)"
-    show_menu_option "0"  "退出脚本"
+    show_menu_option "1" "系统优化 (订阅弹窗/温度监控/电源模式)"
+    show_menu_option "2" "软件源与更新 (换源/更新/PVE8→9升级)"
+    show_menu_option "3" "启动与内核 (内核切换/更新/清理)"
+    show_menu_option "4" "直通与显卡 (核显/NVIDIA/硬件直通)"
+    show_menu_option "5" "虚拟机与容器 (FastPVE/第三方工具)"
+    show_menu_option "6" "存储与硬盘 (Local合并/Ceph/休眠)"
+    show_menu_option "7" "工具与关于 (系统信息/救砖/Star)"
+    show_menu_option "0" "退出脚本"
     show_menu_footer
     
     # 贴吧老梗随机轮播 (卡吧特供版)
@@ -3597,6 +3594,71 @@ show_menu() {
         "什么？你问我电源多少瓦？能亮就行！"
         "散热全靠吼，除尘全靠抖"
         "矿卡锻炼身体，新卡锻炼钱包"
+        "图吧捡垃圾，五十包邮解君愁"
+        "开机卡logo？大力出奇迹，拍一下就好了"
+        "超频一时爽，缩缸火葬场"
+        "水冷漏液不要慌，先拍照发个朋友圈"
+        "魔改U配寨板，翻车是日常，点亮算惊喜"
+        "牙膏厂挤牙膏，AMD，YES！"
+        "双路E5开网吧，电表倒转笑哈哈"
+        "捡垃圾要趁早，晚了都是传家宝"
+        "亮机卡才是真传家宝，核显都是异端"
+        "跑分没赢过，体验没输过"
+        "硅脂不要钱，就往死里涂"
+        "装机三大神器：筷子、手电筒、扎带"
+        "先点菜吧，不然跑分的时候没东西吃"
+        "二手东七天机，垃圾佬的圣诞节"
+        "战术核弹已就位，准备烤机！"
+        "散热器用原装？你是AMD原教旨主义者吗？"
+        "RGB风扇装反了？不，那是故意的光污染"
+        "别问，问就是加钱上3090"
+        "电费？什么电费？我都是去星巴克蹭电的"
+        "理论性能翻一倍，电费账单翻两倍"
+        "二手矿龙传三代，人走板卡它还在"
+        "玄学调参：BIOS里随便改几个数，万一稳了呢"
+        "垃圾佬的浪漫：用最少的钱，跑最多的分"
+        "蓝屏？那是微软给你的思考人生的时间"
+        "卡巴基佬烧友，图吧垃圾佬，我们都有光明的未来"
+        "点亮了没？没有。再等等，电容在充电"
+        "这U温度怎么这么高？硅脂还没干呢"
+        "不要怂，就是超，缩了就当是降压降温用"
+        "开机箱侧板，被动散热大师"
+        "论斤买的服务器内存，香是真的香，吵也是真的吵"
+        "别问机箱多少钱，鞋盒赛高，通风又好还便宜"
+        "显卡啸叫？那是高端显卡在唱歌给你听"
+        "多盘位NAS？不，那是捡来的硬盘别墅"
+        "电源必须传家宝，矿龙一响，黄金万两"
+        "降压降频用矿卡，温度和噪音都沉默了"
+        "风冷压i9？只要不开机，它就永远不热"
+        "小黄鱼蹲守口诀：早蹲、晚蹲、凌晨三点继续蹲"
+        "魔改QLC刷SLC缓存，用寿命换速度的赌徒艺术"
+        "开机自检一分钟？那是给你的开机仪式感"
+        "‘又不是不能用’，垃圾佬的终极哲学"
+        "集显战3A，720P最低画质也是风景"
+        "线材理个啥？盖上侧板就是理好了"
+        "洋垃圾平台开机先听交响乐：风扇全速起飞"
+        "捡垃圾三境界：能用，够用，战未来"
+        "‘这价格还要啥自行车’，下单前的自我催眠"
+        "双路主板搭单U，另一半座位留给未来的梦想"
+        "固态硬盘用清零盘，数据坐过山车，刺激"
+        "‘完美下车’——垃圾佬的最高赞誉，通常管三天"
+        "导热垫用久了出油？那是散热器在流泪"
+        "显卡高温？下个冬天的主机暖气就有了"
+        "老至强配RECC内存，电表倒转不是梦"
+        "刷鸡血BIOS，让老U回光返照再战三年"
+        "开机箱用风扇直吹，物理外挂，最为致命"
+        "‘五十包邮解君愁’——垃圾佬的接头暗号"
+        "网吧倒闭盘，写入量？不要在意那些细节"
+        "‘点不亮就当手办’，垃圾佬的事后安慰剂"
+        "用PCIe转接卡上NVMe，老主板焕发第N春"
+        "散热器用钉子固定，垃圾佬的硬核改装"
+        "“这电容鼓了？敲平了接着用”"
+        "二手电源带核弹，宿舍跳闸的罪魁祸首"
+        "用牙膏代替硅脂？极限操作，仅供瞻仰"
+        "“跑个分看看” —— 垃圾佬的赛博晒娃"
+        "机箱里养猫？那是不请自来的蒲公英培育基地"
+        "“又不是不能用”的终点是“确实不能用了”"
+        "图吧真传：一百预算进图吧，学校门口开网吧"
     )
     local random_index=$((RANDOM % ${#tips[@]}))
     echo -e "${CYAN}小贴士：${tips[$random_index]}${NC}"
@@ -3638,22 +3700,22 @@ show_menu_rescue() {
     done
 }
 
-# 二级菜单：基础设置
-show_menu_basic() {
+# 二级菜单：系统优化
+menu_optimization() {
     while true; do
         clear
-        show_menu_header "基础设置"
-        show_menu_option "1" "更换软件源"
-        show_menu_option "2" "删除订阅弹窗"
-        show_menu_option "3" "更新系统"
-        show_menu_option "4" "一键配置 (换源+删弹窗+更新)"
+        show_menu_header "系统优化"
+        show_menu_option "1" "删除订阅弹窗"
+        show_menu_option "2" "温度监控管理 (CPU/硬盘监控设置)"
+        show_menu_option "3" "CPU 电源模式配置"
+        show_menu_option "4" "一键优化 (换源+删弹窗+更新)"
         show_menu_option "0" "返回主菜单"
         show_menu_footer
         read -p "请选择操作 [0-4]: " choice
         case $choice in
-            1) change_sources ;;
-            2) remove_subscription_popup ;;
-            3) update_system ;;
+            1) remove_subscription_popup ;;
+            2) temp_monitoring_menu ;;
+            3) cpupower ;;
             4) quick_setup ;;
             0) return ;;
             *) log_error "无效选择" ;;
@@ -3662,23 +3724,21 @@ show_menu_basic() {
     done
 }
 
-# 二级菜单：存储与系统优化
-show_menu_system() {
+# 二级菜单：软件源与更新
+menu_sources_updates() {
     while true; do
         clear
-        show_menu_header "存储与系统优化"
-        show_menu_option "1" "合并 local 与 local-lvm"
-        show_menu_option "2" "删除 Swap 分区"
-        show_menu_option "3" "内核管理 (内核切换/更新/清理)"
-        show_menu_option "4" "Ceph 管理"
+        show_menu_header "软件源与更新"
+        show_menu_option "1" "更换软件源"
+        show_menu_option "2" "更新系统软件包"
+        show_menu_option "3" "PVE 8.x 升级到 PVE 9.x"
         show_menu_option "0" "返回主菜单"
         show_menu_footer
-        read -p "请选择操作 [0-4]: " choice
+        read -p "请选择操作 [0-3]: " choice
         case $choice in
-            1) merge_local_storage ;;
-            2) remove_swap ;;
-            3) kernel_management_menu ;;
-            4) ceph_management_menu ;;
+            1) change_sources ;;
+            2) update_system ;;
+            3) pve8_to_pve9_upgrade ;;
             0) return ;;
             *) log_error "无效选择" ;;
         esac
@@ -3686,27 +3746,151 @@ show_menu_system() {
     done
 }
 
-# 二级菜单：硬件与监控
-show_menu_hardware() {
+# 二级菜单：启动与内核
+menu_boot_kernel() {
     while true; do
         clear
-        show_menu_header "硬件与监控"
-        show_menu_option "1" "温度监控管理 (CPU/硬盘监控设置)"
-        show_menu_option "2" "CPU 电源模式"
-        show_menu_option "3" "Intel 核显虚拟化 (GVT-g)"
-        show_menu_option "4" "Intel 核显直通"
-        show_menu_option "5" "NVIDIA 显卡直通/虚拟化"
-        show_menu_option "6" "硬件直通配置 (IOMMU)"
+        show_menu_header "启动与内核"
+        show_menu_option "1" "内核管理 (内核切换/更新/清理)"
+        show_menu_option "2" "查看/备份 GRUB 配置"
         show_menu_option "0" "返回主菜单"
         show_menu_footer
-        read -p "请选择操作 [0-6]: " choice
+        read -p "请选择操作 [0-2]: " choice
         case $choice in
-            1) temp_monitoring_menu ;;
-            2) cpupower ;;
-            3) igpu_management_menu ;;
-            4) intel_gpu_passthrough ;;
-            5) nvidia_gpu_management_menu ;;
-            6) hw_passth ;;
+            1) kernel_management_menu ;;
+            2) 
+                while true; do
+                    clear
+                    show_menu_header "GRUB 配置管理"
+                    show_menu_option "1" "查看当前 GRUB 配置"
+                    show_menu_option "2" "备份 GRUB 配置"
+                    show_menu_option "3" "查看备份列表"
+                    show_menu_option "4" "恢复 GRUB 备份"
+                    show_menu_option "0" "返回上级菜单"
+                    show_menu_footer
+                    read -p "请选择操作 [0-4]: " grub_choice
+                    case $grub_choice in
+                        1) show_grub_config; pause_function ;;
+                        2) 
+                            echo "请输入备份备注："
+                            read -p "> " note
+                            backup_grub_with_note "${note:-手动备份}"
+                            pause_function
+                            ;;
+                        3) list_grub_backups; pause_function ;;
+                        4) restore_grub_backup ;;
+                        0) break ;;
+                        *) log_error "无效选择" ;;
+                    esac
+                done
+                ;;
+            0) return ;;
+            *) log_error "无效选择" ;;
+        esac
+        pause_function
+    done
+}
+
+# 二级菜单：直通与显卡
+menu_gpu_passthrough() {
+    while true; do
+        clear
+        show_menu_header "直通与显卡"
+        show_menu_option "1" "Intel 核显虚拟化管理 (SR-IOV/GVT-g)"
+        show_menu_option "2" "Intel 核显直通配置 (修改版 QEMU)"
+        show_menu_option "3" "NVIDIA 显卡直通/虚拟化 (开发中)"
+        show_menu_option "4" "硬件直通一键配置 (IOMMU)"
+        show_menu_option "0" "返回主菜单"
+        show_menu_footer
+        read -p "请选择操作 [0-4]: " choice
+        case $choice in
+            1) igpu_management_menu ;;
+            2) intel_gpu_passthrough ;;
+            3) nvidia_gpu_management_menu ;;
+            4) hw_passth ;;
+            0) return ;;
+            *) log_error "无效选择" ;;
+        esac
+        pause_function
+    done
+}
+
+# 二级菜单：虚拟机与容器
+menu_vm_container() {
+    while true; do
+        clear
+        show_menu_header "虚拟机与容器"
+        show_menu_option "1" "FastPVE - 虚拟机快速下载"
+        show_menu_option "2" "Community Scripts - 第三方工具集"
+        show_menu_option "0" "返回主菜单"
+        show_menu_footer
+        read -p "请选择操作 [0-2]: " choice
+        case $choice in
+            1) fastpve_quick_download_menu ;;
+            2) third_party_tools_menu ;;
+            0) return ;;
+            *) log_error "无效选择" ;;
+        esac
+        pause_function
+    done
+}
+
+# 二级菜单：存储与硬盘
+menu_storage_disk() {
+    while true; do
+        clear
+        show_menu_header "存储与硬盘"
+        show_menu_option "1" "合并 local 与 local-lvm"
+        show_menu_option "2" "Ceph 管理 (安装/卸载/换源)"
+        show_menu_option "3" "硬盘休眠配置 (hdparm)"
+        show_menu_option "4" "删除 Swap 分区"
+        show_menu_option "0" "返回主菜单"
+        show_menu_footer
+        read -p "请选择操作 [0-4]: " choice
+        case $choice in
+            1) merge_local_storage ;;
+            2) ceph_management_menu ;;
+            3) 
+                lsblk -o NAME,MODEL,TYPE,SIZE,MOUNTPOINT | grep disk
+                read -p "请输入要配置休眠的硬盘盘符 (如 sdb, 不含/dev/): " disk_name
+                if [ -b "/dev/$disk_name" ]; then
+                    read -p "请输入休眠时间 (1-255, 120=10分钟, 240=20分钟, 0=禁用): " sleep_val
+                    if [[ "$sleep_val" =~ ^[0-9]+$ ]]; then
+                        hdparm -S "$sleep_val" "/dev/$disk_name"
+                        log_success "配置已应用到 /dev/$disk_name"
+                    else
+                        log_error "无效的时间值"
+                    fi
+                else
+                    log_error "未找到磁盘 /dev/$disk_name"
+                fi
+                ;;
+            4) remove_swap ;;
+            0) return ;;
+            *) log_error "无效选择" ;;
+        esac
+        pause_function
+    done
+}
+
+# 二级菜单：工具与关于
+menu_tools_about() {
+    while true; do
+        clear
+        show_menu_header "工具与关于"
+        show_menu_option "1" "系统信息概览"
+        show_menu_option "2" "应急救砖工具箱"
+        show_menu_option "3" "给作者点个 Star 吧"
+        show_menu_option "0" "返回主菜单"
+        show_menu_footer
+        read -p "请选择操作 [0-3]: " choice
+        case $choice in
+            1) show_system_info ;;
+            2) show_menu_rescue ;;
+            3) 
+                echo -e "${YELLOW}项目地址：https://github.com/Mapleawaa/PVE-Tools-9${NC}"
+                echo -e "${GREEN}您的支持是我更新的最大动力，谢谢喵~${NC}"
+                ;;
             0) return ;;
             *) log_error "无效选择" ;;
         esac
@@ -3877,28 +4061,38 @@ check_update() {
     
     # 比较版本
     if [ "$(printf '%s\n' "$remote_version" "$CURRENT_VERSION" | sort -V | tail -n1)" != "$CURRENT_VERSION" ]; then
-        echo "----------------------------------------------"
-        echo "发现新版本！推荐更新哦，新增功能和修复BUG喵"
-        echo "当前版本: $CURRENT_VERSION"
-        echo "最新版本: $remote_version"
-        echo "更新内容："
+        echo -e "${UI_HEADER}"
+        echo -e "${YELLOW}🚀 发现新版本！推荐更新以获取最新功能和修复喵${NC}"
+        echo -e "----------------------------------------------"
+        echo -e "当前版本: ${WHITE}$CURRENT_VERSION${NC}"
+        echo -e "最新版本: ${GREEN}$remote_version${NC}"
+        echo -e "${BLUE}更新日志：${NC}"
         
-        # 如果获取到了详细的更新日志，则显示详细内容，否则显示从VERSION文件中获取的内容
+        # 如果获取到了详细的更新日志
         if [ -n "$detailed_changelog" ]; then
-            echo "$detailed_changelog"
+            # 使用 sed 提取第一行作为标题，其余行缩进显示
+            local first_line=$(echo "$detailed_changelog" | head -n 1)
+            local rest_lines=$(echo "$detailed_changelog" | tail -n +2)
+            
+            echo -e "  ${CYAN}★ $first_line${NC}"
+            if [ -n "$rest_lines" ]; then
+                echo "$rest_lines" | sed 's/^/    /'
+            fi
         else
             # 格式化显示版本文件中的更新内容
             if [ -n "$version_changelog" ] && [ "$version_changelog" != "$remote_version" ]; then
-                echo "$version_changelog"
+                echo "$version_changelog" | sed 's/^/    /'
             else
-                echo "  - 请查看项目页面获取详细更新内容"
+                echo -e "    ${YELLOW}- 请访问项目页面获取详细更新内容${NC}"
             fi
         fi
         
-        echo "----------------------------------------------"
-        echo "请访问项目页面获取最新版本："
-        echo "https://github.com/Mapleawaa/PVE-Tools-9"
-        echo "按回车键继续..."
+        echo -e "----------------------------------------------"
+        echo -e "${CYAN}官方文档与最新脚本：${NC}"
+        echo -e "🔗 https://s.ow0.icu (推荐)"
+        echo -e "🔗 https://github.com/Mapleawaa/PVE-Tools-9"
+        echo -e "${UI_FOOTER}"
+        echo -e "按 ${GREEN}回车键${NC} 进入主菜单..."
         read -r
     else
         log_success "当前已是最新版本 ($CURRENT_VERSION) 放心用吧"
@@ -4559,32 +4753,25 @@ main() {
         
         case $choice in
             1)
-                show_menu_basic
+                menu_optimization
                 ;;
             2)
-                show_menu_system
+                menu_sources_updates
                 ;;
             3)
-                show_menu_hardware
+                menu_boot_kernel
                 ;;
             4)
-                fastpve_quick_download_menu
+                menu_gpu_passthrough
                 ;;
             5)
-                third_party_tools_menu
+                menu_vm_container
                 ;;
             6)
-                pve8_to_pve9_upgrade
+                menu_storage_disk
                 ;;
             7)
-                show_system_info
-                ;;
-            8)
-                echo "项目地址：https://github.com/Mapleawaa/PVE-Tools-9"
-                echo "有你真好~"
-                ;;
-            9)
-                show_menu_rescue
+                menu_tools_about
                 ;;
             0)
                 echo "感谢使用,谢谢喵"
@@ -4593,7 +4780,7 @@ main() {
                 ;;
             *)
                 log_error "哎呀，这个选项不存在呢"
-                log_warn "请输入 0-9 之间的数字"
+                log_warn "请输入 0-7 之间的数字"
                 ;;
         esac
         

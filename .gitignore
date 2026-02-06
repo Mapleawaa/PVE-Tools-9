@@ -11,8 +11,8 @@ out/
 .temp/
 .vitepress/dist/
 .vitepress/cache/
-**/ .vitepress/dist/
-**/ .vitepress/cache/
+**/.vitepress/dist/
+**/.vitepress/cache/
 
 # Ignore system files
 .DS_Store
