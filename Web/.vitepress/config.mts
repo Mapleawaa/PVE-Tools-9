@@ -37,11 +37,14 @@ export default defineConfig({
         ]
       },
       {
-        text: '教程',
+        text: '高级教程 (博客)',
         items: [
           { text: '教程总览', link: '/advanced/' },
           { text: 'Intel 核显直通', link: '/advanced/gpu-passthrough' },
-          { text: '核显虚拟化 SR-IOV', link: '/advanced/gpu-virtualization' }
+          { text: '核显虚拟化 SR-IOV', link: '/advanced/gpu-virtualization' },
+          { text: 'CPU 性能调优', link: '/advanced/cpu-optimization' },
+          { text: 'PVE 8 升级 9', link: '/advanced/pve-upgrade' },
+          { text: '存储管理与休眠', link: '/advanced/storage-management' }
         ]
       }
     ],
