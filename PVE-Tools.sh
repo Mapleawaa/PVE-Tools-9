@@ -115,6 +115,167 @@ confirm_action() {
     fi
 }
 
+# ============ 配置文件安全管理函数 ============
+
+# 备份文件到 /var/backups/pve-tools/
+backup_file() {
+    local file_path="$1"
+    local backup_dir="/var/backups/pve-tools"
+
+    if [[ ! -f "$file_path" ]]; then
+        log_warn "文件不存在，跳过备份: $file_path"
+        return 1
+    fi
+
+    # 创建备份目录
+    mkdir -p "$backup_dir"
+
+    # 生成带时间戳的备份文件名
+    local filename=$(basename "$file_path")
+    local timestamp=$(date +%Y%m%d_%H%M%S)
+    local backup_path="${backup_dir}/${filename}.${timestamp}.bak"
+
+    # 执行备份
+    if cp -a "$file_path" "$backup_path"; then
+        log_success "文件已备份: $backup_path"
+        return 0
+    else
+        log_error "备份失败: $file_path"
+        return 1
+    fi
+}
+
+# 写入配置块（带标记）
+# 用法: apply_block <file> <marker> <content>
+apply_block() {
+    local file_path="$1"
+    local marker="$2"
+    local content="$3"
+
+    if [[ -z "$file_path" || -z "$marker" ]]; then
+        log_error "apply_block: 缺少必需参数"
+        return 1
+    fi
+
+    # 先备份文件
+    backup_file "$file_path"
+
+    # 移除旧的配置块（如果存在）
+    remove_block "$file_path" "$marker"
+
+    # 写入新的配置块
+    {
+        echo "# PVE-TOOLS BEGIN $marker"
+        echo "$content"
+        echo "# PVE-TOOLS END $marker"
+    } >> "$file_path"
+
+    log_success "配置块已写入: $file_path [$marker]"
+}
+
+# 删除配置块（精确匹配标记）
+# 用法: remove_block <file> <marker>
+remove_block() {
+    local file_path="$1"
+    local marker="$2"
+
+    if [[ -z "$file_path" || -z "$marker" ]]; then
+        log_error "remove_block: 缺少必需参数"
+        return 1
+    fi
+
+    if [[ ! -f "$file_path" ]]; then
+        log_warn "文件不存在，跳过删除: $file_path"
+        return 0
+    fi
+
+    # 使用 sed 删除标记之间的所有内容（包括标记行）
+    sed -i "/# PVE-TOOLS BEGIN $marker/,/# PVE-TOOLS END $marker/d" "$file_path"
+
+    log_info "配置块已删除: $file_path [$marker]"
+}
+
+# ============ 配置文件安全管理函数结束 ============
+
+# ============ GRUB 参数幂等管理函数 ============
+
+# 添加 GRUB 参数（幂等操作，不会重复添加）
+# 用法: grub_add_param "intel_iommu=on"
+grub_add_param() {
+    local param="$1"
+
+    if [[ -z "$param" ]]; then
+        log_error "grub_add_param: 缺少参数"
+        return 1
+    fi
+
+    # 备份 GRUB 配置
+    backup_file "/etc/default/grub"
+
+    # 读取当前的 GRUB_CMDLINE_LINUX_DEFAULT 值
+    local current_line=$(grep '^GRUB_CMDLINE_LINUX_DEFAULT=' /etc/default/grub)
+
+    if [[ -z "$current_line" ]]; then
+        log_error "未找到 GRUB_CMDLINE_LINUX_DEFAULT 配置"
+        return 1
+    fi
+
+    # 提取引号内的参数
+    local current_params=$(echo "$current_line" | sed 's/^GRUB_CMDLINE_LINUX_DEFAULT="\(.*\)"$/\1/')
+
+    # 检查参数是否已存在（支持 key=value 和 key 两种格式）
+    local param_key=$(echo "$param" | cut -d'=' -f1)
+
+    if echo "$current_params" | grep -qw "$param_key"; then
+        # 参数已存在，先删除旧值
+        current_params=$(echo "$current_params" | sed "s/\b${param_key}[^ ]*\b//g")
+    fi
+
+    # 添加新参数（去除多余空格）
+    local new_params=$(echo "$current_params $param" | sed 's/  */ /g' | sed 's/^ //;s/ $//')
+
+    # 写回配置文件
+    sed -i "s|^GRUB_CMDLINE_LINUX_DEFAULT=.*|GRUB_CMDLINE_LINUX_DEFAULT=\"$new_params\"|" /etc/default/grub
+
+    log_success "GRUB 参数已添加: $param"
+}
+
+# 删除 GRUB 参数（精确删除，不影响其他参数）
+# 用法: grub_remove_param "intel_iommu=on"
+grub_remove_param() {
+    local param="$1"
+
+    if [[ -z "$param" ]]; then
+        log_error "grub_remove_param: 缺少参数"
+        return 1
+    fi
+
+    # 备份 GRUB 配置
+    backup_file "/etc/default/grub"
+
+    # 读取当前的 GRUB_CMDLINE_LINUX_DEFAULT 值
+    local current_line=$(grep '^GRUB_CMDLINE_LINUX_DEFAULT=' /etc/default/grub)
+
+    if [[ -z "$current_line" ]]; then
+        log_error "未找到 GRUB_CMDLINE_LINUX_DEFAULT 配置"
+        return 1
+    fi
+
+    # 提取引号内的参数
+    local current_params=$(echo "$current_line" | sed 's/^GRUB_CMDLINE_LINUX_DEFAULT="\(.*\)"$/\1/')
+
+    # 删除指定参数（支持精确匹配和前缀匹配）
+    local param_key=$(echo "$param" | cut -d'=' -f1)
+    local new_params=$(echo "$current_params" | sed "s/\b${param_key}[^ ]*\b//g" | sed 's/  */ /g' | sed 's/^ //;s/ $//')
+
+    # 写回配置文件
+    sed -i "s|^GRUB_CMDLINE_LINUX_DEFAULT=.*|GRUB_CMDLINE_LINUX_DEFAULT=\"$new_params\"|" /etc/default/grub
+
+    log_success "GRUB 参数已删除: $param"
+}
+
+# ============ GRUB 参数幂等管理函数结束 ============
+
 # 进度指示函数
 show_progress() {
     local message="$1"
@@ -235,7 +396,7 @@ EOF
     echo "PVE-Tools-9 一键脚本"
     echo "让每个人都能体验虚拟化技术的的便利。"
     echo "作者: Maple & Claude 4.5 & 提交PR的你们"
-    echo "当前版本: $CURRENT_VERSION | 最新版本: $remote_version"
+    echo "当前版本: $CURRENT_VERSION | 最新版本: ${remote_version:-"未检测"}"
     echo "═════════════════════════════════════════════════"
 }
 
@@ -482,8 +643,9 @@ set_default_kernel() {
     log_info "设置默认启动内核: ${GREEN}$kernel_version${NC}"
     
     # 检查内核是否存在
-    if ! [[ -d "/boot/initrd.img-$kernel_version" || -d "/boot/vmlinuz-$kernel_version" ]]; then
+    if ! [[ -f "/boot/initrd.img-$kernel_version" && -f "/boot/vmlinuz-$kernel_version" ]]; then
         log_error "内核文件不存在，请先安装该内核"
+        log_error "缺失文件: /boot/vmlinuz-$kernel_version 或 /boot/initrd.img-$kernel_version"
         return 1
     fi
     
@@ -1061,15 +1223,15 @@ kvmgt
 EOF
         fi
         
-        if [ ! -f "/etc/modprobe.d/blacklist.conf" ];then
-            echo "blacklist snd_hda_intel" >> /etc/modprobe.d/blacklist.conf 
-            echo "blacklist snd_hda_codec_hdmi" >> /etc/modprobe.d/blacklist.conf 
-            echo "blacklist i915" >> /etc/modprobe.d/blacklist.conf 
-        fi
+        # 使用安全的配置块管理
+        blacklist_content="blacklist snd_hda_intel
+blacklist snd_hda_codec_hdmi
+blacklist i915"
+        apply_block "/etc/modprobe.d/blacklist.conf" "HARDWARE_PASSTHROUGH" "$blacklist_content"
 
-        if [ ! -f "/etc/modprobe.d/vfio.conf" ];then
-            echo "options vfio-pci ids=8086:3185" >> /etc/modprobe.d/vfio.conf
-        fi
+        # 使用安全的配置块管理
+        vfio_content="options vfio-pci ids=8086:3185"
+        apply_block "/etc/modprobe.d/vfio.conf" "HARDWARE_PASSTHROUGH" "$vfio_content"
         
         log_success "开启设置后需要重启系统，请准备就绪后重启宿主机"
         log_tips "重启后才可以应用对内核引导的修改哦！命令是 reboot"
@@ -1100,8 +1262,9 @@ disable_pass() {
         {
             sed -i 's/ '$iommu'//g' /etc/default/grub
             sed -i '/vfio/d' /etc/modules
-            rm -rf /etc/modprobe.d/blacklist.conf
-            rm -rf /etc/modprobe.d/vfio.conf
+            # 使用安全的配置块删除，而不是直接删除整个文件
+            remove_block "/etc/modprobe.d/blacklist.conf" "HARDWARE_PASSTHROUGH"
+            remove_block "/etc/modprobe.d/vfio.conf" "HARDWARE_PASSTHROUGH"
             sleep 1
         }
         log_success "关闭设置后需要重启系统，请准备就绪后重启宿主机。"
@@ -1225,7 +1388,8 @@ cpupower_add() {
     EXISTING_CRONTAB=$(crontab -l 2>/dev/null)
     if [[ -n "$EXISTING_CRONTAB" ]]; then
         TEMP_CRONTAB_FILE=$(mktemp)
-        echo "$EXISTING_CRONTAB" | grep -v "@reboot sleep 10 && echo*" > "$TEMP_CRONTAB_FILE"
+        # 使用 -F 精确匹配标记，避免误删用户的其他任务
+        echo "$EXISTING_CRONTAB" | grep -vF "#CPU Power Mode" > "$TEMP_CRONTAB_FILE"
         crontab "$TEMP_CRONTAB_FILE"
         rm "$TEMP_CRONTAB_FILE"
     fi
@@ -1244,7 +1408,8 @@ cpupower_del() {
     EXISTING_CRONTAB=$(crontab -l 2>/dev/null)
     if [[ -n "$EXISTING_CRONTAB" ]]; then
         TEMP_CRONTAB_FILE=$(mktemp)
-        echo "$EXISTING_CRONTAB" | grep -v "@reboot sleep 10 && echo*" > "$TEMP_CRONTAB_FILE"
+        # 使用 -F 精确匹配标记，避免误删用户的其他任务
+        echo "$EXISTING_CRONTAB" | grep -vF "#CPU Power Mode" > "$TEMP_CRONTAB_FILE"
         crontab "$TEMP_CRONTAB_FILE"
         rm "$TEMP_CRONTAB_FILE"
     fi
@@ -2161,7 +2326,8 @@ restore_grub_backup() {
 
 #--------------核显虚拟化管理----------------
 # 核显管理菜单
-igpu_management_menu() {
+# 简化版核显虚拟化菜单（保留用于兼容性）
+igpu_management_menu_simple() {
     while true; do
         clear
         show_menu_header "Intel 核显虚拟化管理"
@@ -2171,7 +2337,7 @@ igpu_management_menu() {
         show_menu_option "4" "清理核显虚拟化配置 (恢复默认)"
         show_menu_option "0" "返回主菜单"
         show_menu_footer
-        
+
         read -p "请选择操作 [0-4]: " choice
         case $choice in
             1) igpu_sriov_setup ;;
@@ -2278,20 +2444,23 @@ igpu_sriov_setup() {
     echo "配置 GRUB 引导参数..."
     backup_file "/etc/default/grub"
 
-    # 检查是否已配置
-    if grep -q "i915.enable_guc=3.*i915.max_vfs=7" /etc/default/grub; then
-        echo -e "GRUB 已配置 SR-IOV 参数，跳过修改"
-    else
-        # 移除旧的配置（如果有 GVT-g 配置）
-        sed -i 's/i915.enable_gvt=1//g' /etc/default/grub
+    # 使用幂等的 GRUB 参数管理函数
+    echo "配置 GRUB 参数..."
 
-        # 添加 SR-IOV 参数
-        # 针对 6.8+ 内核，必须屏蔽 xe 驱动以防止冲突
-        # 参考: https://github.com/strongtz/i915-sriov-dkms
-        sed -i '/^GRUB_CMDLINE_LINUX_DEFAULT=/c\GRUB_CMDLINE_LINUX_DEFAULT="quiet intel_iommu=on iommu=pt i915.enable_guc=3 i915.max_vfs=7 module_blacklist=xe"' /etc/default/grub
+    # 移除旧的 GVT-g 配置（如果有）
+    grub_remove_param "i915.enable_gvt"
+    grub_remove_param "pcie_acs_override"
 
-        echo -e "✓ GRUB 配置已更新 (已添加 module_blacklist=xe 以兼容 PVE 9.1)"
-    fi
+    # 添加 SR-IOV 参数（幂等操作，不会重复添加）
+    # 针对 6.8+ 内核，必须屏蔽 xe 驱动以防止冲突
+    # 参考: https://github.com/strongtz/i915-sriov-dkms
+    grub_add_param "intel_iommu=on"
+    grub_add_param "iommu=pt"
+    grub_add_param "i915.enable_guc=3"
+    grub_add_param "i915.max_vfs=7"
+    grub_add_param "module_blacklist=xe"
+
+    echo -e "✓ GRUB 配置已更新 (已添加 module_blacklist=xe 以兼容 PVE 9.1)"
 
     # 更新 GRUB
     echo "更新 GRUB..."
@@ -2510,18 +2679,21 @@ igpu_gvtg_setup() {
     echo "配置 GRUB 引导参数..."
     backup_file "/etc/default/grub"
 
-    # 检查是否已配置
-    if grep -q "i915.enable_gvt=1" /etc/default/grub; then
-        echo -e "GRUB 已配置 GVT-g 参数，跳过修改"
-    else
-        # 移除旧的 SR-IOV 配置（如果有）
-        sed -i 's/i915.enable_guc=3//g; s/i915.max_vfs=7//g; s/module_blacklist=xe//g' /etc/default/grub
+    # 使用幂等的 GRUB 参数管理函数
+    echo "配置 GRUB 参数..."
 
-        # 添加 GVT-g 参数
-        sed -i '/^GRUB_CMDLINE_LINUX_DEFAULT=/c\GRUB_CMDLINE_LINUX_DEFAULT="quiet intel_iommu=on iommu=pt i915.enable_gvt=1 pcie_acs_override=downstream,multifunction"' /etc/default/grub
+    # 移除旧的 SR-IOV 配置（如果有）
+    grub_remove_param "i915.enable_guc"
+    grub_remove_param "i915.max_vfs"
+    grub_remove_param "module_blacklist"
 
-        echo -e "✓ GRUB 配置已更新"
-    fi
+    # 添加 GVT-g 参数（幂等操作，不会重复添加）
+    grub_add_param "intel_iommu=on"
+    grub_add_param "iommu=pt"
+    grub_add_param "i915.enable_gvt=1"
+    grub_add_param "pcie_acs_override=downstream,multifunction"
+
+    echo -e "✓ GRUB 配置已更新"
 
     # 更新 GRUB
     echo "更新 GRUB..."
