@@ -3,7 +3,7 @@
 <div align="center">
 你的下一个简单好用，简洁易用的 PVE9 配置脚本
 
-[文档](https://pve.u3u.icu/)|[更新日志](https://pve.u3u.icu/update.html)|[疑难解答](https://pve.u3u.icu/faq.html)
+[文档](https://s.ow0.icu)|[更新日志](https://s.ow0.icu/update)|[疑难解答](https://s.ow0.icu/faq)
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Shell Script](https://img.shields.io/badge/Shell-Script-4EAA25?logo=gnu-bash&logoColor=white)](https://www.gnu.org/software/bash/)
@@ -21,11 +21,11 @@ bash <(curl -sSL https://pve.u3u.icu/PVE-Tools.sh)
 ```
 #### 中国大陆网络
 ```
-bash <(curl -sSL https://ghfast.top/github.com/Mapleawaa/PVE-Tools-9/blob/main/PVE-Tools.sh)
+bash <(curl -sSL https://ghfast.top/raw.githubusercontent.com/Mapleawaa/PVE-Tools-9/main/PVE-Tools.sh)
 ```
 #### 国际网络
 ```
-bash <(curl -sSL https://raw.githubusercontent.com/Mapleawaa/PVE-Tools-9/refs/heads/main/PVE-Tools.sh)
+bash <(curl -sSL https://raw.githubusercontent.com/Mapleawaa/PVE-Tools-9/main/PVE-Tools.sh)
 ```
 > [!WARNING]
 > 请不要多次拉取文件，无论镜像站还是源站。否则会被服务器拒绝导致影响心情。
@@ -78,10 +78,9 @@ chmod +x PVE-Tools.sh
 # 3. 运行脚本
 sudo ./PVE-Tools.sh
 ```
-## 📁 文档知识库 / 
-主站 [国内网络](https://docs.302200.xyz/pve) | [国际网络](https://pages.dev)
-
-建设中 
+## 📁 文档知识库
+官方文档：[https://s.ow0.icu](https://s.ow0.icu) (推荐)
+备用地址：[https://docs.302200.xyz/pve](https://docs.302200.xyz/pve)
 
 ---
 

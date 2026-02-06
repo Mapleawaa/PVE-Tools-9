@@ -30,8 +30,11 @@ features:
   - title: 智能硬盘管理
     details: 支持硬盘直通、LVM 管理、分区挂载等，操作简单直观。
     icon: hard-drive
-  - title: More Future
-    details: 等你探寻
+  - title: 定时开关机
+    details: 支持 VM 和容器的定时任务管理，基于 cron.d 幂等配置，安全可靠。
+    icon: clock
+  - title: 更多功能
+    details: 包含内核管理、硬件直通一键配置、UPS 监控等丰富工具。
     icon: dots-horizontal
 ---
 
