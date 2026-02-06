@@ -13,6 +13,9 @@ hero:
     - theme: brand
       text: 立即开始
       link: /guide
+    - theme: brand
+      text: 更新日志
+      link: /update
     - theme: alt
       text: 在 GitHub 查看
       link: https://github.com/Mapleawaa/PVE-Tools-9

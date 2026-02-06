@@ -1,0 +1,940 @@
+cfc31c313127a77879573988ee2cdebe95a34687|2025-09-01|MareCyra|Initial commit
+Initial commit
+A	LICENSE
+
+4039d9236f404b75eddbe3459c8cd6609dc46487|2025-09-01|MareCyra|Create README.md
+Create README.md
+A	README.md
+
+bc3be32018edac817de361a841a63e450803ff31|2025-09-01|MareCyra|Update README.md
+Update README.md
+M	README.md
+
+fb50ef572900efb7d7e8448ab36bf20f53e4fbe4|2025-09-01|MareCyra|Update README.md
+Update README.md
+M	README.md
+
+3ac67ebdb7f7142efdd817076ddd86cbdcc2cfa9|2025-09-01|MareCyra|Update README.md
+Update README.md
+M	README.md
+
+add1ee6a441cb306fe8cff57522ccfd4e86501e9|2025-09-01|MareCyra|Create PVE-Tools.sh
+Create PVE-Tools.sh
+A	PVE-Tools.sh
+
+ca42bdf49c6e872d2b7d80f013b008ea9b18e143|2025-09-01|MareCyra|fix: 修复了遗漏特别鸣谢问题
+fix: 修复了遗漏特别鸣谢问题
+M	README.md
+
+46d48562922258d2b6ad07adcb26adf2403be6bd|2025-09-01|MareCyra|fix: 修复小问题
+fix: 修复小问题
+M	PVE-Tools.sh
+
+ba9ccbd8b66209465990e8fb733e68eed2bab0fe|2025-09-02|MareCyra|fix: 字符画
+fix: 字符画
+M	README.md
+
+a6022ed91fc024ab8d32c2218e2a7caac82b67c4|2025-09-02|MareCyra|Update README.md
+Update README.md
+M	README.md
+
+c387ce965028e90cc0ac32cd0b7b80092e72be63|2025-09-09|Mapleawaa|feat: 新增新功能 issue#2 issue#3
+feat: 新增新功能 issue#2 issue#3
+
+    新增硬件直通配置（开启/关闭）
+    新增 CPU 电源模式管理（performance、powersave 等）
+    新增 CPU 与硬盘温度监控
+    新增 Ceph 存储支持（ceph-squid、ceph-quincy）
+    新增 Ceph 卸载功能
+    更新 README.md，补充新功能说明
+    扩展主菜单，新增选项 8–14
+
+M	PVE-Tools.sh
+M	README.md
+A	UpdateLogs.md
+
+da3316e9b8fc245b86aef5283bfd0d16a99b95cc|2025-09-09|Mapleawaa|feat: 新增了调试和跳过PVE检测的功能    1. 添加了调试模式支持    2. 使用 --debug 标志跳过 PVE 检测
+feat: 新增了调试和跳过PVE检测的功能
+   1. 添加了调试模式支持
+   2. 使用 --debug 标志跳过 PVE 检测
+
+M	PVE-Tools.sh
+M	README.md
+
+e0e83091858b1de6699856e3e69eb81d09e47cb4|2025-09-09|Mapleawaa|feat: 去除无法显示的Emoji，修复逻辑问题，修复自动化提示
+feat: 去除无法显示的Emoji，修复逻辑问题，修复自动化提示
+
+M	PVE-Tools.sh
+M	README.md
+
+0a350648b419791870fd7e40a0018c0bb6ea75f4|2025-09-09|Mapleawaa|refactor: 优化日志函数输出格式,删除了emoji
+refactor: 优化日志函数输出格式,删除了emoji
+
+M	PVE-Tools.sh
+
+2ba24f8e8b2065799ae4a06153c7b08b382aef3e|2025-09-09|Mapleawaa|docs: 更新README文档
+docs: 更新README文档
+
+更新中英文README文件内容，保持文档同步更新。
+
+A	README-EN.md
+M	README.md
+
+ffde0d3c29fedf34e0ddf644acc0339387f66d1e|2025-09-09|Mapleawaa|docs: 更新README添加快速开始指南和提交历史徽章
+docs: 更新README添加快速开始指南和提交历史徽章
+
+在README中新增快速开始命令区块，并添加GitHub提交历史徽章链接。同时优化了部分标题格式。
+
+M	README-EN.md
+M	README.md
+
+dfb80476eb8097c7126a83da652b63c3c089928c|2025-09-11|Mapleawaa|fix: 移除遗漏的emoji
+fix: 移除遗漏的emoji
+
+M	PVE-Tools.sh
+
+e28b31383a69994afedcac87aad6e0f04bb80da5|2025-09-15|Mapleawaa|feat(内核管理): 根据 issue[#7](https://github.com/Mapleawaa/PVE-Tools-9/issues/7) 添加内核切换功能和相关文档
+feat(内核管理): 根据 issue[#7](https://github.com/Mapleawaa/PVE-Tools-9/issues/7) 添加内核切换功能和相关文档
+
+A	.gitignore
+M	PVE-Tools.sh
+A	"PVE-Tools.sh_\345\206\205\346\240\270\345\210\207\346\215\242\345\212\237\350\203\275.md"
+M	README.md
+
+07f147fd798dd9ca402c8735d0a721c4a54b5dfb|2025-09-15|Mapleawaa|docs: ❤️ 感谢屏幕面前的你 。 修改了文档
+docs: ❤️ 感谢屏幕面前的你 。 修改了文档
+
+D	"PVE-Tools.sh_\345\206\205\346\240\270\345\210\207\346\215\242\345\212\237\350\203\275.md"
+M	README-EN.md
+M	README.md
+
+8a64f4f9e6a5352e6843551768a06efe905aa7db|2025-09-15|Mapleawaa|docs: 在README中添加展示图片
+docs: 在README中添加展示图片
+
+M	README-EN.md
+M	README.md
+A	image.png
+
+39cada7eb9d0e79e6d0560e3c61e1e59f13d057b|2025-09-19|Mapleawaa|feat: 添加镜像源选择功能和版本检查
+feat: 添加镜像源选择功能和版本检查
+
+实现镜像源选择菜单和自动版本检查功能，增强软件源配置灵活性
+
+M	PVE-Tools.sh
+A	VERSION
+
+af17838157f8700e906175f263f13b695eec5915|2025-09-19|Mapleawaa|fix: 修复了镜像源备份文件的存放位置会被误识别警告的问题 `Notice: Ignoring file 'debian.sources.backup.20250919_170547' in directory '/etc/apt/sources.list.d/' as it has an invalid filename extension`
+fix: 修复了镜像源备份文件的存放位置会被误识别警告的问题
+`Notice: Ignoring file 'debian.sources.backup.20250919_170547' in directory '/etc/apt/sources.list.d/' as it has an invalid filename extension`
+
+M	PVE-Tools.sh
+
+6e1707009f1c10212f0fff7ae65a5bbb60512c24|2025-09-19|CyreneNight|删除不应该存在的更新日志文件
+删除不应该存在的更新日志文件
+D	UpdateLogs.md
+
+d8a047c1ed1f5602559ac6e72accc4ee21a0c84d|2025-09-19|Mapleawaa|chore: 更新版本号文件
+chore: 更新版本号文件
+
+更新项目版本号文件以反映最新版本信息。
+
+M	VERSION
+
+d691bb1cf38da7277ee92c6ccb4f215daae8d00e|2025-09-19|Mapleawaa|docs(README): 添加警告提示信息
+docs(README): 添加警告提示信息
+
+在README文件中添加关于多次拉取文件的警告提示框，提醒用户避免被服务器拒绝。
+
+M	README-EN.md
+M	README.md
+
+c19525f2c361f4172a036a87c3cc8ce9cf648838|2025-09-19|Mapleawaa|feat(update): 为版本检查添加网络检测和跳过功能
+feat(update): 为版本检查添加网络检测和跳过功能
+
+M	PVE-Tools.sh
+M	VERSION
+
+bbb6d049baaaeb327d1dfd75c27f48df3d029d1f|2025-09-19|Mapleawaa|feat(ui): 在横幅中添加版本信息显示
+feat(ui): 在横幅中添加版本信息显示
+
+M	PVE-Tools.sh
+
+0ba764b8a930fe0144341a5f3902cd12f73eb843|2025-09-19|Mapleawaa|style: 优化脚本输出文案和格式
+style: 优化脚本输出文案和格式
+
+调整日志和提示信息的文案表达，删除冗余注释，增加版本检查时的下载提示和更新指引。
+
+M	PVE-Tools.sh
+
+28238b37e6b2a49a25b229ce514ee5bdc0593113|2025-09-19|Mapleawaa|chore: 更新展示截图
+chore: 更新展示截图
+
+M	image.png
+
+bae6f745829532b7e324e535f3229558bbb12fcb|2025-09-20|Mapleawaa|fix: 修复PVE镜像源的配置，移除重复的路径拼接，更新推送新版本
+fix: 修复PVE镜像源的配置，移除重复的路径拼接，更新推送新版本
+
+M	PVE-Tools.sh
+M	VERSION
+
+78be1be05dfafd8cdbc96947cede6ecc68b2453e|2025-09-20|Mapleawaa|fix: 修复了错误的版本信息,导致无法识别最新版本的问题
+fix: 修复了错误的版本信息,导致无法识别最新版本的问题
+
+R100	README-EN.md	Docs/README-EN.md
+M	PVE-Tools.sh
+M	README.md
+M	VERSION
+R100	image.png	images/image.png
+
+6a6a6d4b83a53ccf2c07db8bbe42e8979d6e4b13|2025-09-22|Mapleawaa|fix: 修复了版本检查死循环的问题,请及时更新
+fix: 修复了版本检查死循环的问题,请及时更新
+
+M	PVE-Tools.sh
+
+0939adc1b6c9ce1d9d282a1a34aed27acedda572|2025-09-27|Yuri-NagaSaki|更新安全镜像源
+更新安全镜像源
+
+M	PVE-Tools.sh
+
+dd5dea6c37cb263057e3dba3f96d23c66ac13a97|2025-09-28|CyreneNight|Merge pull request #15 from Yuri-NagaSaki/main
+Merge pull request #15 from Yuri-NagaSaki/main
+
+增加安全镜像源配置可选项
+ddd568e0efddd67186b960959e1fb07122029c33|2025-09-28|Mapleawaa|feat(security)!: 合入PVE安全镜像源，请尽快升级脚本并且换源
+feat(security)!: 合入PVE安全镜像源，请尽快升级脚本并且换源
+
+M	PVE-Tools.sh
+M	README.md
+M	VERSION
+
+dab02dd64fb1d3f88213cb4fe15cc1eef5563719|2025-09-28|Mapleawaa|docs: 修复错误的贡献者渲染图
+docs: 修复错误的贡献者渲染图
+
+M	README.md
+
+46f4128c05f52576c59689f383dbbc33c27c0dfb|2025-09-28|Mapleawaa|feat: 新增功能: PVE8 一键升级 PVE9
+feat: 新增功能: PVE8 一键升级 PVE9
+
+M	PVE-Tools.sh
+M	README.md
+
+2fcdfe05a4655296d8bb486f7d8679c8387d51e1|2025-09-28|Mapleawaa|docs: 更新文档
+docs: 更新文档
+
+A	Docs/future-guide.md
+A	images/enable-hardware-pci-passthrough.png
+R100	images/image.png	images/image.old.png
+A	images/kernel-info.png
+A	images/kernel-install.png
+A	images/kernel-manager-list.png
+A	images/kernel-manager.png
+A	images/main-shot.png
+A	images/remove-lvm.png
+A	images/remove-message-box.png
+A	images/remove-swapon.png
+A	images/source-manager.png
+A	images/sources-manager.png
+A	images/system-overview.png
+
+5cd767e4a4a1feeb73d87e84604560733b38dc05|2025-09-28|Mapleawaa|docs: 修复错误的图片引用
+docs: 修复错误的图片引用
+
+M	README.md
+
+82d7b8ff3cd4251f71148606da2ad585d77ca2db|2025-09-28|Mapleawaa|docu: 修复错误的图片引用
+docu: 修复错误的图片引用
+
+M	README.md
+
+6caaed42ecb29531f9ba53130b70f4e491d6892f|2025-09-28|Mapleawaa|docu: 修复错误的 star-history
+docu: 修复错误的 star-history
+
+M	README.md
+
+952c6605cc23764ad05e37853fc03378b3f06c3e|2025-09-30|Mapleawaa|feat: add GitHub Actions workflows for automated release
+feat: add GitHub Actions workflows for automated release
+
+A	.github/workflows/beta-release.yml
+A	.github/workflows/pr-validation.yml
+A	.github/workflows/release.yml
+
+6c1effe0f12bdaadfabe5f4c802dacd0e1152ef7|2025-10-05|Mapleawaa|refactor: 优化 UI 交互界面操作统一性
+refactor: 优化 UI 交互界面操作统一性
+
+M	PVE-Tools.sh
+M	VERSION
+
+b7510d33944ae74d73857d749795e4b3daf1514b|2025-10-05|Mapleawaa|fix: 替换了新的展示截图
+fix: 替换了新的展示截图
+
+A	images/main-shot.old.png
+M	images/main-shot.png
+
+df458561fc1fa5ecf5b0a808b7f9845df0c954cf|2025-10-11|Mapleawaa|Fix: - 修复了传感器显示信息方框无法显示完全的问题,提供一个输入询问用户可调节方框高度大小
+Fix: - 修复了传感器显示信息方框无法显示完全的问题,提供一个输入询问用户可调节方框高度大小
+
+Closes #16
+
+M	.gitignore
+A	.newUI
+M	PVE-Tools.sh
+A	PVE-Tools.sh.bak
+A	pve-tool.sh
+
+24dff7b438ec7886fde738492c2d2287f05c2daa|2025-10-11|Mapleawaa|Fix: 版本升级,尽快更新
+Fix: 版本升级,尽快更新
+
+M	VERSION
+
+c83c63c316534300a36f52cea17481b808391537|2025-10-11|Mapleawaa|Fix: 修复了语法问题导致脚本无法启动的问题
+Fix: 修复了语法问题导致脚本无法启动的问题
+
+D	.newUI
+M	PVE-Tools.sh
+D	PVE-Tools.sh.bak
+D	pve-tool.sh
+
+19cea888a17cf414f53142f024de37c22d2ab733|2025-10-11|Introl-ljl|Fix: 删除重复内容
+Fix: 删除重复内容
+
+M	PVE-Tools.sh
+
+a508783faf79ec5b5692995113c384b13178b328|2025-10-11|Introl-ljl|Fix: 优化菜单对齐输出方式，使用echo替代printf以增强可读性
+Fix: 优化菜单对齐输出方式，使用echo替代printf以增强可读性
+
+M	PVE-Tools.sh
+
+ee9622900858866a667136704eebc194d1487c77|2025-10-11|Introl-ljl|Fix: 修复颜色可选参数无法正确处理的问题。
+Fix: 修复颜色可选参数无法正确处理的问题。
+
+M	PVE-Tools.sh
+
+6167601b06d9796697c4b0685d3a287e61aad1b4|2025-10-11|Introl-ljl|Revert "Fix: 删除重复内容"
+Revert "Fix: 删除重复内容"
+
+This reverts commit 19cea888a17cf414f53142f024de37c22d2ab733.
+
+M	PVE-Tools.sh
+
+599a4d661cfc8419c1b0bff767afc28f541cdc29|2025-10-11|Introl-ljl|Fix: 修改菜单选择输入方式，使用read命令避免重复。
+Fix: 修改菜单选择输入方式，使用read命令避免重复。
+
+M	PVE-Tools.sh
+
+37c4a5977dfef1dd97dd65147cbbe1c7fe27b927|2025-10-11|Mapleawaa|Fix: 修复了字符串显示错误导致的颜色代码混乱
+Fix: 修复了字符串显示错误导致的颜色代码混乱
+
+M	PVE-Tools.sh
+
+cca86858bb227aba9409d91230f46b0504548660|2025-10-11|Mapleawaa|Fix: 修复了颜色代码无法渲染的问题
+Fix: 修复了颜色代码无法渲染的问题
+
+M	PVE-Tools.sh
+
+e04c0f75a6816b5631768da484d40ce29bdc09d3|2025-10-11|CyreneNight|Merge branch 'main' into main
+Merge branch 'main' into main
+ae8846f00a2c0069f3a98e56fa96a1b830a2424c|2025-10-11|CyreneNight|Merge pull request #17 from Introl-ljl/main
+Merge pull request #17 from Introl-ljl/main
+
+Fix: 修复了一堆奇奇怪怪的问题
+466f0fe070c8a9ba7ae30776011971deb3ac2c75|2025-10-11|Mapleawaa|修复脚本中颜色字符错误问题\n\n修复了菜单显示中出现格式化字符串 %-3s. %s 的问题\n修改了 show_menu_option 函数中的 printf 语句
+修复脚本中颜色字符错误问题\n\n修复了菜单显示中出现格式化字符串 %-3s. %s 的问题\n修改了 show_menu_option 函数中的 printf 语句
+
+Co-authored-by: Qwen-Coder <qwen-coder@alibabacloud.com>
+
+M	PVE-Tools.sh
+
+ec699cb02494b4a5c974cefc014fff4a4b7faa9a|2025-10-11|Mapleawaa|Fix: 修复了众多历史遗留问题 1. 界面优化    - 修复颜色代码显示问题，使用 echo -e 替代 printf    - 简化所有UI边框元素为普通虚线    - 移除颜色格式化，使用纯文本显示
+Fix: 修复了众多历史遗留问题
+1. 界面优化
+   - 修复颜色代码显示问题，使用 echo -e 替代 printf
+   - 简化所有UI边框元素为普通虚线
+   - 移除颜色格式化，使用纯文本显示
+
+2. 内核安装增强
+   - 改进 install_kernel 函数，支持完整包名和版本号两种格式
+   - 增强依赖检测和用户引导
+
+3. 菜单重构
+   - 合并温度监控选项到专用子菜单
+   - 合并Ceph相关选项到专用子菜单
+   - 重新编号主菜单选项（1-13）
+   - 更新所有对应的case语句
+
+4. 自定义温度监控
+   - 实现交互式菜单系统，支持详细传感器配置
+   - 添加多种监控选项（CPU频率、温度、功耗、磁盘信息等）
+   - 实现依赖检查和预设配置方案
+
+5. 代码一致性
+   - 统一纯文本格式化
+   - 保持功能完整性的同时简化视觉元素
+
+M	PVE-Tools.sh
+A	test_approaches.sh
+A	test_colors.sh
+A	test_colors_detailed.sh
+A	test_final_solution.sh
+A	test_ui_changes.sh
+A	test_updated_function.sh
+
+9017702026a65281830e2811d6e54685d3adeadf|2025-10-11|Mapleawaa|忘了删测试脚本了 F**K
+忘了删测试脚本了 F**K
+
+D	test_approaches.sh
+D	test_colors.sh
+D	test_colors_detailed.sh
+D	test_final_solution.sh
+D	test_ui_changes.sh
+D	test_updated_function.sh
+
+3ea1a5a01d13421a7c59ba3edb88fea493977ec6|2025-10-11|Mapleawaa|Fix:修复了许多历史遗留问题，请尽快更新 1. 界面优化    - 修复颜色代码显示问题，使用 echo -e 替代 printf    - 简化所有UI边框元素为普通虚线    - 移除颜色格式化，使用纯文本显示
+Fix:修复了许多历史遗留问题，请尽快更新
+1. 界面优化
+   - 修复颜色代码显示问题，使用 echo -e 替代 printf
+   - 简化所有UI边框元素为普通虚线
+   - 移除颜色格式化，使用纯文本显示
+
+2. 内核安装增强
+   - 改进 install_kernel 函数，支持完整包名和版本号两种格式
+   - 增强依赖检测和用户引导
+
+3. 菜单重构
+   - 合并温度监控选项到专用子菜单
+   - 合并Ceph相关选项到专用子菜单
+   - 重新编号主菜单选项（1-13）
+   - 更新所有对应的case语句
+
+4. 自定义温度监控
+   - 实现交互式菜单系统，支持详细传感器配置
+   - 添加多种监控选项（CPU频率、温度、功耗、磁盘信息等）
+   - 实现依赖检查和预设配置方案
+
+5. 更新检查功能增强
+   - 改进 check_update() 函数，支持从VERSION和UPDATE双文件获取更新信息
+   - 新增通用下载函数 download_file，替代原有 download_version_file
+   - 添加UPDATE文件的镜像URL支持
+
+6. 双源更新信息机制
+   - 优先从VERSION文件获取版本信息（保持向后兼容）
+   - 同时从UPDATE文件获取详细更新内容（如可用）
+   - UPDATE文件不可用时回退到VERSION文件的更新日志
+
+7. 更新显示优化
+   - 改进更新信息展示格式，提供更好的可读性
+   - 智能显示详细更新信息或基础版本信息
+   - 保持虚线分隔符的UI风格一致性
+
+8. 代码一致性
+   - 统一纯文本格式化
+   - 保持功能完整性的同时简化视觉元素
+
+M	PVE-Tools.sh
+A	UPDATE
+M	VERSION
+
+8dbcd244fdbb7ef885e47e123825a5f09a24353f|2025-10-11|Mapleawaa|docs: 更换封面图
+docs: 更换封面图
+
+A	images/main-shot.oldd.png
+M	images/main-shot.png
+
+bdf651e7d4811885a0fcfc4ef42a42f17e93fbbe|2025-10-13|Mapleawaa|fix(scope): 修复了错误的温度检测代码部分
+fix(scope): 修复了错误的温度检测代码部分
+
+问题来源于盲目使用 AI LLM 修改代码导致的Debug 疏忽，带来不便还请谅解，后续会 review AI 编写的代码
+
+Closes #18
+
+M	.gitignore
+M	PVE-Tools.sh
+
+cbba2d557a8d90e8636d62c9792be83ec81548a7|2025-10-17|Mapleawaa|Fix: 修复了 CT 模板 URL 错误,二次替换源功能失效的问题
+Fix: 修复了 CT 模板 URL 错误,二次替换源功能失效的问题
+
+M	PVE-Tools.sh
+
+4802610f9c1103321f3b969167eadea0c53a1af0|2025-10-17|Mapleawaa|docs: add issue templates for bug reports and feature requests
+docs: add issue templates for bug reports and feature requests
+
+A	.github/workflows/ISSUE-TEMPLATE/feature-request.md
+A	.github/workflows/ISSUE-TEMPLATE/report-bugs.md
+
+8c07e703760b364ca1a4a85b00d6e83228a57aef|2025-10-17|Mapleawaa|docs: add issue templates for bug reports and feature requests
+docs: add issue templates for bug reports and feature requests
+
+R100	.github/workflows/ISSUE-TEMPLATE/feature-request.md	.github/ISSUE-TEMPLATE/feature-request.md
+R100	.github/workflows/ISSUE-TEMPLATE/report-bugs.md	.github/ISSUE-TEMPLATE/report-bugs.md
+
+050cde4dcb15cf3c26c922654418cd9ef192a410|2025-10-17|Mapleawaa|docs: 新增 issue 模板
+docs: 新增 issue 模板
+
+A	.github/ISSUE-TEMPLATE/config.yml
+
+d165934bd51950beebd18d5f8d0513d897f8d27e|2025-10-17|Mapleawaa|docs:
+docs:
+
+R100	.github/ISSUE-TEMPLATE/config.yml	.github/ISSUE_TEMPLATE/config.yml
+R100	.github/ISSUE-TEMPLATE/feature-request.md	.github/ISSUE_TEMPLATE/feature-request.md
+R100	.github/ISSUE-TEMPLATE/report-bugs.md	.github/ISSUE_TEMPLATE/report-bugs.md
+
+03c1644b3a138b6fec6dbac5ce518fcb22fb9a65|2025-10-17|Mapleawaa|feat: Add various Proxmox VE helper scripts for monitoring, installation, and configuration
+feat: Add various Proxmox VE helper scripts for monitoring, installation, and configuration
+
+- Introduced `monitor-all.sh` for monitoring and restarting LXC and VM instances based on ping status.
+- Added `netdata.sh` for installing and uninstalling NetData on Proxmox VE.
+- Created `post-pbs-install.sh` for post-installation routines specific to Proxmox Backup Server.
+- Developed `post-pve-install.sh` for post-installation routines specific to Proxmox VE.
+- Implemented `scaling-governor.sh` to manage CPU scaling governors and set crontab for persistence.
+- Added `update-lxcs.sh` for updating LXC containers with options to exclude specific containers.
+
+M	PVE-Tools.sh
+A	Tools/.gitkeep
+A	Tools/README.md
+A	Tools/clean-lxcs.sh
+A	Tools/cron-update-lxcs.sh
+A	Tools/fstrim.sh
+A	Tools/host-backup.sh
+A	Tools/kernel-clean.sh
+A	Tools/kernel-pin.sh
+A	Tools/microcode.sh
+A	Tools/monitor-all.sh
+A	Tools/netdata.sh
+A	Tools/post-pbs-install.sh
+A	Tools/post-pve-install.sh
+A	Tools/scaling-governor.sh
+A	Tools/update-lxcs.sh
+M	UPDATE
+
+501588a6b2d9b43eae0d407b999a45671662e316|2025-10-17|Mapleawaa|update: 更新版本号
+update: 更新版本号
+
+M	PVE-Tools.sh
+M	VERSION
+
+7c25c8ce535595d6e783c53401bb354b3c94b83d|2025-10-17|Mapleawaa|fix: 修复了日志输出中的颜色代码问题，采用更简洁的格式显示信息，提升可读性。
+fix: 修复了日志输出中的颜色代码问题，采用更简洁的格式显示信息，提升可读性。
+
+M	PVE-Tools.sh
+
+a6ceec02da919c13203f6a38ff8cda58a483ff89|2025-10-17|Mapleawaa|docs: 展示新功能，更换头图
+docs: 展示新功能，更换头图
+
+M	README.md
+A	images/little-tools.png
+A	images/main-shot.olddd.png
+M	images/main-shot.png
+
+3cf1c5680231c8133765169f8d6650f52d3277b6|2025-10-17|Mapleawaa|feat: 新增第三方工具集成功能 (v4.1.0)
+feat: 新增第三方工具集成功能 (v4.1.0)
+
+  功能特性:
+  - 集成 tteck/Proxmox 社区的 13 个实用工具
+  - 智能下载管理（curl 优先，进度显示）
+  - 安全执行机制（二次确认 + 日志审计）
+  - 优化 TUI 颜色显示，保持界面和谐
+  - 新增 Tools 目录和完整文档
+
+  工具来源: https://github.com/tteck/Proxmox
+  致谢: tteck 社区
+
+  Co-authored-by: Claude Code <noreply@anthropic.com>
+
+M	README.md
+
+5a810d0a4da3603396e311d12d59a74519666c2c|2025-10-23|Mapleawaa|Fix: 修复用户反馈问题并优化系统功能
+Fix: 修复用户反馈问题并优化系统功能
+
+- 移除传感器检测项目的可选配置项 Closes #20, #21
+- 修复新增/修改传感器后信息框被遮挡的显示问题 Closes #23, #19
+- 更新小工具来源配置
+- 优化系统稳定性与性能表现
+
+M	.gitignore
+M	PVE-Tools.sh
+
+6f8b2c93b493337ec120589cac895704275c2b98|2025-10-23|Mapleawaa|Fix: 修复用户反馈问题并优化系统功能
+Fix: 修复用户反馈问题并优化系统功能
+
+- 移除传感器检测项目的可选配置项 Closes #20, #21
+- 修复新增/修改传感器后信息框被遮挡的显示问题 Closes #23, #19
+- 更新小工具来源配置
+- 优化系统稳定性与性能表现
+
+M	PVE-Tools.sh
+M	UPDATE
+M	VERSION
+
+d8eccc6b688f6d6d568a3c0e33ebc399840dd697|2025-10-23|Mapleawaa|Fix: 修复用户反馈问题并优化系统功能
+Fix: 修复用户反馈问题并优化系统功能
+
+- 移除传感器检测项目的可选配置项 Closes #20, Closes #21
+- 修复新增/修改传感器后信息框被遮挡的显示问题 Closes #23, Closes #19
+- 更新小工具来源配置
+- 优化系统稳定性与性能表现
+
+M	PVE-Tools.sh
+
+08ead9c609033ff9f3cca51b2008f33390cc5f41|2025-10-24|Mapleawaa|fix: 修复了 CT 模板地址错误的问题 感谢 @BluestoneVale - Closes #24
+fix: 修复了 CT 模板地址错误的问题 感谢 @BluestoneVale - Closes #24
+
+M	PVE-Tools.sh
+
+81f5c37e8f3e50d29044e8f7f85d80d916e0221e|2025-10-24|Mapleawaa|fix: 修复了错误的 CT 源
+fix: 修复了错误的 CT 源
+
+M	PVE-Tools.sh
+
+1a48274ba3c01bd9c651bf2aa33f6a4c2bd7ca75|2025-11-04|Mapleawaa|fix: 修复了温度传感器显示部分模块的一系列问题
+fix: 修复了温度传感器显示部分模块的一系列问题
+
+M	.github/ISSUE_TEMPLATE/config.yml
+M	PVE-Tools.sh
+M	UPDATE
+
+f882dc92f2094de35fe0b7c3a8c8c9ab8fe46ef7|2025-11-04|Mapleawaa|docs: 修改 Readme 关闭 ISSUE Closes #25 Closes #6
+docs: 修改 Readme
+关闭 ISSUE Closes #25 Closes #6
+
+M	README.md
+
+ad25829f4aefa45c3e8a0d1898cfa227a231b978|2025-11-04|Mapleawaa|feat: 新增 UPS 信息检测 感谢 @siyrs 提供的代码和思路。 Closes #27
+feat: 新增 UPS 信息检测 感谢 @siyrs 提供的代码和思路。 Closes #27
+
+M	PVE-Tools.sh
+
+d0d02fe80744e7b5f407ec8b3c7533cce09a14dc|2025-11-11|Mapleawaa|feat: 新增功能和修复     - fix: UPS 监控项目的异常，原因是无设备情况下直接显示了错误信息     - feat: 新增核显直通菜单和功能项
+feat: 新增功能和修复
+    - fix: UPS 监控项目的异常，原因是无设备情况下直接显示了错误信息
+    - feat: 新增核显直通菜单和功能项
+
+    Closes #29
+    Closes #32
+
+M	PVE-Tools.sh
+M	UPDATE
+M	VERSION
+
+77ca7f23bc844bc07046bf5fa3659b5bf022b2fb|2025-11-11|Mapleawaa|fix: 忘记改版本号了
+fix: 忘记改版本号了
+
+M	PVE-Tools.sh
+M	UPDATE
+
+ea6f8491dabd34f80f98fb71822f4d22f7df9bc5|2025-11-11|Mapleawaa|docs: 修复了错误的头图
+docs: 修复了错误的头图
+
+M	PVE-Tools.sh
+R100	images/main-shot.old.png	images/main-shot-3.0.png
+R100	images/main-shot.oldd.png	images/main-shot-3.1.png
+R100	images/main-shot.olddd.png	images/main-shot-4.0.png
+A	images/main-shot-4.1.png
+M	images/main-shot.png
+
+775095c0adaf05c00be107fc63907a488c733f84|2025-11-11|Mapleawaa|fix: 修复了核显拆分部分错误的页面逻辑
+fix: 修复了核显拆分部分错误的页面逻辑
+
+M	PVE-Tools.sh
+
+8823fd4e2506763b62d4fac61058119e212ab715|2025-11-14|Mapleawaa|fix: 修复了#32 #33 的历史遗留问题 Closes #32 Closes #33
+fix: 修复了#32 #33 的历史遗留问题
+Closes #32 Closes #33
+
+M	PVE-Tools.sh
+M	README.md
+M	UPDATE
+M	VERSION
+
+ea06b89328f717d15d11d23427c20c6698293d7c|2025-11-21|Mapleawaa|fix: 修复了 AMD 系列 CPU 温度显示出现异常的问题 Closes #31
+fix: 修复了 AMD 系列 CPU 温度显示出现异常的问题 Closes #31
+
+A	AGENTS.md
+M	PVE-Tools.sh
+
+4702a6c548500e6dc7b97b9d15626040420ee12b|2025-11-21|Mapleawaa|docs: 增加移除 codex 文件
+docs: 增加移除 codex 文件
+
+M	.gitignore
+
+231f8bbc13361126a9ef4f73bfac187d45d10059|2025-11-21|CyreneNight|Delete AGENTS.md
+Delete AGENTS.md
+D	AGENTS.md
+
+e66afba49ef830ef15e7b2cfcdc9cf58a0529771|2025-11-21|Mapleawaa|feat: 核显直通部分驱动选择问题修复完成。 Closes #37
+feat: 核显直通部分驱动选择问题修复完成。 Closes #37
+
+M	PVE-Tools.sh
+M	README.md
+
+6dceb958525a4683b3145beaf896682e8c4b625c|2025-11-28|Mapleawaa|feat: 修复新增巨多功能  - 修复了检查更新过久的问题  - 优化了 UI，删除了过于重复和臃肿的 UI  - 删除了一些功能部分的颜色代码  - 新增核显显卡直通，显卡虚拟化的功能(~~大饼~~)  - 新增了虚拟机快速安装脚本  - 修复了错误的 CT 模板
+feat: 修复新增巨多功能
+ - 修复了检查更新过久的问题
+ - 优化了 UI，删除了过于重复和臃肿的 UI
+ - 删除了一些功能部分的颜色代码
+ - 新增核显显卡直通，显卡虚拟化的功能(~~大饼~~)
+ - 新增了虚拟机快速安装脚本
+ - 修复了错误的 CT 模板
+
+M	PVE-Tools.sh
+M	Tools/README.md
+A	images/main-shot-4.3.png
+M	images/main-shot.png
+
+9097b757e87f9c90c6a32e2290a4a8290396ed8e|2025-11-28|Mapleawaa|docs: 更换错误版本的头图，修复错误的 Markdown 文本
+docs: 更换错误版本的头图，修复错误的 Markdown 文本
+
+M	README.md
+M	images/main-shot.png
+
+63b00862cfcbd37fefa7710a395d25b567c14837|2025-11-28|Mapleawaa|docs: 优化一下排版
+docs: 优化一下排版
+
+M	README.md
+
+1430c38d4cfc93d594d8d57922895adcecb6fdf1|2025-11-28|201853910|更新ceph换的源出错问题
+更新ceph换的源出错问题
+M	PVE-Tools.sh
+
+fb30a57e17b1a4533382c44e574cae7d99703d30|2025-11-29|CyreneNight|Merge pull request #43 from 201853910/patch-1
+Merge pull request #43 from 201853910/patch-1
+
+更新ceph换的源出错问题
+2a096af6706f73aa187a755b6a7f8f0cc48aa9c0|2025-11-29|Mapleawaa|docs: 修改 Issue Workflow
+docs: 修改 Issue Workflow
+
+M	.github/ISSUE_TEMPLATE/config.yml
+
+74634631057a90eb3e4039528fbcbe03629185ef|2025-11-29|Mapleawaa|docs: 修改了 Issue template
+docs: 修改了 Issue template
+
+M	.github/ISSUE_TEMPLATE/config.yml
+A	.github/ISSUE_TEMPLATE/fast-bugs-report.md
+
+e09ec763235dea498e625a4f09c9f617ec1b1d03|2025-12-03|CyreneNight|Remove ASCII art from README.md
+Remove ASCII art from README.md
+
+Removed ASCII art section from README.
+M	README.md
+
+4b94001d2be8c33a55c894e7342fa93ee31a7254|2025-12-03|CyreneNight|Fix README formatting and remove duplicate text
+Fix README formatting and remove duplicate text
+
+Removed duplicate description line and adjusted formatting.
+M	README.md
+
+e60a4ce08d82380fe4d3de0e8fb04ae4c480674c|2025-12-03|CyreneNight|Fix formatting in README.md
+Fix formatting in README.md
+M	README.md
+
+3b98fffbb7849567cbe5a3e4d1d0ffea74d70a03|2025-12-03|CyreneNight|Fix formatting issues in README.md
+Fix formatting issues in README.md
+M	README.md
+
+47c338d37f8746eafeb671df86f31f61cacdacd9|2025-12-09|CyreneNight|Revise project maintenance notice and links
+Revise project maintenance notice and links
+
+Updated project status and added new repository links.
+M	README.md
+
+795021342d5f4ee9569ab96a82a3b0cd2407fafa|2025-12-09|CyreneNight|Fix formatting of repository links in README
+Fix formatting of repository links in README
+M	README.md
+
+f0bfd9a36c059d9fce8c1b06c37e19fd83e1a7b6|2025-12-15|Mapleawaa|fix: 修复了UPS监控项的问题 Closes #49 - 新增从 apcaccess status 中解析 NOMPOWER ，展示 UPS 额定功率（W） - 根据 NOMPOWER 与 LOADPCT 估算当前功率，并在 UI 中显示 - 对 STATUS 做中文化映射（ONLINE / ONBATT / CHRG / DISCHRG） - 兼容 OUTPUTV / LINEV 两种电压字段 - 对缺失字段增加默认值，避免异常导致整块 UPS 信息解析失败
+fix: 修复了UPS监控项的问题 Closes #49
+- 新增从 apcaccess status 中解析 NOMPOWER ，展示 UPS 额定功率（W）
+- 根据 NOMPOWER 与 LOADPCT 估算当前功率，并在 UI 中显示
+- 对 STATUS 做中文化映射（ONLINE / ONBATT / CHRG / DISCHRG）
+- 兼容 OUTPUTV / LINEV 两种电压字段
+- 对缺失字段增加默认值，避免异常导致整块 UPS 信息解析失败
+
+M	PVE-Tools.sh
+
+1b92a254e61069df6e33d94b9402e350b24003e5|2025-12-15|Mapleawaa|Merge branch 'main' of https://github.com/Mapleawaa/PVE-Tools-9
+Merge branch 'main' of https://github.com/Mapleawaa/PVE-Tools-9
+
+1ad3f6415fec59c02b3679280827579849dc6d6a|2025-12-22|Aethersailor|Update international network install script URL
+Update international network install script URL
+
+Changed the script URL in the README to use the raw content link from GitHub for international network installation instructions.
+
+M	README.md
+
+f67aff54bc55f36bcb72099faf53a55ca257179b|2025-12-26|CyreneNight|docs: 修复了错误的快捷命令
+docs: 修复了错误的快捷命令
+
+Update international network install script URL
+306041d363c737c61810de4da8a59540e2182489|2026-01-06|Mapleawaa|style: 移除菜单和版本信息中的多余空行
+style: 移除菜单和版本信息中的多余空行
+
+删除show_menu函数和版本信息显示中的多余空行，保持界面整洁统一
+
+M	PVE-Tools.sh
+
+943c7f57bbaa5e8b4cee6fc9c8ae177c25b15c7f|2026-01-06|Mapleawaa|Merge branch 'main' of https://github.com/Mapleawaa/PVE-Tools-9
+Merge branch 'main' of https://github.com/Mapleawaa/PVE-Tools-9
+
+a5d1ca3bda53a47626a28bd75bbab08967938c00|2026-01-14|Mapleawaa|fix: 优化移除 PVE 订阅弹窗的匹配逻辑
+fix: 优化移除 PVE 订阅弹窗的匹配逻辑
+
+通过修改状态判断逻辑（将 !== 'active' 改为 == 'active'）来屏蔽弹窗，提高对新版本 PVE 的兼容性。同时引入 Perl 处理多行匹配作为备用方案，增强脚本的鲁棒性。
+
+M	PVE-Tools.sh
+A	proxmoxlib.js
+
+96f1b5f2ab1c38e896b644b389c3cff68a8c5de2|2026-01-14|Mapleawaa|feat: 更新至 v6.0.0 并新增 Intel 核显直通与救砖工具
+feat: 更新至 v6.0.0 并新增 Intel 核显直通与救砖工具
+
+1. 版本号从 5.0.0 升级至 6.0.0。
+2. 重构主菜单结构，采用二级菜单分类，提升交互体验。
+3. 新增 Intel 6-14 代核显直通自动化配置功能，支持自动下载 ROM 和修改版 QEMU。
+4. 新增“应急救砖工具箱”，支持恢复官方 proxmoxlib.js、重置驱动黑名单及还原官方 QEMU。
+5. 优化 CI/CD 流程，引入 shc 将脚本编译为二进制文件发布。
+6. 优化日志记录机制，减少控制台冗余输出。
+
+M	.github/workflows/release.yml
+M	PVE-Tools.sh
+M	UPDATE
+M	VERSION
+A	release ROM
+
+c7e29ebff67dcd8f9e01355978fcc6f6625094aa|2026-01-14|GitHub Action|chore: update version to 6.0.0
+chore: update version to 6.0.0
+
+M	VERSION
+
+b82273a8232b92b5dc82bf8fec349e3079fafd89|2026-01-14|Mapleawaa|docs: 更新项目主截图并新增备选图
+docs: 更新项目主截图并新增备选图
+
+更新 main-shot.png 以反映最新的界面状态，并添加 main-shot.5.png 作为补充文档素材。
+
+A	images/main-shot.5.png
+M	images/main-shot.png
+
+5f1fa1b027aea5ff2a1492117e259e1bb119a03d|2026-01-14|Mapleawaa|Merge branch 'main' of https://github.com/Mapleawaa/PVE-Tools-9
+Merge branch 'main' of https://github.com/Mapleawaa/PVE-Tools-9
+
+6136d002a2d4fb60e2621ea3f1822a621e51d91a|2026-01-18|CyreneNight|Update README with script options and features
+Update README with script options and features
+
+Added documentation for script options and features.
+M	README.md
+
+ca6f776b3009a62030efc7e8162b5c9d648ddbcf|2026-01-18|CyreneNight|Remove main features and supported functions sections
+Remove main features and supported functions sections
+
+Removed main features and supported functions sections from the README.
+M	README.md
+
+6d6878557a74d8d98a12a8e7c50860659b348445|2026-01-20|Mapleawaa|fix: 优化磁盘休眠检测逻辑并更新版本
+fix: 优化磁盘休眠检测逻辑并更新版本
+
+1. 在磁盘休眠检测中增加对 SAS 协议的判断，避免对 SAS 盘使用 hdparm 导致误报。
+2. 将版本号从 6.0.0 升级至 6.0.1。
+
+M	PVE-Tools.sh
+M	UPDATE
+M	VERSION
+
+5672fa862d15ad2f5e8d4e00656e64ecda636832|2026-01-20|Mapleawaa|Merge branch 'main' of https://github.com/Mapleawaa/PVE-Tools-9
+Merge branch 'main' of https://github.com/Mapleawaa/PVE-Tools-9
+
+c0c2c7341fdeae5775f41733c82bdf566ca0b879|2026-01-20|CyreneNight|Update star count from 500 to 1K in README
+Update star count from 500 to 1K in README
+M	README.md
+
+da52a04a27beb379d77ae14fa76c15528d926565|2026-02-03|Mapleawaa|feat: 优化 iGPU SR-IOV 配置以兼容 PVE 9.1 Closes #65
+feat: 优化 iGPU SR-IOV 配置以兼容 PVE 9.1 Closes #65
+
+在 GRUB 参数中添加 module_blacklist=xe，防止 6.8+ 内核中新的 xe 驱动与 i915 驱动冲突，确保 SR-IOV 功能在 PVE 9.1 环境下正常运行。
+
+M	PVE-Tools.sh
+
+543e4b11b438f1334e35853182eb880ebf0508e0|2026-02-06|Mapleawaa|feat: 新增 Web 官方文档并优化脚本配置管理
+feat: 新增 Web 官方文档并优化脚本配置管理
+
+1. 在 Web 目录下基于 VitePress 构建了全新的官方文档，包含使用指南、功能特性及 FAQ。
+2. 为脚本新增了配置块安全管理函数 (`apply_block`, `remove_block`)，支持带标记的幂等修改。
+3. 引入了 GRUB 参数幂等管理函数，实现对 `/etc/default/grub` 配置的精准增删。
+4. 优化了核显虚拟化 (SR-IOV/GVT-g) 的配置逻辑，自动处理驱动冲突并增强兼容性。
+5. 更新了 `.gitignore` 以适配 VitePress 项目，并修正了部分脚本逻辑漏洞。
+
+M	.gitignore
+M	PVE-Tools.sh
+A	Web/.vitepress/config.mts
+A	Web/.vitepress/theme/components/CopyCodeBox.vue
+A	Web/.vitepress/theme/custom.css
+A	Web/.vitepress/theme/index.ts
+A	Web/assets/images/Proxmox-Corporate-Brandguideline.pdf
+A	Web/assets/images/Proxmox_logos_full_lockup_SVG/proxmox-full-lockup-color.svg
+A	Web/assets/images/Proxmox_logos_full_lockup_SVG/proxmox-full-lockup-inverted-color.svg
+A	Web/assets/images/Proxmox_logos_full_lockup_SVG/proxmox-logo-stacked-color.svg
+A	Web/assets/images/Proxmox_logos_full_lockup_SVG/proxmox-logo-stacked-inverted-color.svg
+A	Web/bun.lock
+A	Web/faq.md
+A	Web/features.md
+A	Web/guide.md
+A	Web/index.md
+A	Web/package.json
+A	Web/public/logo-dark.svg
+A	Web/public/logo-horizontal-dark.svg
+A	Web/public/logo-horizontal.svg
+A	Web/public/logo.svg
+
+dbf62340b32a89d01375d4773a0d47ed1cbc5157|2026-02-06|Mapleawaa|refactor: 重构脚本菜单结构并引入 VitePress 文档
+refactor: 重构脚本菜单结构并引入 VitePress 文档
+
+1. 重新组织 PVE-Tools.sh 的主菜单及二级菜单分类，使功能逻辑更清晰
+2. 在 Web/ 目录下引入基于 VitePress 的官方文档，并优化构建脚本
+3. 增强脚本更新提示界面，支持显示详细的 Markdown 格式更新日志
+4. 修复 .gitignore 中路径匹配的格式问题
+5. 在脚本中新增大量“图吧”风格的随机小贴士，提升用户体验
+
+M	.gitignore
+M	PVE-Tools.sh
+M	UPDATE
+M	Web/package.json
+
+3f9e3cd3579b4483ec4545b8d3bc3ad1898e3d42|2026-02-06|Mapleawaa|chore(web): 添加 wrangler.jsonc 配置文件
+chore(web): 添加 wrangler.jsonc 配置文件
+
+为项目引入 Cloudflare Workers 部署配置，指定静态资源目录为 VitePress 构建输出路径。
+
+A	Web/wrangler.jsonc
+
+d6d3ae245d143081ead3102c275101ec68d30f93|2026-02-06|Mapleawaa|chore(web): 移除 wrangler.jsonc 中多余的资源绑定
+chore(web): 移除 wrangler.jsonc 中多余的资源绑定
+
+在 Cloudflare Workers 静态资产配置中移除 "binding": "ASSETS"，因为现代版本的 Wrangler 不再强制要求该绑定，简化配置文件结构。
+
+M	Web/wrangler.jsonc
+
+99ff4e348588adb492101099667e11348b843f27|2026-02-06|Mapleawaa|feat(web): 添加 Cloudflare Workers 入口文件
+feat(web): 添加 Cloudflare Workers 入口文件
+
+为 Web 项目添加 index.js 作为 Worker 的入口点，并在 wrangler.jsonc 中配置 main 字段。这样可以通过 Worker 代理静态资源，为后续添加自定义路由或中间件逻辑提供支持。
+
+A	Web/index.js
+M	Web/wrangler.jsonc
+
+dca31970c972adb2357ad5a19b8db69686b69b47|2026-02-07|Mapleawaa|feat: 新增虚拟机与容器定时开关机管理功能
+feat: 新增虚拟机与容器定时开关机管理功能
+
+- 在脚本中新增定时任务管理菜单，支持对 qm 和 pct 进行自动识别与配置
+- 实现基于 /etc/cron.d/ 的幂等配置管理，支持自定义开关机时间并自动重启服务
+- 文档网站新增脚本下载源切换功能，支持多线路（Cloudflare/GitHub/CDN）选择
+- 优化文档网站视觉效果，为标题及页脚添加渐变色与颗粒感质感
+- 更新版本号至 6.2.0 并同步构建脚本与统计配置
+
+M	PVE-Tools.sh
+M	UPDATE
+M	VERSION
+M	Web/.vitepress/config.mts
+M	Web/.vitepress/theme/components/CopyCodeBox.vue
+M	Web/.vitepress/theme/custom.css
+M	Web/package.json
+
+df97f2d4b8e94974a85b184a140c34ce7b58efa4|2026-02-07|Mapleawaa|docs: 修改了README中关于新的文档站的描述
+docs: 修改了README中关于新的文档站的描述
+
+M	README.md
