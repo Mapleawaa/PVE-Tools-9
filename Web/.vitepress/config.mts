@@ -8,7 +8,7 @@ export default defineConfig({
       async: '', 
       defer: '', 
       src: 'https://cloud.umami.is/script.js', 
-      'data-website-id': '12730785-6093-4463-b8db-569799c6d79c' 
+      'data-website-id': '20d9b612-ee9c-4e5e-9183-1abd4e401629' 
     }]
   ],
   themeConfig: {
@@ -35,8 +35,15 @@ export default defineConfig({
       { icon: 'github', link: 'https://github.com/Mapleawaa/PVE-Tools-9' }
     ],
     footer: {
-      message: '基于 Cloudflare Pages 托管 | 使用 Umami 收集匿名信息',
+      message: '基于 Cloudflare Pages 托管 | 使用 Umami 收集匿名信息 | ',
       copyright: 'Copyright © 2024-present Maple'
+    },
+    // 自定义脚本源配置
+    scriptSources: {
+      cloudflare: 'https://pve.u3u.icu/PVE-Tools.sh',
+      ghfast: 'https://ghfast.top/raw.githubusercontent.com/Mapleawaa/PVE-Tools-9/main/PVE-Tools.sh',
+      github: 'https://raw.githubusercontent.com/Mapleawaa/PVE-Tools-9/main/PVE-Tools.sh',
+      edgeone: '未上线'
     }
   }
 })

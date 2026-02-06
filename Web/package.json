@@ -5,7 +5,7 @@
   "private": true,
   "scripts": {
     "dev": "vitepress dev",
-    "build": "vitepress build && cp ../VERSION .vitepress/dist/VERSION && cp ../UPDATE .vitepress/dist/UPDATE",
+    "build": "vitepress build && cp ../VERSION .vitepress/dist/VERSION && cp ../UPDATE .vitepress/dist/UPDATE && cp ../PVE-Tools.sh .vitepress/dist/PVE-Tools.sh",
     "preview": "vitepress preview"
   },
   "devDependencies": {
