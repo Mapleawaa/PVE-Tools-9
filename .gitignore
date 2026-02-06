@@ -1,40 +1,49 @@
-.codebuddy/
-.cache
+# Ignore dependencies
+node_modules/
+**/node_modules/
+bun.lockb
 
-# Ignore LLM Client files
-QWEN.md
-CLAUDE.md
-.spec-workflow/
+# Ignore build outputs
+dist/
+**/dist/
+build/
+out/
+.temp/
+.vitepress/dist/
+.vitepress/cache/
+**/ .vitepress/dist/
+**/ .vitepress/cache/
 
 # Ignore system files
 .DS_Store
 Thumbs.db
-# Ignore node modules
-node_modules/
+*.tmp
+*.swp
+
 # Ignore log files
 *.log
-# Ignore compiled Python files
-__pycache__/
-*.pyc
-# Ignore environment files
-.env
+report.[0-9]*.[0-9]*.[0-9]*.[0-9]*.json
+
 # Ignore IDE specific files
 .vscode/
 .idea/
-# Ignore build directories
-dist/
-build/
-# Ignore temporary files
-*.tmp
-*.swp
-# Ignore coverage reports
-coverage/
+*.tsbuildinfo
+.eslintcache
 
-# Ignore testing files
-Proxmox-Helper-Script/
+# Ignore environment files
+.env
+.env.*.local
 
-# Ignore Claude code files
+# Project specific ignores
+.codebuddy/
+.cache/
+.spec-workflow/
 .claude/
-
-# Ignore Codex code files
+Proxmox-Helper-Script/
+QWEN.md
+CLAUDE.md
 AGENTS.md
+
+# Python
+__pycache__/
+*.pyc

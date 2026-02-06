@@ -1,0 +1,126 @@
+:root {
+  --vp-c-brand: #646cff;
+  --vp-c-brand-light: #747bff;
+  --vp-c-brand-lighter: #9499ff;
+  --vp-c-brand-dark: #535bf2;
+  --vp-c-brand-darker: #454ce1;
+  --custom-icon-color: #8e8e8e;
+}
+
+.dark {
+  --custom-icon-color: #a1a1a1;
+}
+
+/* 首页标题 Mesh Gradient 效果 */
+.VPHero .name {
+  background: radial-gradient(at 0% 0%, #bd34fe 0px, transparent 50%),
+              radial-gradient(at 50% 0%, #41d1ff 0px, transparent 50%),
+              radial-gradient(at 100% 0%, #bd34fe 0px, transparent 50%),
+              radial-gradient(at 0% 50%, #41d1ff 0px, transparent 50%),
+              radial-gradient(at 100% 50%, #bd34fe 0px, transparent 50%),
+              radial-gradient(at 0% 100%, #41d1ff 0px, transparent 50%),
+              radial-gradient(at 50% 100%, #bd34fe 0px, transparent 50%),
+              radial-gradient(at 100% 100%, #41d1ff 0px, transparent 50%);
+  background-size: 200% 200%;
+  animation: mesh-gradient 8s ease infinite;
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  position: relative;
+  display: inline-block;
+}
+
+/* 颗粒感/流沙质感 */
+.VPHero .name::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.65' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)'/%3E%3C/svg%3E");
+  opacity: 0.15;
+  mix-blend-mode: overlay;
+  pointer-events: none;
+  -webkit-background-clip: text;
+  background-clip: text;
+}
+
+@keyframes mesh-gradient {
+  0% { background-position: 0% 50%; }
+  50% { background-position: 100% 50%; }
+  100% { background-position: 0% 50%; }
+}
+
+/* 首页特性图标样式 */
+.VPFeature .icon {
+  font-size: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 48px;
+  height: 48px;
+  margin-bottom: 20px;
+  border-radius: 8px;
+  background-color: var(--vp-c-bg-soft);
+  transition: all 0.25s;
+  color: var(--custom-icon-color);
+}
+
+.VPFeature:hover .icon {
+  background-color: var(--vp-c-default-soft);
+  color: var(--vp-c-brand);
+}
+
+.VPFeature .icon::before {
+  content: '';
+  width: 24px;
+  height: 24px;
+  background-color: currentColor;
+  mask-size: contain;
+  mask-repeat: no-repeat;
+  mask-position: center;
+}
+
+.VPFeatures .item:nth-child(1) .icon::before {
+  mask-image: url('https://api.iconify.design/mdi:server-network.svg');
+}
+.VPFeatures .item:nth-child(2) .icon::before {
+  mask-image: url('https://api.iconify.design/mdi:shield-check-outline.svg');
+}
+.VPFeatures .item:nth-child(3) .icon::before {
+  mask-image: url('https://api.iconify.design/mdi:harddisk.svg');
+}
+.VPFeatures .item:nth-child(4) .icon::before {
+  mask-image: url('https://api.iconify.design/mdi:dots-horizontal.svg');
+}
+
+/* 页面切换淡入淡出动画 */
+::view-transition-old(root),
+::view-transition-new(root) {
+  animation: none;
+  mix-blend-mode: normal;
+}
+
+::view-transition-old(root) {
+  animation: fade-out 0.3s ease-in-out;
+}
+
+::view-transition-new(root) {
+  animation: fade-in 0.3s ease-in-out;
+}
+
+@keyframes fade-in {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes fade-out {
+  from { opacity: 1; }
+  to { opacity: 0; }
+}
+
+/* 兼容不支持 View Transitions 的浏览器 */
+.vp-doc {
+  animation: fade-in 0.5s ease-in-out;
+}
