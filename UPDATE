@@ -1,1 +1,6 @@
+feat: 引入 VitePress 文档网站并增强脚本配置管理
 
+- 在 Web/ 目录下新增基于 VitePress 的官方文档，包含使用指南、功能特性及 FAQ
+- 为 PVE-Tools.sh 增加一套幂等的配置文件管理函数 (apply_block, grub_add_param 等)
+- 优化核显虚拟化配置逻辑，支持自动处理 PVE 9.1 内核驱动冲突 (屏蔽 xe 驱动)
+- 增强脚本安全性，在修改关键系统配置前增加自动备份机制
