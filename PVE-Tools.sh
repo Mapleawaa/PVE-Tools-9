@@ -2354,6 +2354,9 @@ igpu_management_menu_simple() {
 # Intel 11-15代 SR-IOV 核显虚拟化配置
 igpu_sriov_setup() {
     echo "开始配置 Intel 11-15代 SR-IOV 核显虚拟化"
+    echo "详细原理与教程：https://s.ow0.icu/advanced/gpu-virtualization"
+    echo "如果配置失败，请访问文档站下方留言反馈。"
+    echo
 
     # 检查内核版本
     kernel_version=$(uname -r | awk -F'-' '{print $1}')
@@ -2614,6 +2617,9 @@ igpu_sriov_setup() {
 # Intel 6-10代 GVT-g 核显虚拟化配置
 igpu_gvtg_setup() {
     echo "开始配置 Intel 6-10代 GVT-g 核显虚拟化"
+    echo "详细原理与教程：https://s.ow0.icu/advanced/gpu-virtualization"
+    echo "如果配置失败，请访问文档站下方留言反馈。"
+    echo
 
     # 展示当前 GRUB 配置
     echo
@@ -3320,7 +3326,8 @@ pve8_to_pve9_upgrade() {
     log_info "检测到当前 PVE 版本: $current_pve_version"
     log_warn "即将开始 PVE 8.x 到 PVE 9.x 的升级流程"
     log_warn "此过程不可逆，请确保已备份重要数据！"
-    log_warn "建议在升级前阅读官方升级指南：https://pve.proxmox.com/wiki/Upgrade_from_8.x_to_9.0"
+    log_warn "建议在升级前阅读详细原理与避坑指南：https://s.ow0.icu/advanced/pve-upgrade"
+    log_warn "建议在升级前手动备份 /var/lib/pve-cluster/ 目录"
     echo
     log_warn "升级过程中请勿中断，确保有稳定的网络连接"
     log_warn "升级完成后，系统将自动重启以应用更改"
@@ -3438,6 +3445,13 @@ pve8_to_pve9_upgrade() {
     
     if [[ -f "/etc/apt/sources.list.d/pve-enterprise.list" ]]; then
         cp /etc/apt/sources.list.d/pve-enterprise.list "${backup_dir}/pve-enterprise.list.backup.${timestamp}"
+    fi
+
+    # 备份 PVE 核心数据库
+    log_info "备份 PVE 核心数据库..."
+    if [[ -d "/var/lib/pve-cluster" ]]; then
+        cp -r /var/lib/pve-cluster "${backup_dir}/pve-cluster.backup.${timestamp}"
+        log_success "核心数据库已备份至 ${backup_dir}"
     fi
     
     # 6. 更新源到 Debian 13 (Trixie) 并添加 PVE 9.x 源
@@ -4546,6 +4560,7 @@ restore_qemu_kvm() {
 intel_gpu_passthrough() {
     log_step "开始 Intel 核显直通配置"
     echo "注意：此功能基于 lixiaoliu666 的修改版 QEMU 和 ROM"
+    echo "详细原理与教程：https://s.ow0.icu/advanced/gpu-passthrough"
     echo "适用于需要将 Intel 核显直通给 Windows 虚拟机且遇到代码 43 或黑屏的情况"
     echo "支持的 CPU 架构：6代(Skylake) 到 14代(Raptor Lake Refresh)"
     echo "项目地址：https://github.com/lixiaoliu666/intel6-14rom"
@@ -4558,6 +4573,9 @@ intel_gpu_passthrough() {
     log_warn "直通失败属于正常现象，请尝试更换其他版本的 ROM 或自行寻找专用 ROM"
     log_warn "本功能仅提供自动化配置辅助，作者精力有限，无法提供免费的一对一排错服务"
     log_warn "折腾有风险，入坑需谨慎！"
+    echo
+    log_tips "如果配置失败，请访问文档站查看详细教程并留言反馈："
+    log_tips "🔗 https://s.ow0.icu/advanced/gpu-passthrough"
     echo
     log_tips "如需要反馈或者请求更新ROM文件适配你的CPU，请前往lixiaoliu666的GitHub仓库开ISSUE反馈，不是找我。"
     echo
