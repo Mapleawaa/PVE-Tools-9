@@ -57,7 +57,10 @@ const copyCode = async () => {
           <div class="terminal-title">Ciallo～(∠・ω<)⌒★ - {{ currentSource.name }}</div>
           
           <div class="header-right">
-            <span class="copy-tip" :class="{ show: copied }">已复制!</span>
+            <div class="status-wrapper">
+              <span class="guide-text" :class="{ hide: copied }">点这里更换地址哦 &gt;&gt;</span>
+              <span class="copy-tip" :class="{ show: copied }">已复制!</span>
+            </div>
             <button class="refresh-btn" @click="toggleSource" :title="`切换源: ${currentSource.name}`">
               <RefreshCw :class="{ rotating: isRotating }" :size="14" />
             </button>
@@ -94,7 +97,7 @@ const copyCode = async () => {
   border-radius: 12px;
   padding: 12px 20px;
   width: 100%;
-  font-family: var(--vp-font-family-mono);
+  font-family: "HarmonyOS_Sans_SC_Mono", "HarmonyOS Sans SC Mono", var(--vp-font-family-mono);
   cursor: pointer;
   position: relative;
   transition: transform 0.2s, box-shadow 0.2s;
@@ -144,7 +147,37 @@ const copyCode = async () => {
   margin-left: auto;
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 8px;
+}
+
+.status-wrapper {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  height: 24px;
+}
+
+.guide-text {
+  font-family: "HarmonyOS_Sans_SC", "HarmonyOS Sans SC", var(--vp-font-family-base);
+  font-size: 13px;
+  color: #888;
+  font-style: italic;
+  white-space: nowrap;
+  animation: float 2s ease-in-out infinite;
+  user-select: none;
+  transition: opacity 0.3s, transform 0.3s;
+}
+
+.guide-text.hide {
+  opacity: 0;
+  transform: translateX(10px);
+  pointer-events: none;
+}
+
+@keyframes float {
+  0%, 100% { transform: translateX(0); }
+  50% { transform: translateX(-4px); }
 }
 
 .refresh-btn {
@@ -175,11 +208,14 @@ const copyCode = async () => {
 }
 
 .copy-tip {
-  font-size: 12px;
+  position: absolute;
+  right: 0;
+  font-size: 13px;
   color: #27c93f;
   opacity: 0;
-  transition: opacity 0.3s;
+  transition: opacity 0.3s, transform 0.3s;
   font-weight: bold;
+  pointer-events: none;
 }
 
 .copy-tip.show {
@@ -187,8 +223,8 @@ const copyCode = async () => {
 }
 
 .terminal-content {
-  font-size: 14px;
-  line-height: 1.5;
+  font-size: 15px;
+  line-height: 1.6;
   white-space: nowrap;
   overflow-x: auto;
   scrollbar-width: none;
@@ -213,10 +249,10 @@ const copyCode = async () => {
 
 @media (min-width: 640px) {
   .terminal-content {
-    font-size: 15px;
+    font-size: 16px;
   }
   .terminal-box {
-    padding: 16px 24px;
+    padding: 18px 26px;
   }
 }
 </style>

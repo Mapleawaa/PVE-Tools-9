@@ -5,6 +5,10 @@
   --vp-c-brand-dark: #535bf2;
   --vp-c-brand-darker: #454ce1;
   --custom-icon-color: #8e8e8e;
+
+  /* 全局字体更换为 HarmonyOS Sans */
+  --vp-font-family-base: "HarmonyOS_Sans_SC", "HarmonyOS Sans SC", "HarmonyOS Sans", "PingFang SC", "Lantinghei SC", "Microsoft YaHei", "HanHei SC", "Helvetica Neue", "Open Sans", Arial, "Hiragino Sans GB", "微软雅黑", STHeiti, "WenQuanYi Micro Hei", SimSun, sans-serif;
+  --vp-font-family-mono: "HarmonyOS_Sans_SC_Mono", "HarmonyOS Sans SC Mono", "JetBrains Mono", "Fira Code", "Menlo", "Monaco", "Consolas", "Liberation Mono", "Courier New", monospace;
 }
 
 .dark {
