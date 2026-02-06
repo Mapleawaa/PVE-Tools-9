@@ -11,8 +11,11 @@
   --custom-icon-color: #a1a1a1;
 }
 
-/* 首页标题 Mesh Gradient 效果 */
-.VPHero .name {
+/* 标题与页脚 Mesh Gradient 效果 */
+.VPHero .name,
+.vp-doc h1,
+.VPFooter .message,
+.VPFooter .copyright {
   background: radial-gradient(at 0% 0%, #bd34fe 0px, transparent 50%),
               radial-gradient(at 50% 0%, #41d1ff 0px, transparent 50%),
               radial-gradient(at 100% 0%, #bd34fe 0px, transparent 50%),
@@ -31,7 +34,10 @@
 }
 
 /* 颗粒感/流沙质感 */
-.VPHero .name::after {
+.VPHero .name::after,
+.vp-doc h1::after,
+.VPFooter .message::after,
+.VPFooter .copyright::after {
   content: '';
   position: absolute;
   top: 0;

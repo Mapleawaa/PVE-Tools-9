@@ -1,12 +1,39 @@
 <script setup>
-import { ref } from 'vue'
+import { ref, computed } from 'vue'
+import { useData } from 'vitepress'
+import { RefreshCw } from 'lucide-vue-next'
 
-const code = "curl -sSL https://raw.githubusercontent.com/Mapleawaa/PVE-Tools-9/main/PVE-Tools.sh | bash"
+const { theme } = useData()
+
+const sources = computed(() => {
+  const config = theme.value.scriptSources || {}
+  return [
+    { name: '全国可用 Pages托管', url: config.cloudflare || '' },
+    { name: 'Github国内加速', url: config.ghfast || '' },
+    { name: 'Github源站', url: config.github || '' },
+    { name: '中国大陆备案CDN', url: config.edgeone }
+  ]
+})
+
+const currentIndex = ref(0)
+const currentSource = computed(() => sources.value[currentIndex.value])
+const code = computed(() => `bash <(curl -sSL ${currentSource.value.url} | bash)`)
+
 const copied = ref(false)
+const isRotating = ref(false)
+
+const toggleSource = (e) => {
+  e.stopPropagation()
+  isRotating.value = true
+  currentIndex.value = (currentIndex.value + 1) % sources.value.length
+  setTimeout(() => {
+    isRotating.value = false
+  }, 500)
+}
 
 const copyCode = async () => {
   try {
-    await navigator.clipboard.writeText(code)
+    await navigator.clipboard.writeText(code.value)
     copied.value = true
     setTimeout(() => {
       copied.value = false
@@ -27,12 +54,18 @@ const copyCode = async () => {
             <span class="dot yellow"></span>
             <span class="dot green"></span>
           </div>
-          <div class="terminal-title">Ciallo～(∠・ω<)⌒★</div>
-          <span class="copy-tip" :class="{ show: copied }">已复制!</span>
+          <div class="terminal-title">Ciallo～(∠・ω<)⌒★ - {{ currentSource.name }}</div>
+          
+          <div class="header-right">
+            <span class="copy-tip" :class="{ show: copied }">已复制!</span>
+            <button class="refresh-btn" @click="toggleSource" :title="`切换源: ${currentSource.name}`">
+              <RefreshCw :class="{ rotating: isRotating }" :size="14" />
+            </button>
+          </div>
         </div>
         <div class="terminal-content">
           <span class="prompt">bash</span>
-          <span class="operator">&lt;(</span><span class="command">curl -sSL https://raw.githubusercontent.com/Mapleawaa/PVE-Tools-9/main/PVE-Tools.sh | bash</span><span class="operator">)</span>
+          <span class="operator">&lt;(</span><span class="command">curl -sSL {{ currentSource.url }} | bash</span><span class="operator">)</span>
         </div>
       </div>
       <div class="footer-tip">点击复制 click to copy</div>
@@ -79,6 +112,7 @@ const copyCode = async () => {
   margin-bottom: 12px;
   align-items: center;
   position: relative;
+  height: 24px;
 }
 
 .dots {
@@ -106,8 +140,41 @@ const copyCode = async () => {
   white-space: nowrap;
 }
 
-.copy-tip {
+.header-right {
   margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.refresh-btn {
+  background: transparent;
+  border: none;
+  color: #8e8e8e;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 4px;
+  border-radius: 4px;
+  transition: all 0.2s;
+}
+
+.refresh-btn:hover {
+  background-color: rgba(255, 255, 255, 0.1);
+  color: #fff;
+}
+
+.rotating {
+  animation: rotate 0.5s ease-in-out;
+}
+
+@keyframes rotate {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+.copy-tip {
   font-size: 12px;
   color: #27c93f;
   opacity: 0;
@@ -124,12 +191,12 @@ const copyCode = async () => {
   line-height: 1.5;
   white-space: nowrap;
   overflow-x: auto;
-  scrollbar-width: none; /* Firefox */
+  scrollbar-width: none;
   padding-bottom: 4px;
 }
 
 .terminal-content::-webkit-scrollbar {
-  display: none; /* Chrome/Safari */
+  display: none;
 }
 
 .prompt { color: #569cd6; margin-right: 8px; }
