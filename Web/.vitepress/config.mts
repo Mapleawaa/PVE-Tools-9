@@ -19,6 +19,7 @@ export default defineConfig({
     nav: [
       { text: '首页', link: '/' },
       { text: '使用指南', link: '/guide' },
+      { text: '更新日志', link: '/update' },
       { text: 'GitHub', link: 'https://github.com/Mapleawaa/PVE-Tools-9' }
     ],
     sidebar: [
@@ -27,6 +28,7 @@ export default defineConfig({
         items: [
           { text: '简介', link: '/guide' },
           { text: '功能特性', link: '/features' },
+          { text: '更新日志', link: '/update' },
           { text: '常见问题', link: '/faq' }
         ]
       }
@@ -35,8 +37,8 @@ export default defineConfig({
       { icon: 'github', link: 'https://github.com/Mapleawaa/PVE-Tools-9' }
     ],
     footer: {
-      message: '基于 Cloudflare Pages 托管 | 使用 Umami 收集匿名信息 | ',
-      copyright: 'Copyright © 2024-present Maple'
+      message: '基于 Cloudflare Pages 托管 | 使用 Umami 收集匿名信息',
+      copyright: ' | Copyright © 2024-present Maple'
     },
     // 自定义脚本源配置
     scriptSources: {
