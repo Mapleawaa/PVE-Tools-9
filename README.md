@@ -3,7 +3,7 @@
 <div align="center">
 你的下一个简单好用，简洁易用的 PVE9 配置脚本
 
-[文档](https://s.ow0.icu)|[更新日志](https://s.ow0.icu/update)|[疑难解答](https://s.ow0.icu/faq)
+[文档](https://pve.u3u.icu)|[更新日志](https://pve.u3u.icu/update)|[疑难解答](https://pve.u3u.icu/faq)
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Shell Script](https://img.shields.io/badge/Shell-Script-4EAA25?logo=gnu-bash&logoColor=white)](https://www.gnu.org/software/bash/)
