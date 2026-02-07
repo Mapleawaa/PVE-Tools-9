@@ -3,7 +3,7 @@
 <div align="center">
 你的下一个简单好用，简洁易用的 PVE9 配置脚本
 
-[文档](https://pve.u3u.icu)|[更新日志](https://pve.u3u.icu/update)|[疑难解答](https://pve.u3u.icu/faq)
+[文档](https://pve.u3u.icu) | [更新日志](https://pve.u3u.icu/update) | [疑难解答](https://pve.u3u.icu/faq)
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Shell Script](https://img.shields.io/badge/Shell-Script-4EAA25?logo=gnu-bash&logoColor=white)](https://www.gnu.org/software/bash/)
@@ -11,7 +11,9 @@
 [![Debian](https://img.shields.io/badge/Debian-13%20(Trixie)-A81D33?logo=debian&logoColor=white)](https://www.debian.org/)
 
  🎉  1K Stars 撒花 🎉 好耶 ！！！🎉  Ciallo～(∠・ω<)⌒★
-![展示](/images/main-shot.png)
+
+![展示](/images/main-shot-latest.png)
+
 </div>
 
 ### 🚪 开门见山
@@ -37,6 +39,7 @@ bash <(curl -sSL https://raw.githubusercontent.com/Mapleawaa/PVE-Tools-9/main/PV
 > [!IMPORTANT]
 > 显卡拆分/直通 已新开仓库使用其他语言编写脚本。
 > 详细请看 👉 [N卡拆分仓库](https://github.com/Mapleawaa/NVIDIA-vGPU-Script-For-PVE) | [显卡直通脚本仓库](https://github.com/Mapleawaa/GPU-Pathrough-Script-For-PVE)
+> 更新：已停更。享年三个星期。
 
 > [!WARNING]
 > 3.0.0 起已加入 Proxmox 安全软件源，建议尽快更新以避免潜在安全风险。
