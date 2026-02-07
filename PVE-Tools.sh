@@ -6,27 +6,46 @@
 # Auther:Maple 二次修改使用请不要删除此段注释
 
 # 版本信息
-CURRENT_VERSION="6.2.0"
+CURRENT_VERSION="6.2.1"
 VERSION_FILE_URL="https://raw.githubusercontent.com/Mapleawaa/PVE-Tools-9/main/VERSION"
 UPDATE_FILE_URL="https://raw.githubusercontent.com/Mapleawaa/PVE-Tools-9/main/UPDATE"
 
-# 颜色定义 - 保持一致性
-RED='\033[0;31m'
-GREEN='\033[0;32m'
-YELLOW='\033[1;33m'
-BLUE='\033[0;34m'
-CYAN='\033[0;36m'
-MAGENTA='\033[0;35m'
-WHITE='\033[1;37m'
-ORANGE='\033[0;33m'  
-NC='\033[0m'
+# ============ 颜色系统 ============
 
-# UI 界面一致性常量
-UI_BORDER="═════════════════════════════════════════════════"
-UI_DIVIDER="═════════════════════════════════════════════════"
-UI_FOOTER="═════════════════════════════════════════════════"
-UI_HEADER="═════════════════════════════════════════════════"
-UI_FOOTER_SHORT="═════════════════════════════════════════════════"
+# 终端颜色初始化
+setup_colors() {
+    if [[ -t 1 && -z "${NO_COLOR}" ]]; then
+        # 使用 printf 确保变量包含真实的转义字符，提高不同 shell 间的兼容性
+        RED=$(printf '\033[0;31m')
+        GREEN=$(printf '\033[0;32m')
+        YELLOW=$(printf '\033[1;33m')
+        BLUE=$(printf '\033[0;34m')
+        PINK=$(printf '\033[0;35m')
+        CYAN=$(printf '\033[0;36m')
+        MAGENTA=$(printf '\033[0;35m')
+        WHITE=$(printf '\033[1;37m')
+        ORANGE=$(printf '\033[0;33m')
+        NC=$(printf '\033[0m')
+
+        
+        # UI 辅助色映射
+        PRIMARY="${CYAN}"
+        H1=$(printf '\033[1;36m')
+        H2=$(printf '\033[1;37m')
+    else
+        RED='' GREEN='' YELLOW='' BLUE='' CYAN='' MAGENTA='' WHITE='' ORANGE='' NC=''
+        PRIMARY='' H1='' H2=''
+    fi
+
+    # UI 界面一致性常量
+    UI_BORDER="${NC}═════════════════════════════════════════════════${NC}"
+    UI_DIVIDER="${NC}═════════════════════════════════════════════════${NC}"
+    UI_FOOTER="${NC}═════════════════════════════════════════════════${NC}"
+    UI_HEADER="${NC}═════════════════════════════════════════════════${NC}"
+}
+
+# 初始化颜色
+setup_colors
 
 # 镜像源配置
 MIRROR_USTC="https://mirrors.ustc.edu.cn/proxmox/debian/pve"
@@ -56,27 +75,39 @@ FASTPVE_PROJECT_URL="https://github.com/kspeeder/fastpve"
 
 # 日志函数
 log_info() {
-    echo -e "${GREEN}[$(date +'%H:%M:%S')]${NC} ${CYAN}INFO${NC} $1" >> /var/log/pve-tools.log
+    local timestamp=$(date +'%H:%M:%S')
+    echo -e "${GREEN}[$timestamp]${NC} ${CYAN}INFO${NC} $1"
+    echo "[$timestamp] INFO $1" >> /var/log/pve-tools.log
 }
 
 log_warn() {
-    echo -e "${YELLOW}[$(date +'%H:%M:%S')]${NC} ${ORANGE}WARN${NC} $1" | tee -a /var/log/pve-tools.log
+    local timestamp=$(date +'%H:%M:%S')
+    echo -e "${YELLOW}[$timestamp]${NC} ${ORANGE}WARN${NC} $1"
+    echo "[$timestamp] WARN $1" >> /var/log/pve-tools.log
 }
 
 log_error() {
-    echo -e "${RED}[$(date +'%H:%M:%S')]${NC} ${RED}ERROR${NC} $1" | tee -a /var/log/pve-tools.log >&2
+    local timestamp=$(date +'%H:%M:%S')
+    echo -e "${RED}[$timestamp]${NC} ${RED}ERROR${NC} $1" >&2
+    echo "[$timestamp] ERROR $1" >> /var/log/pve-tools.log
 }
 
 log_step() {
-    echo -e "${BLUE}[$(date +'%H:%M:%S')]${NC} ${MAGENTA}STEP${NC} $1" | tee -a /var/log/pve-tools.log
+    local timestamp=$(date +'%H:%M:%S')
+    echo -e "${BLUE}[$timestamp]${NC} ${MAGENTA}STEP${NC} $1"
+    echo "[$timestamp] STEP $1" >> /var/log/pve-tools.log
 }
 
 log_success() {
-    echo -e "${GREEN}[$(date +'%H:%M:%S')]${NC} ${GREEN}OK${NC} $1" | tee -a /var/log/pve-tools.log
+    local timestamp=$(date +'%H:%M:%S')
+    echo -e "${GREEN}[$timestamp]${NC} ${GREEN}OK${NC} $1"
+    echo "[$timestamp] OK $1" >> /var/log/pve-tools.log
 }
 
 log_tips(){
-    echo -e "${CYAN}[$(date +'%H:%M:%S')]${NC} ${MAGENTA}TIPS${NC} $1" | tee -a /var/log/pve-tools.log
+    local timestamp=$(date +'%H:%M:%S')
+    echo -e "${CYAN}[$timestamp]${NC} ${MAGENTA}TIPS${NC} $1"
+    echo "[$timestamp] TIPS $1" >> /var/log/pve-tools.log
 }
 
 # Enhanced error handling function with consistent messaging
@@ -384,6 +415,7 @@ detect_network_region() {
 # 显示横幅
 show_banner() {
     clear
+    echo -ne "${NC}"
     cat << 'EOF'
 ██████╗ ██╗   ██╗███████╗    ████████╗ ██████╗  ██████╗ ██╗     ███████╗     █████╗ 
 ██╔══██╗██║   ██║██╔════╝    ╚══██╔══╝██╔═══██╗██╔═══██╗██║     ██╔════╝    ██╔══██╗
@@ -392,12 +424,13 @@ show_banner() {
 ██║      ╚████╔╝ ███████╗       ██║   ╚██████╔╝╚██████╔╝███████╗███████║     █████╔╝
 ╚═╝       ╚═══╝  ╚══════╝       ╚═╝    ╚═════╝  ╚═════╝ ╚══════╝╚══════╝     ╚════╝ 
 EOF
-    echo "═════════════════════════════════════════════════"
-    echo "PVE-Tools-9 一键脚本"
-    echo "让每个人都能体验虚拟化技术的的便利。"
-    echo "作者: Maple & Claude 4.5 & 提交PR的你们"
-    echo "当前版本: $CURRENT_VERSION | 最新版本: ${remote_version:-"未检测"}"
-    echo "═════════════════════════════════════════════════"
+    echo -ne "${NC}"
+    echo "$UI_BORDER"
+    echo -e "  ${H1}PVE-Tools-9 一键脚本${NC}"
+    echo "  让每个人都能体验虚拟化技术的的便利。"
+    echo -e "  作者: ${PINK}Maple${NC} & 提交PR的你们"
+    echo -e "  当前版本: ${GREEN}$CURRENT_VERSION${NC} | 最新版本: ${remote_version:-"未检测"}"
+    echo "$UI_BORDER"
 }
 
 # 检查是否为 root 用户
@@ -728,19 +761,17 @@ remove_old_kernels() {
 # 内核管理主菜单
 kernel_management_menu() {
     while true; do
-        echo
-        echo "${UI_BORDER}"
-        echo "  内核管理菜单"
-        echo "${UI_DIVIDER}"
+        clear
+        show_menu_header "内核管理菜单"
         show_menu_option "1" "显示当前内核信息"
         show_menu_option "2" "查看可用内核列表"
         show_menu_option "3" "安装新内核"
         show_menu_option "4" "设置默认启动内核"
-        show_menu_option "5" "清理旧内核"
-        show_menu_option "6" "重启系统应用新内核"
+        show_menu_option "5" "${RED}清理旧内核${NC}"
+        show_menu_option "6" "${YELLOW}重启系统应用新内核${NC}"
         echo "${UI_DIVIDER}"
         show_menu_option "0" "返回主菜单"
-        echo "${UI_FOOTER}"
+        show_menu_footer
         
         read -p "请选择操作 [0-6]: " choice
         
@@ -2131,14 +2162,14 @@ fi
 # 展示当前 GRUB 配置
 show_grub_config() {
     log_info "当前 GRUB 配置信息"
-    log_step "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    echo "$UI_DIVIDER"
 
     if [ ! -f "/etc/default/grub" ]; then
         log_error "未找到 /etc/default/grub 文件"
         return 1
     fi
 
-    log_info "文件路径: /etc/default/grub"
+    log_info "文件路径: ${CYAN}/etc/default/grub${NC}"
     log_info "当前内核参数:"
 
     # 读取并显示 GRUB_CMDLINE_LINUX_DEFAULT
@@ -2150,44 +2181,44 @@ show_grub_config() {
         log_success "GRUB_CMDLINE_LINUX_DEFAULT 内容:"
         # 逐行显示参数
         echo "$current_config" | tr ' ' '\n' | while read -r param; do
-            [ -n "$param" ] && log_info "  - $param"
+            [ -n "$param" ] && echo -e "  ${BLUE}•${NC} $param"
         done
     fi
 
-    log_step "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    echo "$UI_DIVIDER"
 
     # 检测关键参数
     log_info "关键参数检测:"
 
     # 检测 IOMMU
     if echo "$current_config" | grep -q "intel_iommu=on\|amd_iommu=on"; then
-        log_success "  IOMMU: 已启用"
+        echo -e "  ${GREEN}[ OK ]${NC} IOMMU: 已启用"
     else
-        log_warn "  IOMMU: 未启用"
+        echo -e "  ${YELLOW}[WARN]${NC} IOMMU: 未启用"
     fi
 
     # 检测 SR-IOV
     if echo "$current_config" | grep -q "i915.enable_guc=3"; then
-        log_success "  SR-IOV (i915.enable_guc=3): 已配置"
+        echo -e "  ${GREEN}[ OK ]${NC} SR-IOV: 已配置"
     else
-        log_info "  SR-IOV: 未配置"
+        echo -e "  ${BLUE}[INFO]${NC} SR-IOV: 未配置"
     fi
 
     # 检测 GVT-g
     if echo "$current_config" | grep -q "i915.enable_gvt=1"; then
-        log_success "  GVT-g (i915.enable_gvt=1): 已配置"
+        echo -e "  ${GREEN}[ OK ]${NC} GVT-g: 已配置"
     else
-        log_info "  GVT-g: 未配置"
+        echo -e "  ${BLUE}[INFO]${NC} GVT-g: 未配置"
     fi
 
     # 检测硬件直通
     if echo "$current_config" | grep -q "iommu=pt"; then
-        log_success "  硬件直通 (iommu=pt): 已启用"
+        echo -e "  ${GREEN}[ OK ]${NC} 硬件直通: 已启用"
     else
-        log_info "  硬件直通: 未启用"
+        echo -e "  ${BLUE}[INFO]${NC} 硬件直通: 未启用"
     fi
 
-    log_step "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    echo "$UI_DIVIDER"
 }
 
 # GRUB 配置备份
@@ -2353,9 +2384,9 @@ igpu_management_menu_simple() {
 
 # Intel 11-15代 SR-IOV 核显虚拟化配置
 igpu_sriov_setup() {
-    echo "开始配置 Intel 11-15代 SR-IOV 核显虚拟化"
-    echo "详细原理与教程：https://s.ow0.icu/advanced/gpu-virtualization"
-    echo "如果配置失败，请访问文档站下方留言反馈。"
+    echo -e "${H2}开始配置 Intel 11-15代 SR-IOV 核显虚拟化${NC}"
+    echo -e "详细原理与教程： ${CYAN}https://pve.u3u.icu/advanced/gpu-virtualization${NC}"
+    echo -e "如果配置失败，请访问文档站下方留言反馈。"
     echo
 
     # 检查内核版本
@@ -2365,8 +2396,8 @@ igpu_sriov_setup() {
 
     if [ "$kernel_major" -lt 6 ] || ([ "$kernel_major" -eq 6 ] && [ "$kernel_minor" -lt 8 ]); then
         echo -e "${RED}SR-IOV 需要内核版本 6.8 或更高${NC}"
-        echo "  提示: 当前内核版本: $(uname -r)"
-        echo "  提示: 请先使用内核管理功能升级到 6.8 内核"
+        echo -e "  ${YELLOW}提示:${NC} 当前内核版本: $(uname -r)"
+        echo -e "  ${YELLOW}提示:${NC} 请先使用内核管理功能升级到 6.8 内核"
         pause_function
         return 1
     fi
@@ -2379,33 +2410,34 @@ igpu_sriov_setup() {
     echo
 
     # 危险性警告
-    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-    echo -e "【高危操作警告】SR-IOV 核显虚拟化配置"
-    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-    echo -e "此操作属于【高危险性】系统配置，配置错误可能导致："
-    echo -e "  - 系统无法正常启动（GRUB 配置错误）"
-    echo -e "  - 核显完全不可用（参数配置错误）"
-    echo -e "  - 虚拟机黑屏或无法启动（直通配置错误）"
-    echo -e "  - 需要通过恢复模式修复系统"
-    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-    echo "此功能将修改以下系统配置："
-    echo "  1. 修改 GRUB 引导参数（启用 IOMMU 和 SR-IOV）"
-    echo "  2. 加载 VFIO 内核模块"
-    echo "  3. 下载并安装 i915-sriov-dkms 驱动（约 10MB）"
-    echo "  4. 配置虚拟核显数量（VFs）"
-    echo "前置要求（请确认已完成）："
-    echo "  ✓ BIOS 已开启 VT-d 虚拟化"
-    echo "  ✓ BIOS 已开启 SR-IOV（如有此选项）"
-    echo "  ✓ BIOS 已开启 Above 4GB（如有此选项）"
-    echo "  ✓ BIOS 已关闭 Secure Boot 安全启动"
-    echo "  ✓ CPU 为 Intel 11-15 代处理器"
-    echo -e "重要：物理核显 (00:02.0) 不能直通，否则所有虚拟核显将消失"
-    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    echo "$UI_BORDER"
+    echo -e "  ${RED}【高危操作警告】${NC} SR-IOV 核显虚拟化配置"
+    echo "$UI_BORDER"
+    echo -e "  此操作属于${RED}【高危险性】${NC}系统配置，配置错误可能导致："
+    echo -e "    - ${YELLOW}系统无法正常启动${NC}（GRUB 配置错误）"
+    echo -e "    - ${YELLOW}核显完全不可用${NC}（参数配置错误）"
+    echo -e "    - ${YELLOW}虚拟机黑屏或无法启动${NC}（直通配置错误）"
+    echo -e "    - ${YELLOW}需要通过恢复模式修复系统${NC}"
+    echo "$UI_BORDER"
+    echo -e "  此功能将修改以下系统配置："
+    echo -e "    1. 修改 ${CYAN}GRUB 引导参数${NC}（启用 IOMMU 和 SR-IOV）"
+    echo -e "    2. 加载 ${CYAN}VFIO${NC} 内核模块"
+    echo -e "    3. 下载并安装 ${CYAN}i915-sriov-dkms${NC} 驱动（约 10MB）"
+    echo -e "    4. 配置虚拟核显数量（VFs）"
     echo
-    echo -e "强烈建议："
-    echo "  提示: 1. 在继续前先备份当前 GRUB 配置"
-    echo "  提示: 2. 确保了解核显虚拟化的工作原理"
-    echo "  提示: 3. 准备好通过 SSH 或物理访问恢复系统"
+    echo -e "  ${GREEN}前置要求（请确认已完成）：${NC}"
+    echo -e "    ${GREEN}✓${NC} BIOS 已开启 ${CYAN}VT-d${NC} 虚拟化"
+    echo -e "    ${GREEN}✓${NC} BIOS 已开启 ${CYAN}SR-IOV${NC}（如有此选项）"
+    echo -e "    ${GREEN}✓${NC} BIOS 已开启 ${CYAN}Above 4GB${NC}（如有此选项）"
+    echo -e "    ${GREEN}✓${NC} BIOS 已关闭 ${CYAN}Secure Boot${NC} 安全启动"
+    echo -e "    ${GREEN}✓${NC} CPU 为 ${CYAN}Intel 11-15 代${NC} 处理器"
+    echo -e "  ${RED}重要：${NC}物理核显 (00:02.0) 不能直通，否则所有虚拟核显将消失"
+    echo "$UI_BORDER"
+    echo
+    echo -e "${YELLOW}强烈建议：${NC}"
+    echo -e "  ${CYAN}提示 1:${NC} 在继续前先备份当前 GRUB 配置"
+    echo -e "  ${CYAN}提示 2:${NC} 确保了解核显虚拟化的工作原理"
+    echo -e "  ${CYAN}提示 3:${NC} 准备好通过 SSH 或物理访问恢复系统"
     echo
 
     # 询问是否要备份
@@ -2616,9 +2648,9 @@ igpu_sriov_setup() {
 
 # Intel 6-10代 GVT-g 核显虚拟化配置
 igpu_gvtg_setup() {
-    echo "开始配置 Intel 6-10代 GVT-g 核显虚拟化"
-    echo "详细原理与教程：https://s.ow0.icu/advanced/gpu-virtualization"
-    echo "如果配置失败，请访问文档站下方留言反馈。"
+    echo -e "${H2}开始配置 Intel 6-10代 GVT-g 核显虚拟化${NC}"
+    echo -e "详细原理与教程： ${CYAN}https://pve.u3u.icu/advanced/gpu-virtualization${NC}"
+    echo -e "如果配置失败，请访问文档站下方留言反馈。"
     echo
 
     # 展示当前 GRUB 配置
@@ -2627,43 +2659,43 @@ igpu_gvtg_setup() {
     echo
 
     # 危险性警告
-    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-    echo -e "【高危操作警告】GVT-g 核显虚拟化配置"
-    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-    echo -e "此操作属于【高危险性】系统配置，配置错误可能导致："
-    echo -e "  - 系统无法正常启动（GRUB 配置错误）"
-    echo -e "  - 核显完全不可用（参数配置错误）"
-    echo -e "  - 虚拟机黑屏或无法启动（直通配置错误）"
-    echo -e "  - 需要通过恢复模式修复系统"
-    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    echo "$UI_BORDER"
+    echo -e "  ${RED}【高危操作警告】${NC} GVT-g 核显虚拟化配置"
+    echo "$UI_BORDER"
+    echo -e "  此操作属于${RED}【高危险性】${NC}系统配置，配置错误可能导致："
+    echo -e "    - ${YELLOW}系统无法正常启动${NC}（GRUB 配置错误）"
+    echo -e "    - ${YELLOW}核显完全不可用${NC}（参数配置错误）"
+    echo -e "    - ${YELLOW}虚拟机黑屏或无法启动${NC}（直通配置错误）"
+    echo -e "    - ${YELLOW}需要通过恢复模式修复系统${NC}"
+    echo "$UI_BORDER"
     echo
-    echo "此功能将修改以下系统配置："
-    echo "  1. 修改 GRUB 引导参数（启用 IOMMU 和 GVT-g）"
-    echo "  2. 加载 VFIO 和 kvmgt 内核模块"
+    echo -e "  此功能将修改以下系统配置："
+    echo -e "    1. 修改 ${CYAN}GRUB 引导参数${NC}（启用 IOMMU 和 GVT-g）"
+    echo -e "    2. 加载 ${CYAN}VFIO${NC} 和 ${CYAN}kvmgt${NC} 内核模块"
     echo
-    echo "前置要求（请确认已完成）："
-    echo "  ✓ BIOS 已开启 VT-d 虚拟化"
-    echo "  ✓ BIOS 已开启 SR-IOV（如有此选项）"
-    echo "  ✓ BIOS 已开启 Above 4GB（如有此选项）"
-    echo "  ✓ BIOS 已关闭 Secure Boot 安全启动"
-    echo "  ✓ CPU 为 Intel 6-10 代处理器"
+    echo -e "  ${GREEN}前置要求（请确认已完成）：${NC}"
+    echo -e "    ${GREEN}✓${NC} BIOS 已开启 ${CYAN}VT-d${NC} 虚拟化"
+    echo -e "    ${GREEN}✓${NC} BIOS 已开启 ${CYAN}SR-IOV${NC}（如有此选项）"
+    echo -e "    ${GREEN}✓${NC} BIOS 已开启 ${CYAN}Above 4GB${NC}（如有此选项）"
+    echo -e "    ${GREEN}✓${NC} BIOS 已关闭 ${CYAN}Secure Boot${NC} 安全启动"
+    echo -e "    ${GREEN}✓${NC} CPU 为 ${CYAN}Intel 6-10 代${NC} 处理器"
     echo
-    echo "支持的处理器代号："
-    echo "  • Skylake (6代)"
-    echo "  • Kaby Lake (7代)"
-    echo "  • Coffee Lake (8代)"
-    echo "  • Coffee Lake Refresh (9代)"
-    echo "  • Comet Lake (10代)"
+    echo -e "  ${PRIMARY}支持的处理器代号：${NC}"
+    echo -e "    ${BLUE}•${NC} Skylake (6代)"
+    echo -e "    ${BLUE}•${NC} Kaby Lake (7代)"
+    echo -e "    ${BLUE}•${NC} Coffee Lake (8代)"
+    echo -e "    ${BLUE}•${NC} Coffee Lake Refresh (9代)"
+    echo -e "    ${BLUE}•${NC} Comet Lake (10代)"
     echo
-    echo -e "特殊的处理器代号："
-    echo -e "  • Rocket Lake / Tiger Lake (11代) 因处在当前代与上一代交界"
-    echo -e "    部分型号支持，但是不保证兼容性，请谨慎使用"
-    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    echo -e "  ${MAGENTA}特殊的处理器代号：${NC}"
+    echo -e "    ${MAGENTA}•${NC} Rocket Lake / Tiger Lake (11代) 因处在当前代与上一代交界"
+    echo -e "      部分型号支持，但是不保证兼容性，请谨慎使用"
+    echo "$UI_BORDER"
     echo
-    echo -e "强烈建议："
-    echo "  提示: 1. 在继续前先备份当前 GRUB 配置"
-    echo "  提示: 2. 确保了解核显虚拟化的工作原理"
-    echo "  提示: 3. 准备好通过 SSH 或物理访问恢复系统"
+    echo -e "${YELLOW}强烈建议：${NC}"
+    echo -e "  ${CYAN}提示 1:${NC} 在继续前先备份当前 GRUB 配置"
+    echo -e "  ${CYAN}提示 2:${NC} 确保了解核显虚拟化的工作原理"
+    echo -e "  ${CYAN}提示 3:${NC} 准备好通过 SSH 或物理访问恢复系统"
     echo
 
     # 询问是否要备份
@@ -2762,11 +2794,11 @@ igpu_gvtg_setup() {
 # 清理 GVT-g 和 SR-IOV 配置 (恢复默认)
 restore_igpu_config() {
     log_step "开始清理核显虚拟化配置 (恢复默认)"
-    echo "此操作将执行以下步骤："
-    echo "1. 移除 GRUB 中的核显相关参数 (intel_iommu, i915.enable_gvt, i915.enable_guc 等)"
-    echo "2. 从 /etc/modules 移除核显相关模块 (kvmgt, vfio 等)"
-    echo "3. 更新 GRUB 和 initramfs"
-    echo "适用于因配置核显虚拟化导致系统异常或想要重置配置的情况。"
+    echo -e "  此操作将执行以下步骤："
+    echo -e "    1. 移除 ${CYAN}GRUB${NC} 中的核显相关参数"
+    echo -e "    2. 从 ${CYAN}/etc/modules${NC} 移除核显相关模块"
+    echo -e "    3. 更新 ${CYAN}GRUB${NC} 和 ${CYAN}initramfs${NC}"
+    echo -e "  适用于因配置核显虚拟化导致系统异常或想要重置配置的情况。"
     echo
 
     if ! confirm_action "是否继续执行清理操作？"; then
@@ -3004,36 +3036,32 @@ igpu_remove() {
 igpu_management_menu() {
     while true; do
         clear
-        echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-        echo "              核显虚拟化高级功能"
-        echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-        echo -e "【危险警告】核显虚拟化属于高危操作"
-        echo -e "配置错误可能导致系统无法启动，请务必提前备份 GRUB 配置"
-        echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-        echo "  1. Intel 11-15代 SR-IOV 核显虚拟化"
-        echo "     支持: Rocket Lake, Alder Lake, Raptor Lake"
-        echo "     特性: 最多 7 个虚拟核显，性能较好"
-        echo "  2. Intel 6-10代 GVT-g 核显虚拟化"
-        echo "     支持: Skylake ~ Comet Lake"
-        echo "     特性: 最多 2-8 个虚拟核显（取决于型号）"
-        echo "  3. 验证核显虚拟化状态"
-        echo "     检查 IOMMU、VFIO、SR-IOV/GVT-g 配置"
-        echo "  4. 移除核显虚拟化配置"
-        echo "     恢复默认配置，移除所有核显虚拟化设置"
-        echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-        echo "  GRUB 配置管理（强烈推荐使用）"
-        echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-        echo "  5. 查看当前 GRUB 配置"
-        echo "     展示当前的 GRUB 引导参数和关键配置"
-        echo "  6. 备份 GRUB 配置"
-        echo "     备份到 /etc/pvetools9/backup/grub/"
-        echo "  7. 查看 GRUB 备份列表"
-        echo "     列出所有已创建的备份文件"
-        echo "  8. 恢复 GRUB 配置"
-        echo "     从备份文件恢复 GRUB 配置"
-        echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-        echo "  0. 返回主菜单"
-        echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+        show_menu_header "核显虚拟化高级功能"
+        echo -e "  ${RED}【危险警告】${NC} 核显虚拟化属于高危操作"
+        echo -e "  配置错误可能导致系统无法启动，请务必提前备份 GRUB 配置"
+        echo "${UI_DIVIDER}"
+        show_menu_option "1" "Intel 11-15代 SR-IOV 核显虚拟化"
+        echo -e "     ${CYAN}支持:${NC} Rocket Lake, Alder Lake, Raptor Lake"
+        echo -e "     ${CYAN}特性:${NC} 最多 7 个虚拟核显，性能较好"
+        show_menu_option "2" "Intel 6-10代 GVT-g 核显虚拟化"
+        echo -e "     ${CYAN}支持:${NC} Skylake ~ Comet Lake"
+        echo -e "     ${CYAN}特性:${NC} 最多 2-8 个虚拟核显（取决于型号）"
+        show_menu_option "3" "验证核显虚拟化状态"
+        echo -e "     ${CYAN}检查:${NC} IOMMU、VFIO、SR-IOV/GVT-g 配置"
+        show_menu_option "4" "移除核显虚拟化配置"
+        echo -e "     ${CYAN}恢复:${NC} 默认配置，移除所有核显虚拟化设置"
+        echo "${UI_DIVIDER}"
+        show_menu_option "" "GRUB 配置管理（强烈推荐使用）"
+        echo "${UI_DIVIDER}"
+        show_menu_option "5" "查看当前 GRUB 配置"
+        echo -e "     ${CYAN}展示:${NC} 当前的 GRUB 引导参数和关键配置"
+        show_menu_option "6" "备份 GRUB 配置"
+        echo -e "     ${CYAN}路径:${NC} /etc/pvetools9/backup/grub/"
+        show_menu_option "7" "查看 GRUB 备份列表"
+        show_menu_option "8" "恢复 GRUB 配置"
+        echo "${UI_DIVIDER}"
+        show_menu_option "0" "返回主菜单"
+        show_menu_footer
         echo
         read -p "请选择操作 [0-8]: " choice
 
@@ -3326,7 +3354,7 @@ pve8_to_pve9_upgrade() {
     log_info "检测到当前 PVE 版本: $current_pve_version"
     log_warn "即将开始 PVE 8.x 到 PVE 9.x 的升级流程"
     log_warn "此过程不可逆，请确保已备份重要数据！"
-    log_warn "建议在升级前阅读详细原理与避坑指南：https://s.ow0.icu/advanced/pve-upgrade"
+    log_warn "建议在升级前阅读详细原理与避坑指南：https://pve.u3u.icu/advanced/pve-upgrade"
     log_warn "建议在升级前手动备份 /var/lib/pve-cluster/ 目录"
     echo
     log_warn "升级过程中请勿中断，确保有稳定的网络连接"
@@ -3553,37 +3581,38 @@ show_system_info() {
     log_step "为您展示系统运行状况"
     echo
     echo "${UI_BORDER}"
-    echo "  系统信息概览"
+    echo -e "  ${H1}系统信息概览${NC}"
     echo "${UI_DIVIDER}"
-    echo "PVE 版本: $(pveversion | head -n1)"
-    echo "内核版本: $(uname -r)"
-    echo "CPU 信息: $(lscpu | grep 'Model name' | sed 's/Model name:[ \t]*//')"
-    echo "CPU 核心: $(nproc) 核心"
-    echo "系统架构: $(dpkg --print-architecture)"
-    echo "系统启动: $(uptime -p | sed 's/up //')"
-    echo "引导类型: $(if [ -d /sys/firmware/efi ]; then echo UEFI; else echo BIOS; fi)"
-    echo "系统负载: $(uptime | awk -F'load average:' '{print $2}')"
-    echo "内存使用: $(free -h | grep Mem | awk '{print $3"/"$2}')"
-    echo "磁盘使用:"
-    df -h | grep -E '^/dev/' | awk '{print "  "$1" "$3"/"$2" ("$5")"}'
-    echo "网络接口:"
-    ip -br addr show | awk '{print "  "$1" "$3}'
-    echo "当前时间: $(date)"
+    echo -e "  ${PRIMARY}PVE 版本:${NC} $(pveversion | head -n1)"
+    echo -e "  ${PRIMARY}内核版本:${NC} $(uname -r)"
+    echo -e "  ${PRIMARY}CPU 信息:${NC} $(lscpu | grep 'Model name' | sed 's/Model name:[ \t]*//')"
+    echo -e "  ${PRIMARY}CPU 核心:${NC} $(nproc) 核心"
+    echo -e "  ${PRIMARY}系统架构:${NC} $(dpkg --print-architecture)"
+    echo -e "  ${PRIMARY}系统启动:${NC} $(uptime -p | sed 's/up //')"
+    echo -e "  ${PRIMARY}引导类型:${NC} $(if [ -d /sys/firmware/efi ]; then echo UEFI; else echo BIOS; fi)"
+    echo -e "  ${PRIMARY}系统负载:${NC} $(uptime | awk -F'load average:' '{print $2}')"
+    echo -e "  ${PRIMARY}内存使用:${NC} $(free -h | grep Mem | awk '{print $3"/"$2}')"
+    echo -e "  ${PRIMARY}磁盘使用:${NC}"
+    df -h | grep -E '^/dev/' | awk '{print "    "$1" "$3"/"$2" ("$5")"}'
+    echo -e "  ${PRIMARY}网络接口:${NC}"
+    ip -br addr show | awk '{print "    "$1" "$3}'
+    echo -e "  ${PRIMARY}当前时间:${NC} $(date)"
     echo "${UI_FOOTER}"
 }
 
 # 主菜单
 show_menu() {
     show_banner 
-    show_menu_option "请选择您需要的功能："
-    show_menu_option "1" "系统优化 (订阅弹窗/温度监控/电源模式)"
-    show_menu_option "2" "软件源与更新 (换源/更新/PVE8→9升级)"
-    show_menu_option "3" "启动与内核 (内核切换/更新/清理)"
-    show_menu_option "4" "直通与显卡 (核显/NVIDIA/硬件直通)"
-    show_menu_option "5" "虚拟机与容器 (FastPVE/第三方工具)"
-    show_menu_option "6" "存储与硬盘 (Local合并/Ceph/休眠)"
-    show_menu_option "7" "工具与关于 (系统信息/救砖/Star)"
-    show_menu_option "0" "退出脚本"
+    show_menu_option "" "请选择您需要的功能："
+    show_menu_option "1" "系统优化 ${CYAN}(订阅弹窗/温度监控/电源模式)${NC}"
+    show_menu_option "2" "软件源与更新 ${CYAN}(换源/更新/PVE8→9升级)${NC}"
+    show_menu_option "3" "启动与内核 ${CYAN}(内核切换/更新/清理)${NC}"
+    show_menu_option "4" "直通与显卡 ${CYAN}(核显/NVIDIA/硬件直通)${NC}"
+    show_menu_option "5" "虚拟机与容器 ${CYAN}(FastPVE/第三方工具)${NC}"
+    show_menu_option "6" "存储与硬盘 ${CYAN}(Local合并/Ceph/休眠)${NC}"
+    show_menu_option "7" "工具与关于 ${CYAN}(系统信息/救砖//)${NC}"
+    echo "$UI_DIVIDER"
+    show_menu_option "0" "${RED}退出脚本${NC}"
     show_menu_footer
     
     # 贴吧老梗随机轮播 (卡吧特供版)
@@ -3675,9 +3704,9 @@ show_menu() {
         "图吧真传：一百预算进图吧，学校门口开网吧"
     )
     local random_index=$((RANDOM % ${#tips[@]}))
-    echo -e "${CYAN}小贴士：${tips[$random_index]}${NC}"
-    
-    echo -n "请输入您的选择 [0-9]: "
+    echo -e "  ${YELLOW} 小贴士：${tips[$random_index]}${NC}"
+    echo
+    echo -ne "  ${PRIMARY}请输入您的选择 [0-7]: ${NC}"
 }
 
 # 应急救砖工具箱菜单
@@ -3720,9 +3749,10 @@ menu_optimization() {
         clear
         show_menu_header "系统优化"
         show_menu_option "1" "删除订阅弹窗"
-        show_menu_option "2" "温度监控管理 (CPU/硬盘监控设置)"
+        show_menu_option "2" "温度监控管理 ${CYAN}(CPU/硬盘监控设置)${NC}"
         show_menu_option "3" "CPU 电源模式配置"
-        show_menu_option "4" "一键优化 (换源+删弹窗+更新)"
+        show_menu_option "4" "${MAGENTA}一键优化 (换源+删弹窗+更新)${NC}"
+        echo "$UI_DIVIDER"
         show_menu_option "0" "返回主菜单"
         show_menu_footer
         read -p "请选择操作 [0-4]: " choice
@@ -3745,7 +3775,8 @@ menu_sources_updates() {
         show_menu_header "软件源与更新"
         show_menu_option "1" "更换软件源"
         show_menu_option "2" "更新系统软件包"
-        show_menu_option "3" "PVE 8.x 升级到 PVE 9.x"
+        show_menu_option "3" "${YELLOW}PVE 8.x 升级到 PVE 9.x${NC}"
+        echo "$UI_DIVIDER"
         show_menu_option "0" "返回主菜单"
         show_menu_footer
         read -p "请选择操作 [0-3]: " choice
@@ -3765,8 +3796,9 @@ menu_boot_kernel() {
     while true; do
         clear
         show_menu_header "启动与内核"
-        show_menu_option "1" "内核管理 (内核切换/更新/清理)"
+        show_menu_option "1" "内核管理 ${CYAN}(内核切换/更新/清理)${NC}"
         show_menu_option "2" "查看/备份 GRUB 配置"
+        echo "$UI_DIVIDER"
         show_menu_option "0" "返回主菜单"
         show_menu_footer
         read -p "请选择操作 [0-2]: " choice
@@ -3930,9 +3962,10 @@ menu_vm_container() {
     while true; do
         clear
         show_menu_header "虚拟机与容器"
-        show_menu_option "1" "FastPVE - 虚拟机快速下载"
-        show_menu_option "2" "Community Scripts - 第三方工具集"
+        show_menu_option "1" "${CYAN}FastPVE${NC} - 虚拟机快速下载"
+        show_menu_option "2" "${CYAN}Community Scripts${NC} - 第三方工具集"
         show_menu_option "3" "虚拟机/容器定时开关机"
+        echo "$UI_DIVIDER"
         show_menu_option "0" "返回主菜单"
         show_menu_footer
         read -p "请选择操作 [0-3]: " choice
@@ -3952,10 +3985,11 @@ menu_storage_disk() {
     while true; do
         clear
         show_menu_header "存储与硬盘"
-        show_menu_option "1" "合并 local 与 local-lvm"
-        show_menu_option "2" "Ceph 管理 (安装/卸载/换源)"
-        show_menu_option "3" "硬盘休眠配置 (hdparm)"
-        show_menu_option "4" "删除 Swap 分区"
+        show_menu_option "1" "合并 ${CYAN}local${NC} 与 ${CYAN}local-lvm${NC}"
+        show_menu_option "2" "${CYAN}Ceph${NC} 管理 (安装/卸载/换源)"
+        show_menu_option "3" "硬盘休眠配置 ${CYAN}(hdparm)${NC}"
+        show_menu_option "4" "${RED}删除 Swap 分区${NC}"
+        echo "$UI_DIVIDER"
         show_menu_option "0" "返回主菜单"
         show_menu_footer
         read -p "请选择操作 [0-4]: " choice
@@ -4028,20 +4062,24 @@ quick_setup() {
 # 通用UI函数
 show_menu_header() {
     local title="$1"
-    echo "${UI_BORDER}"
-    printf "  %s\n" "$title"
-    echo "${UI_DIVIDER}"
+    echo -e "${UI_BORDER}"
+    echo -e "  ${H2}${title}${NC}"
+    echo -e "${UI_DIVIDER}"
 }
 
 show_menu_footer() {
-    echo "${UI_FOOTER}"
+    echo -e "${UI_FOOTER}"
 }
 
 show_menu_option() {
     local num="$1"
     local desc="$2"
-    # Use plain text without color codes
-    printf "  %-3s. %s\\n" "$num" "$desc"
+    if [[ -z "$desc" ]]; then
+        # 仅作为消息或标题显示
+        echo -e "  ${H2}$num${NC}"
+    else
+        printf "  ${PRIMARY}%-3s${NC}. %s\\n" "$num" "$desc"
+    fi
 }
 
 # 镜像源选择函数
@@ -4052,9 +4090,9 @@ select_mirror() {
         show_menu_option "1" "中科大镜像源"
         show_menu_option "2" "清华Tuna镜像源" 
         show_menu_option "3" "Debian默认源"
-        echo "${UI_DIVIDER}"
+        echo -e "${UI_DIVIDER}"
         echo "注意：选择后将作为后续所有软件源操作的基础"
-        show_menu_footer
+        echo -e "${UI_DIVIDER}"
         echo
         
         read -p "请选择 [1-3]: " mirror_choice
@@ -4201,7 +4239,7 @@ check_update() {
         
         echo -e "----------------------------------------------"
         echo -e "${CYAN}官方文档与最新脚本：${NC}"
-        echo -e "🔗 https://s.ow0.icu (推荐)"
+        echo -e "🔗 https://pve.u3u.icu (推荐)"
         echo -e "🔗 https://github.com/Mapleawaa/PVE-Tools-9"
         echo -e "${UI_FOOTER}"
         echo -e "按 ${GREEN}回车键${NC} 进入主菜单..."
@@ -4211,108 +4249,16 @@ check_update() {
     fi
 }
 
-# 版本检查函数 - 拉一坨屎在这里，这是镜像源的使用情景，但是大家好像都是用的 bash -sSl <(curl ...) 来跑脚本，所以就注释掉了。
-# check_update() {
-#     log_info "正在检查更新..."
-    
-#     download_file() {
-#         local url="$1"
-#         local timeout=10
-        
-#         if command -v curl &> /dev/null; then
-#             curl -s --connect-timeout $timeout --max-time $timeout "$url" 2>/dev/null
-#         elif command -v wget &> /dev/null; then
-#             wget -q -T $timeout -O - "$url" 2>/dev/null
-#         else
-#             echo ""
-#         fi
-#     }
-    
-#     # 显示进度提示
-#     echo -ne "[....] 正在检查更新...\033[0K\r"
-    
-#     # 首先尝试从GitHub下载版本文件
-#     remote_content=$(download_file "$VERSION_FILE_URL")
-    
-#     # 如果GitHub下载失败，自动尝试镜像源
-#     if [ -z "$remote_content" ]; then
-#         echo -ne "[WARN] GitHub连接失败，尝试镜像源...\033[0K\r"
-#         mirror_url="https://ghfast.top/${UPDATE_FILE_URL}"
-#         remote_content=$(download_file "$mirror_url")
-#     fi
-    
-#     # 清除进度显示
-#     echo -ne "\033[0K\r"
-    
-#     # 如果所有下载都失败
-#     if [ -z "$remote_content" ]; then
-#         log_warn "网络连接失败，跳过版本检查"
-#         echo "提示：您可以手动访问以下地址检查更新："
-#         echo "https://github.com/Mapleawaa/PVE-Tools-9"
-#         echo "按回车键继续..."
-#         read -r
-#         return
-#     fi
-    
-#     # 提取版本号和更新日志
-#     remote_version=$(echo "$remote_content" | head -1 | tr -d '[:space:]')
-#     version_changelog=$(echo "$remote_content" | tail -n +2)
-    
-#     if [ -z "$remote_version" ]; then
-#         log_warn "获取的版本信息格式不正确"
-#         return
-#     fi
-    
-#     # 尝试获取详细的更新日志
-#     UPDATE_FILE_URL="https://raw.githubusercontent.com/Mapleawaa/PVE-Tools-9/main/UPDATE"
-#     detailed_changelog=$(download_file "$UPDATE_FILE_URL")
-    
-#     # 如果GitHub的UPDATE文件获取失败，尝试镜像源
-#     if [ -z "$detailed_changelog" ]; then
-#         mirror_update_url="https://ghfast.top/Mapleawaa/PVE-Tools-9/main/UPDATE"
-#         detailed_changelog=$(download_file "$mirror_update_url")
-#     fi
-    
-#     # 比较版本
-#     if [ "$(printf '%s\n' "$remote_version" "$CURRENT_VERSION" | sort -V | tail -n1)" != "$CURRENT_VERSION" ]; then
-#         echo "----------------------------------------------"
-#         echo "发现新版本！推荐更新哦，新增功能和修复BUG喵"
-#         echo "当前版本: $CURRENT_VERSION"
-#         echo "最新版本: $remote_version"
-#         echo "更新内容："
-        
-#         # 如果获取到了详细的更新日志，则显示详细内容，否则显示从VERSION文件中获取的内容
-#         if [ -n "$detailed_changelog" ]; then
-#             echo "$detailed_changelog"
-#         else
-#             # 格式化显示版本文件中的更新内容
-#             if [ -n "$version_changelog" ] && [ "$version_changelog" != "$remote_version" ]; then
-#                 echo "$version_changelog"
-#             else
-#                 echo "  - 请查看项目页面获取详细更新内容"
-#             fi
-#         fi
-        
-#         echo "----------------------------------------------"
-#         echo "请访问项目页面获取最新版本："
-#         echo "https://github.com/Mapleawaa/PVE-Tools-9"
-#         echo "按回车键继续..."
-#         read -r
-#     else
-#         log_success "当前已是最新版本 ($CURRENT_VERSION) 放心用吧"
-#     fi
-# }
-
 # 温度监控管理菜单
 temp_monitoring_menu() {
     while true; do
         clear
         show_menu_header "温度监控管理"
-        show_menu_option "1" "配置温度监控 (CPU/硬盘温度显示)"
-        show_menu_option "2" "移除温度监控 (移除温度监控功能)"
-        show_menu_option "3" "自定义温度监控选项 (高级)"
+        show_menu_option "1" "配置温度监控 ${CYAN}(CPU/硬盘温度显示)${NC}"
+        show_menu_option "2" "${RED}移除温度监控${NC} (移除温度监控功能)"
+        show_menu_option "3" "自定义温度监控选项 ${MAGENTA}(高级)${NC}"
         echo "${UI_DIVIDER}"
-        show_menu_option "0" "返回主菜单"
+        show_menu_option "0" "返回上级菜单"
         show_menu_footer
         echo
         read -p "请选择 [0-3]: " temp_choice
@@ -4478,9 +4424,9 @@ ceph_management_menu() {
         clear
 
         show_menu_header "Ceph管理"
-        show_menu_option "1" "添加ceph-squid源 (PVE8/9专用)"
-        show_menu_option "2" "添加ceph-quincy源 (PVE7/8专用)"
-        show_menu_option "3" "卸载Ceph (完全移除Ceph)"
+        show_menu_option "1" "添加 ${CYAN}ceph-squid${NC} 源 (PVE8/9专用)"
+        show_menu_option "2" "添加 ${CYAN}ceph-quincy${NC} 源 (PVE7/8专用)"
+        show_menu_option "3" "${RED}卸载 Ceph${NC} (完全移除Ceph)"
         echo "${UI_DIVIDER}"
         show_menu_option "0" "返回主菜单"
         show_menu_footer
@@ -4560,7 +4506,7 @@ restore_qemu_kvm() {
 intel_gpu_passthrough() {
     log_step "开始 Intel 核显直通配置"
     echo "注意：此功能基于 lixiaoliu666 的修改版 QEMU 和 ROM"
-    echo "详细原理与教程：https://s.ow0.icu/advanced/gpu-passthrough"
+    echo "详细原理与教程：https://pve.u3u.icu/advanced/gpu-passthrough"
     echo "适用于需要将 Intel 核显直通给 Windows 虚拟机且遇到代码 43 或黑屏的情况"
     echo "支持的 CPU 架构：6代(Skylake) 到 14代(Raptor Lake Refresh)"
     echo "项目地址：https://github.com/lixiaoliu666/intel6-14rom"
@@ -4575,7 +4521,7 @@ intel_gpu_passthrough() {
     log_warn "折腾有风险，入坑需谨慎！"
     echo
     log_tips "如果配置失败，请访问文档站查看详细教程并留言反馈："
-    log_tips "🔗 https://s.ow0.icu/advanced/gpu-passthrough"
+    log_tips "🔗 https://pve.u3u.icu/advanced/gpu-passthrough"
     echo
     log_tips "如需要反馈或者请求更新ROM文件适配你的CPU，请前往lixiaoliu666的GitHub仓库开ISSUE反馈，不是找我。"
     echo
