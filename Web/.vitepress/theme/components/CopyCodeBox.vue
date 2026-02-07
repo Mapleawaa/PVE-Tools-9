@@ -17,7 +17,7 @@ const sources = computed(() => {
 
 const currentIndex = ref(0)
 const currentSource = computed(() => sources.value[currentIndex.value])
-const code = computed(() => `bash <(curl -sSL ${currentSource.value.url} | bash)`)
+const code = computed(() => `bash <(curl -sSL ${currentSource.value.url})`)
 
 const copied = ref(false)
 const isRotating = ref(false)
@@ -68,7 +68,7 @@ const copyCode = async () => {
         </div>
         <div class="terminal-content">
           <span class="prompt">bash</span>
-          <span class="operator">&lt;(</span><span class="command">curl -sSL {{ currentSource.url }} | bash</span><span class="operator">)</span>
+          <span class="operator">&lt;(</span><span class="command">curl -sSL {{ currentSource.url }}</span><span class="operator">)</span>
         </div>
       </div>
       <div class="footer-tip">点击复制 click to copy</div>

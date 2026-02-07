@@ -37,7 +37,7 @@ export default defineConfig({
         ]
       },
       {
-        text: '高级教程 (博客)',
+        text: '高级教程',
         items: [
           { text: '教程总览', link: '/advanced/' },
           { text: 'Intel 核显直通', link: '/advanced/gpu-passthrough' },
