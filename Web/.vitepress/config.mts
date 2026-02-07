@@ -3,6 +3,7 @@ import { defineConfig } from 'vitepress'
 export default defineConfig({
   title: "PVE-Tools",
   description: "让每个人都能体验虚拟化技术带来的便利。",
+  ignoreDeadLinks: true,
   head: [
     ['link', { rel: 'stylesheet', href: 'https://s1.hdslb.com/bfs/static/jinkela/longtu/images/harmonyos_sans_sc.css' }],
     ['link', { rel: 'stylesheet', href: 'https://s1.hdslb.com/bfs/static/jinkela/longtu/images/harmonyos_sans_sc_mono.css' }],

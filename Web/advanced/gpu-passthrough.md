@@ -22,7 +22,7 @@
 *   **客体系统**：Windows 10/11，其对初始化链路更为敏感。
 *   **必须满足**：
     1.  BIOS 开启了 **VT-d / IOMMU** 以及 **Internal Graphics**。
-    2.  直通设备需要拥有可用并且独立的 **IOMMU Group**，不然就属于硬件或者主板拓扑方面的问题，需要参考 [Proxmox 官方文档](pve.proxmox.com) 来进行调整。
+    2.  直通设备需要拥有可用并且独立的 **IOMMU Group**，不然就属于硬件或者主板拓扑方面的问题，需要参考 [Proxmox 官方文档](https://pve.proxmox.com) 来进行调整。
 *   **不做承诺**：在不同主板固件、核显步进以及内核版本的组合之下，直通成功率会存在波动。失败并不等同于“脚本错误”。本文所提供的乃是**可复现的排障路径以及回滚方案**，并非“百分百成功”的承诺。
 
 > **风险提示**：直通会让这个设备在宿主机上变得不可用。**建议在更新内核或者执行直通脚本之前，先给 PVE 宿主机去做好快照或者备份工作。**
@@ -59,7 +59,7 @@ find /sys/kernel/iommu_groups/ -type l
 args: -device 'vfio-pci,host=00:02.0,addr=0x18,guest-reset=0,romfile=intel.bin'
 ```
 > [!TIP]
-> 脚本会自动帮你去完成绝大部分文件的下载以及配置映射。关于 ROM 注入、直通参数、q35/OVMF 的兼容性建议，可以参考 [Proxmox 官方 Wiki](pve.proxmox.com) 当中的解释以及例子。
+> 脚本会自动帮你去完成绝大部分文件的下载以及配置映射。关于 ROM 注入、直通参数、q35/OVMF 的兼容性建议，可以参考 [Proxmox 官方 Wiki](https://pve.proxmox.com) 当中的解释以及例子。
 
 ## 常见坑点与警示
 
