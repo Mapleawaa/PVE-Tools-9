@@ -2509,6 +2509,16 @@ igpu_sriov_setup() {
     echo "配置内核模块..."
     backup_file "/etc/modules"
 
+    # 清理可能存在的 i915 及音视频相关黑名单 (SR-IOV 需要 i915 驱动加载)
+    echo "清理可能存在的 i915 及音视频相关黑名单..."
+    for f in /etc/modprobe.d/blacklist.conf /etc/modprobe.d/pve-blacklist.conf; do
+        if [ -f "$f" ]; then
+            sed -i '/blacklist i915/d' "$f"
+            sed -i '/blacklist snd_hda_intel/d' "$f"
+            sed -i '/blacklist snd_hda_codec_hdmi/d' "$f"
+        fi
+    done
+
     # 添加 VFIO 模块（如果未添加）
     for module in vfio vfio_iommu_type1 vfio_pci vfio_virqfd; do
         if ! grep -q "^$module$" /etc/modules; then
@@ -2744,6 +2754,16 @@ igpu_gvtg_setup() {
     # 配置内核模块
     echo "配置内核模块..."
     backup_file "/etc/modules"
+
+    # 清理可能存在的 i915 及音视频相关黑名单 (GVT-g 需要 i915 驱动加载)
+    echo "清理可能存在的 i915 及音视频相关黑名单..."
+    for f in /etc/modprobe.d/blacklist.conf /etc/modprobe.d/pve-blacklist.conf; do
+        if [ -f "$f" ]; then
+            sed -i '/blacklist i915/d' "$f"
+            sed -i '/blacklist snd_hda_intel/d' "$f"
+            sed -i '/blacklist snd_hda_codec_hdmi/d' "$f"
+        fi
+    done
 
     # 添加 VFIO 和 kvmgt 模块
     for module in vfio vfio_iommu_type1 vfio_pci vfio_virqfd kvmgt; do
