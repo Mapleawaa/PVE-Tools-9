@@ -1,18 +1,18 @@
 # PVE Tools 9 🚀
 
 <div align="center">
-你的下一个简单好用，简洁易用的 PVE9 配置脚本
+专为 PVE 9（Debian 13）打造的一键运维脚本：换源/订阅弹窗/直通/存储/虚拟机工具/邮件通知，并内置非 PVE9 风险防护
 
 [文档](https://pve.u3u.icu) | [更新日志](https://pve.u3u.icu/update) | [疑难解答](https://pve.u3u.icu/faq) | [赞助喵！](https://pve.u3u.icu/sponsor)
 
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![License: GPL-3.0](https://img.shields.io/badge/License-GPL--3.0-blue.svg)](https://www.gnu.org/licenses/gpl-3.0.html)
 [![Shell Script](https://img.shields.io/badge/Shell-Script-4EAA25?logo=gnu-bash&logoColor=white)](https://www.gnu.org/software/bash/)
 [![Proxmox VE](https://img.shields.io/badge/Proxmox-VE%209.0-E57000?logo=proxmox&logoColor=white)](https://www.proxmox.com/)
 [![Debian](https://img.shields.io/badge/Debian-13%20(Trixie)-A81D33?logo=debian&logoColor=white)](https://www.debian.org/)
 
  🎉  1K Stars 撒花 🎉 好耶 ！！！🎉  Ciallo～(∠・ω<)⌒★
 
-![展示](/images/main-shot-latest.png)
+![展示](/images/main-shot-6.6.png)
 
 </div>
 
@@ -39,9 +39,9 @@ bash <(curl -sSL https://raw.githubusercontent.com/Mapleawaa/PVE-Tools-9/main/PV
 ---
 
 ### 🔔 公告
-[官网已上线！点我查看！](https://pve.u3u.icu)
-[更新日志点我查看！](https://pve.u3u.icu/update)
-[疑难解答点我查看！](https://pve.u3u.icu/faq)
+[官网已上线！点我查看！](https://pve.u3u.icu)|
+[更新日志点我查看！](https://pve.u3u.icu/update)|
+[疑难解答点我查看！](https://pve.u3u.icu/faq)|
 [赞助喵！](https://pve.u3u.icu/sponsor)
 
 
