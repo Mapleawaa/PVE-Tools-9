@@ -7,7 +7,7 @@
 # 请注意开源协议，请勿商用批量使用。
 
 # 版本信息
-CURRENT_VERSION="6.4.0"
+CURRENT_VERSION="6.5.0"
 VERSION_FILE_URL="https://raw.githubusercontent.com/Mapleawaa/PVE-Tools-9/main/VERSION"
 UPDATE_FILE_URL="https://raw.githubusercontent.com/Mapleawaa/PVE-Tools-9/main/UPDATE"
 
