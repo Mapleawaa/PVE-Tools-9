@@ -1,15 +1,21 @@
 #!/bin/bash
 
+# SPDX-License-Identifier: GPL-3.0-only
+# Copyright (C) 2026 Ciriu Networks
+# Auther:Maple 
+
+# 二次修改使用请不要删除此段注释
 # PVE 9.0 配置工具脚本
 # 支持换源、删除订阅弹窗、硬盘管理等功能
 # 适用于 Proxmox VE 9.0 (基于 Debian 13)
-# Auther:Maple 二次修改使用请不要删除此段注释
-# 请注意开源协议，请勿商用批量使用。
+
 
 # 版本信息
-CURRENT_VERSION="6.5.0"
+CURRENT_VERSION="6.6.0"
 VERSION_FILE_URL="https://raw.githubusercontent.com/Mapleawaa/PVE-Tools-9/main/VERSION"
 UPDATE_FILE_URL="https://raw.githubusercontent.com/Mapleawaa/PVE-Tools-9/main/UPDATE"
+PVE_VERSION_DETECTED=""
+PVE_MAJOR_VERSION=""
 
 # ============ 颜色系统 ============
 
@@ -462,7 +468,7 @@ EOF
     echo "$UI_BORDER"
     echo -e "  ${H1}PVE-Tools-9 一键脚本${NC}"
     echo "  让每个人都能体验虚拟化技术的的便利。"
-    echo -e "  作者: ${PINK}Maple${NC} & 提交PR的你们"
+    echo -e "  作者: ${PINK}Maple${NC} | 交流群: ${CYAN}1031976463${NC}"
     echo -e "  当前版本: ${GREEN}$CURRENT_VERSION${NC} | 最新版本: ${remote_version:-"未检测"}"
     echo "$UI_BORDER"
 }
@@ -521,6 +527,8 @@ check_pve_version() {
     if [[ "$DEBUG_MODE" == "true" ]]; then
         log_warn "调试模式：跳过 PVE 版本检测"
         echo "请注意：您正在非 PVE 系统上运行此脚本，某些功能可能无法正常工作"
+        PVE_VERSION_DETECTED="debug"
+        PVE_MAJOR_VERSION="debug"
         return
     fi
     
@@ -530,8 +538,302 @@ check_pve_version() {
         exit 1
     fi
     
-    local pve_version=$(pveversion | head -n1 | cut -d'/' -f2 | cut -d'-' -f1)
+    local pve_version
+    pve_version="$(pveversion | head -n1 | cut -d'/' -f2 | cut -d'-' -f1)"
+    PVE_VERSION_DETECTED="$pve_version"
+    PVE_MAJOR_VERSION="$(echo "$pve_version" | cut -d'.' -f1)"
     log_info "太好了！检测到 PVE 版本: $pve_version"
+
+    if [[ "$PVE_MAJOR_VERSION" != "9" ]]; then
+        clear
+        show_menu_header "高风险提示：非 PVE9 环境"
+        echo -e "${RED}警告：检测到当前不是 PVE 9.x（当前：${PVE_VERSION_DETECTED}）。${NC}"
+        echo -e "${RED}本脚本面向 PVE 9.x（Debian 13 / trixie）编写。${NC}"
+        echo -e "${RED}在 PVE 7/8 等系统上执行“换源/升级/一键优化”等自动化修改，可能是毁灭性的：${NC}"
+        echo -e "${RED}可能导致软件源错配、系统升级路径错误、依赖冲突、宿主机不可用。${NC}"
+        echo -e "${UI_DIVIDER}"
+        echo -e "${YELLOW}严禁在非 PVE9 上使用的选项（脚本将强制拦截）：${NC}"
+        echo -e "  - 一键优化（换源+删弹窗+更新）"
+        echo -e "  - 软件源与更新（更换软件源/更新系统软件包/PVE 8 升级到 9）"
+        echo -e "${UI_DIVIDER}"
+        echo -e "${CYAN}如你仍要继续使用脚本的其它功能，请手动输入以下任意一项以确认风险：${NC}"
+        echo -e "  - 确认"
+        echo -e "  - Confirm with Risks"
+        echo -e "${UI_DIVIDER}"
+        local ack ack_lc
+        read -r -p "请输入确认文本以继续（回车退出）: " ack
+        if [[ -z "$ack" ]]; then
+            log_info "未确认风险，退出脚本"
+            exit 0
+        fi
+        ack_lc="$(echo "$ack" | tr 'A-Z' 'a-z' | sed -E 's/[[:space:]]+/ /g' | sed -E 's/^ +| +$//g')"
+        if [[ "$ack" != "确认" && "$ack_lc" != "confirm with risks" ]]; then
+            log_error "确认文本不匹配，已退出"
+            exit 1
+        fi
+        log_warn "已确认风险：当前为非 PVE9 环境，将拦截毁灭性自动化修改功能"
+    fi
+}
+
+block_non_pve9_destructive() {
+    local feature="$1"
+    if [[ "$DEBUG_MODE" == "true" ]]; then
+        return 0
+    fi
+    if [[ "${PVE_MAJOR_VERSION:-}" != "9" ]]; then
+        display_error "已拦截：非 PVE9 环境禁止执行该自动化操作" "功能：${feature}。请在 PVE9 上使用，或手动参考文档/自行处理。"
+        return 1
+    fi
+    return 0
+}
+
+pve_mail_send_test() {
+    local from_addr="$1"
+    local to_addr="$2"
+    local subject="$3"
+    local body="$4"
+
+    if ! command -v sendmail >/dev/null 2>&1; then
+        display_error "未找到 sendmail" "请确认 postfix 已安装并提供 sendmail。"
+        return 1
+    fi
+
+    {
+        echo "From: ${from_addr}"
+        echo "To: ${to_addr}"
+        echo "Subject: ${subject}"
+        echo
+        echo "${body}"
+    } | sendmail -f "${from_addr}" -t >/dev/null 2>&1
+}
+
+pve_mail_configure_postfix_smtp() {
+    local relay_host="$1"
+    local relay_port="$2"
+    local tls_mode="$3"
+    local sasl_user="$4"
+    local sasl_pass="$5"
+
+    if ! command -v postconf >/dev/null 2>&1; then
+        display_error "未找到 postconf" "请先安装 postfix 并确保其命令可用。"
+        return 1
+    fi
+
+    local relay
+    relay="[${relay_host}]:${relay_port}"
+
+    backup_file "/etc/postfix/main.cf" >/dev/null 2>&1 || true
+    postconf -e "relayhost = ${relay}"
+    postconf -e "smtp_use_tls = yes"
+    postconf -e "smtp_tls_security_level = encrypt"
+    postconf -e "smtp_sasl_auth_enable = yes"
+    postconf -e "smtp_sasl_security_options ="
+    postconf -e "smtp_sasl_password_maps = hash:/etc/postfix/sasl_passwd"
+    postconf -e "smtp_tls_CApath = /etc/ssl/certs"
+    postconf -e "smtp_tls_session_cache_database = btree:/var/lib/postfix/smtp_tls_session_cache"
+    postconf -e "smtp_tls_session_cache_timeout = 3600s"
+
+    if [[ "$tls_mode" == "wrapper" ]]; then
+        postconf -e "smtp_tls_wrappermode = yes"
+    else
+        postconf -e "smtp_tls_wrappermode = no"
+    fi
+
+    local sasl_file="/etc/postfix/sasl_passwd"
+    backup_file "$sasl_file" >/dev/null 2>&1 || true
+    umask 077
+    printf '%s %s:%s\n' "${relay}" "${sasl_user}" "${sasl_pass}" > "$sasl_file"
+    chmod 600 "$sasl_file" >/dev/null 2>&1 || true
+
+    if ! command -v postmap >/dev/null 2>&1; then
+        display_error "未找到 postmap" "请确认 postfix 已安装完整。"
+        return 1
+    fi
+    postmap "hash:${sasl_file}" >/dev/null 2>&1 || {
+        display_error "postmap 执行失败" "请检查 /etc/postfix/sasl_passwd 格式与权限。"
+        return 1
+    }
+
+    postfix reload >/dev/null 2>&1 || {
+        systemctl reload postfix >/dev/null 2>&1 || systemctl restart postfix >/dev/null 2>&1 || true
+    }
+
+    return 0
+}
+
+pve_mail_configure_datacenter_emails() {
+    local from_addr="$1"
+    local root_addr="$2"
+
+    if ! command -v pvesh >/dev/null 2>&1; then
+        display_error "未找到 pvesh" "请确认当前环境为 PVE 宿主机。"
+        return 1
+    fi
+
+    pvesh set /cluster/options --email-from "$from_addr" >/dev/null 2>&1 || {
+        display_error "设置“来自…邮件”失败" "请在 WebUI：数据中心 -> 选项 -> 电子邮件（From）中手动设置。"
+        return 1
+    }
+
+    pvesh set /access/users/root@pam --email "$root_addr" >/dev/null 2>&1 || {
+        display_error "设置 root 邮箱失败" "请在 WebUI：数据中心 -> 权限 -> 用户 -> root@pam 中手动设置邮箱。"
+        return 1
+    }
+
+    return 0
+}
+
+pve_mail_configure_zed_mail() {
+    local from_addr="$1"
+    local to_addr="$2"
+
+    local zed_rc="/etc/zfs/zed.d/zed.rc"
+    if [[ ! -f "$zed_rc" ]]; then
+        log_warn "未找到 zed.rc（跳过 ZFS ZED 邮件配置）"
+        return 0
+    fi
+
+    backup_file "$zed_rc" >/dev/null 2>&1 || true
+
+    if grep -qE '^ZED_EMAIL_ADDR=' "$zed_rc"; then
+        sed -i "s|^ZED_EMAIL_ADDR=.*|ZED_EMAIL_ADDR=\"${to_addr}\"|g" "$zed_rc"
+    else
+        printf '\nZED_EMAIL_ADDR="%s"\n' "$to_addr" >> "$zed_rc"
+    fi
+
+    if grep -qE '^ZED_EMAIL_OPTS=' "$zed_rc"; then
+        sed -i "s|^ZED_EMAIL_OPTS=.*|ZED_EMAIL_OPTS=\"-r ${from_addr}\"|g" "$zed_rc"
+    else
+        printf 'ZED_EMAIL_OPTS="-r %s"\n' "$from_addr" >> "$zed_rc"
+    fi
+
+    systemctl restart zfs-zed >/dev/null 2>&1 || true
+    return 0
+}
+
+pve_mail_notification_setup() {
+    block_non_pve9_destructive "配置邮件通知（SMTP）" || return 1
+    log_step "配置 PVE 邮件通知（商业邮箱 SMTP）"
+
+    if ! command -v postfix >/dev/null 2>&1 && ! command -v postconf >/dev/null 2>&1; then
+        display_error "未检测到 postfix" "请先安装 postfix 后再配置（安装过程可能需要交互）。"
+        return 1
+    fi
+
+    local from_addr root_addr
+    read -p "请输入“来自…邮件”（发件人邮箱）: " from_addr
+    if [[ -z "$from_addr" ]]; then
+        display_error "发件人邮箱不能为空"
+        return 1
+    fi
+
+    read -p "请输入 root 通知邮箱（收件人邮箱）: " root_addr
+    if [[ -z "$root_addr" ]]; then
+        display_error "收件人邮箱不能为空"
+        return 1
+    fi
+
+    local preset
+    echo -e "${CYAN}请选择 SMTP 预设：${NC}"
+    echo "  1) QQ 邮箱（smtp.qq.com:465 SSL）"
+    echo "  2) 163 邮箱（smtp.163.com:465 SSL）"
+    echo "  3) Gmail（smtp.gmail.com:587 STARTTLS）"
+    echo "  4) 自定义（SMTP 兼容）"
+    read -p "请选择 [1-4] (默认: 1): " preset
+    preset="${preset:-1}"
+
+    local smtp_host smtp_port tls_mode
+    case "$preset" in
+        1) smtp_host="smtp.qq.com"; smtp_port="465"; tls_mode="wrapper" ;;
+        2) smtp_host="smtp.163.com"; smtp_port="465"; tls_mode="wrapper" ;;
+        3) smtp_host="smtp.gmail.com"; smtp_port="587"; tls_mode="starttls" ;;
+        4)
+            read -p "请输入 SMTP 服务器地址（如 smtp.xxx.com）: " smtp_host
+            read -p "请输入 SMTP 端口（如 465/587）: " smtp_port
+            read -p "TLS 模式（wrapper/starttls）[wrapper]: " tls_mode
+            tls_mode="${tls_mode:-wrapper}"
+            ;;
+        *) smtp_host="smtp.qq.com"; smtp_port="465"; tls_mode="wrapper" ;;
+    esac
+
+    if [[ -z "$smtp_host" || -z "$smtp_port" ]]; then
+        display_error "SMTP 参数不完整"
+        return 1
+    fi
+    if [[ "$tls_mode" != "wrapper" && "$tls_mode" != "starttls" ]]; then
+        display_error "TLS 模式无效" "仅支持 wrapper 或 starttls"
+        return 1
+    fi
+
+    local smtp_user smtp_pass
+    read -p "请输入 SMTP 登录账号（通常为邮箱地址）[${from_addr}]: " smtp_user
+    smtp_user="${smtp_user:-$from_addr}"
+    if [[ -z "$smtp_user" ]]; then
+        display_error "SMTP 账号不能为空"
+        return 1
+    fi
+
+    echo -n "请输入 SMTP 密码/授权码（输入不回显）: "
+    read -r -s smtp_pass
+    echo
+    if [[ -z "$smtp_pass" ]]; then
+        display_error "SMTP 密码/授权码不能为空"
+        return 1
+    fi
+
+    clear
+    show_menu_header "邮件通知配置确认"
+    echo -e "${YELLOW}发件人（From）:${NC} $from_addr"
+    echo -e "${YELLOW}收件人（root 邮箱）:${NC} $root_addr"
+    echo -e "${YELLOW}SMTP 服务器:${NC} ${smtp_host}:${smtp_port}"
+    echo -e "${YELLOW}TLS 模式:${NC} ${tls_mode}"
+    echo -e "${YELLOW}SMTP 账号:${NC} ${smtp_user}"
+    echo -e "${UI_DIVIDER}"
+    echo -e "${RED}提醒：此功能会修改 postfix 配置并写入 SMTP 凭据文件。${NC}"
+    echo -e "${RED}请确保你使用的是邮箱提供商的 SMTP 授权码/应用专用密码，而非登录密码。${NC}"
+    echo -e "${UI_DIVIDER}"
+
+    if ! confirm_action "开始应用配置并重载 postfix？"; then
+        return 0
+    fi
+
+    log_step "配置 PVE 数据中心邮件选项"
+    pve_mail_configure_datacenter_emails "$from_addr" "$root_addr" || return 1
+
+    log_step "安装 SASL 模块（libsasl2-modules）"
+    apt-get update >/dev/null 2>&1 || true
+    if ! apt-get install -y libsasl2-modules >/dev/null 2>&1; then
+        display_error "安装 libsasl2-modules 失败" "请检查网络与软件源。"
+        return 1
+    fi
+
+    log_step "配置 postfix 通过 SMTP 中继发信"
+    pve_mail_configure_postfix_smtp "$smtp_host" "$smtp_port" "$tls_mode" "$smtp_user" "$smtp_pass" || return 1
+
+    local test_choice="yes"
+    read -p "是否发送测试邮件？(yes/no) [yes]: " test_choice
+    test_choice="${test_choice:-yes}"
+    if [[ "$test_choice" == "yes" || "$test_choice" == "YES" ]]; then
+        log_step "发送测试邮件"
+        if pve_mail_send_test "$from_addr" "$root_addr" "PVE-Tools 邮件测试" "这是一封测试邮件：如果你收到，说明 SMTP 中继已可用。"; then
+            log_success "测试邮件已提交发送队列（请检查收件箱与垃圾箱）"
+        else
+            log_warn "测试邮件发送失败，请检查 postfix 日志与 SMTP 配置"
+            log_tips "可查看：journalctl -u postfix -n 200 或 tail -n 200 /var/log/mail.log"
+        fi
+    fi
+
+    local zed_choice="no"
+    read -p "是否额外配置 ZFS ZED 邮件（ZFS 阵列事件通知）？(yes/no) [no]: " zed_choice
+    zed_choice="${zed_choice:-no}"
+    if [[ "$zed_choice" == "yes" || "$zed_choice" == "YES" ]]; then
+        log_step "配置 ZFS ZED 邮件参数"
+        pve_mail_configure_zed_mail "$from_addr" "$root_addr" || true
+        log_success "ZED 配置已处理（建议手动制造一次 ZFS 事件验证）"
+    fi
+
+    display_success "邮件通知配置完成" "建议在 WebUI 里触发一次通知或检查系统事件确认生效。"
+    return 0
 }
 
 # 检测当前内核版本
@@ -933,6 +1235,7 @@ backup_file() {
 
 # 换源功能
 change_sources() {
+    block_non_pve9_destructive "更换软件源" || return 1
     log_step "开始为您的 PVE 换上飞速源"
     
     # 根据选择的镜像源确定URL
@@ -1076,6 +1379,7 @@ EOF
 
 # 删除订阅弹窗
 remove_subscription_popup() {
+    block_non_pve9_destructive "删除订阅弹窗" || return 1
     log_step "正在消除那个烦人的订阅弹窗"
     
     local js_file="/usr/share/javascript/proxmox-widget-toolkit/proxmoxlib.js"
@@ -1233,6 +1537,7 @@ remove_swap() {
 
 # 更新系统
 update_system() {
+    block_non_pve9_destructive "更新系统软件包" || return 1
     log_step "开始更新系统，让 PVE 保持最新状态 📦"
     
     echo -e "${CYAN}正在更新软件包列表...${NC}"
@@ -1435,6 +1740,7 @@ rdm_discover_whole_disks() {
 
     local -A best_id_for_dev=()
     local -A best_pri_for_dev=()
+    local -A ata_id_for_dev=()
 
     local link
     while IFS= read -r -d '' link; do
@@ -1471,6 +1777,10 @@ rdm_discover_whole_disks() {
         if [[ "$base_name" =~ ^scsi- ]]; then pri=30; fi
         if [[ "$base_name" =~ ^pci- ]]; then pri=40; fi
 
+        if [[ "$base_name" =~ ^ata- ]] && [[ -z "${ata_id_for_dev[$real_dev]:-}" ]]; then
+            ata_id_for_dev["$real_dev"]="$link"
+        fi
+
         if [[ -z "${best_id_for_dev[$real_dev]:-}" || "$pri" -lt "${best_pri_for_dev[$real_dev]}" ]]; then
             best_id_for_dev["$real_dev"]="$link"
             best_pri_for_dev["$real_dev"]="$pri"
@@ -1479,11 +1789,12 @@ rdm_discover_whole_disks() {
 
     local dev
     for dev in "${!best_id_for_dev[@]}"; do
-        local id_path size model
+        local id_path size model ata_path
         id_path="${best_id_for_dev[$dev]}"
+        ata_path="${ata_id_for_dev[$dev]:-}"
         size="$(lsblk -dn -o SIZE "$dev" 2>/dev/null | head -n 1)"
         model="$(lsblk -dn -o MODEL "$dev" 2>/dev/null | head -n 1)"
-        printf '%s|%s|%s|%s\n' "$id_path" "$dev" "${size:-?}" "${model:-?}"
+        printf '%s|%s|%s|%s|%s\n' "$id_path" "$dev" "${size:-?}" "${model:-?}" "$ata_path"
     done | sort -t'|' -k2,2
 }
 
@@ -1531,7 +1842,15 @@ rdm_single_disk_attach() {
     fi
 
     echo -e "${CYAN}可直通磁盘列表（完整磁盘）：${NC}"
-    echo "$disks" | awk -F'|' '{printf "  [%d] %-55s -> %-12s  %-8s  %s\n", NR, $1, $2, $3, $4}'
+    echo "$disks" | awk -F'|' '{
+        ata=$5;
+        if (ata == "") ata="-";
+        else {
+            n=split(ata,a,"/");
+            ata=a[n];
+        }
+        printf "  [%d] %-55s -> %-12s  %-8s  %-28s  ATA:%s\n", NR, $1, $2, $3, $4, ata
+    }'
     echo -e "${UI_DIVIDER}"
 
     local pick
@@ -4279,6 +4598,7 @@ third_party_tools_menu() {
 
 # PVE8 to PVE9 升级功能
 pve8_to_pve9_upgrade() {
+    block_non_pve9_destructive "PVE 8.x 升级到 PVE 9.x" || return 1
     log_step "开始 PVE 8.x 升级到 PVE 9.x"
     
     # 检查当前 PVE 版本
@@ -4693,15 +5013,17 @@ menu_optimization() {
         show_menu_option "2" "温度监控管理 ${CYAN}(CPU/硬盘监控设置)${NC}"
         show_menu_option "3" "CPU 电源模式配置"
         show_menu_option "4" "${MAGENTA}一键优化 (换源+删弹窗+更新)${NC}"
+        show_menu_option "5" "配置邮件通知 ${CYAN}(SMTP/Postfix)${NC}"
         echo "$UI_DIVIDER"
         show_menu_option "0" "返回主菜单"
         show_menu_footer
-        read -p "请选择操作 [0-4]: " choice
+        read -p "请选择操作 [0-5]: " choice
         case $choice in
             1) remove_subscription_popup ;;
             2) temp_monitoring_menu ;;
             3) cpupower ;;
             4) quick_setup ;;
+            5) pve_mail_notification_setup ;;
             0) return ;;
             *) log_error "无效选择" ;;
         esac
@@ -4900,6 +5222,313 @@ manage_vm_schedule() {
     done
 }
 
+img_bytes_to_human() {
+    local bytes="$1"
+    if [[ -z "$bytes" || ! "$bytes" =~ ^[0-9]+$ ]]; then
+        echo "?"
+        return 0
+    fi
+    awk -v b="$bytes" 'BEGIN{
+        split("B KB MB GB TB PB", u, " ");
+        i=1; x=b;
+        while (x>=1024 && i<6) {x/=1024; i++}
+        if (i==1) printf "%d%s", b, u[i];
+        else printf "%.1f%s", x, u[i];
+    }'
+}
+
+img_discover_img_files() {
+    local roots=("/root" "/var/lib/vz/template/iso" "/home")
+    local root
+    for root in "${roots[@]}"; do
+        if [[ -d "$root" ]]; then
+            find "$root" -xdev -type f \( -iname '*.img' \) -printf '%p|%s|%TY-%Tm-%Td %TH:%TM\n' 2>/dev/null || true
+        fi
+    done
+}
+
+img_select_img_file() {
+    local files
+    files="$(img_discover_img_files)"
+    if [[ -z "$files" ]]; then
+        log_error "未发现 .img 文件"
+        log_tips "已扫描目录：/root、/var/lib/vz/template/iso、/home"
+        return 1
+    fi
+
+    {
+        echo -e "${CYAN}已发现 .img 文件：${NC}"
+        echo "$files" | awk -F'|' '
+            function human(x,   u,i){
+                split("B KB MB GB TB PB", u, " ");
+                i=1;
+                while (x>=1024 && i<6){x/=1024;i++}
+                if (i==1) return sprintf("%d%s", x, u[i]);
+                return sprintf("%.1f%s", x, u[i]);
+            }
+            {
+                printf "  [%d] %-9s %-16s %s\n", NR, human($2), $3, $1
+            }'
+        echo -e "${UI_DIVIDER}"
+    } >&2
+
+    local pick
+    read -p "请选择镜像序号 (0 返回): " pick
+    pick="${pick:-0}"
+    if [[ "$pick" == "0" ]]; then
+        return 2
+    fi
+    if [[ ! "$pick" =~ ^[0-9]+$ ]]; then
+        log_error "序号必须是数字"
+        return 1
+    fi
+
+    local line path
+    line="$(echo "$files" | awk -F'|' -v n="$pick" 'NR==n{print $0}')"
+    path="$(echo "$line" | awk -F'|' '{print $1}')"
+    if [[ -z "$path" || ! -f "$path" ]]; then
+        log_error "无效选择"
+        return 1
+    fi
+    echo "$path"
+    return 0
+}
+
+img_select_vmid() {
+    local vms
+    vms="$(qm list 2>/dev/null | awk 'NR>1{print $1 "|" $2 "|" $3}')"
+    if [[ -z "$vms" ]]; then
+        log_error "未发现虚拟机"
+        log_tips "请先创建虚拟机后再操作。"
+        return 1
+    fi
+
+    {
+        echo -e "${CYAN}可用虚拟机列表：${NC}"
+        echo "$vms" | awk -F'|' '{printf "  [%d] VMID: %-6s Name: %-22s Status: %s\n", NR, $1, $2, $3}'
+        echo -e "${UI_DIVIDER}"
+    } >&2
+
+    local pick
+    read -p "请选择虚拟机序号 (0 返回): " pick
+    pick="${pick:-0}"
+    if [[ "$pick" == "0" ]]; then
+        return 2
+    fi
+    if [[ ! "$pick" =~ ^[0-9]+$ ]]; then
+        log_error "序号必须是数字"
+        return 1
+    fi
+
+    local line vmid
+    line="$(echo "$vms" | awk -F'|' -v n="$pick" 'NR==n{print $0}')"
+    vmid="$(echo "$line" | awk -F'|' '{print $1}')"
+    if [[ -z "$vmid" ]]; then
+        log_error "无效选择"
+        return 1
+    fi
+    if ! validate_qm_vmid "$vmid"; then
+        return 1
+    fi
+    echo "$vmid"
+    return 0
+}
+
+img_select_storage() {
+    local stores
+    stores="$(pvesm status 2>/dev/null | awk 'NR>1{print $1 "|" $2}')"
+    if [[ -z "$stores" ]]; then
+        local manual
+        read -p "未能获取存储列表，请手动输入存储名（如 local-lvm）: " manual
+        if [[ -z "$manual" ]]; then
+            log_error "存储名不能为空"
+            return 1
+        fi
+        echo "$manual"
+        return 0
+    fi
+
+    {
+        echo -e "${CYAN}可用存储列表：${NC}"
+        echo "$stores" | awk -F'|' '{printf "  [%d] %-18s (%s)\n", NR, $1, $2}'
+        echo -e "${UI_DIVIDER}"
+    } >&2
+
+    local pick
+    read -p "请选择存储序号 (0 返回): " pick
+    pick="${pick:-0}"
+    if [[ "$pick" == "0" ]]; then
+        return 2
+    fi
+    if [[ ! "$pick" =~ ^[0-9]+$ ]]; then
+        log_error "序号必须是数字"
+        return 1
+    fi
+
+    local line store
+    line="$(echo "$stores" | awk -F'|' -v n="$pick" 'NR==n{print $0}')"
+    store="$(echo "$line" | awk -F'|' '{print $1}')"
+    if [[ -z "$store" ]]; then
+        log_error "无效选择"
+        return 1
+    fi
+    echo "$store"
+    return 0
+}
+
+img_convert_and_import_to_vm() {
+    log_step "IMG 镜像转换并导入虚拟机"
+
+    if ! command -v qemu-img >/dev/null 2>&1; then
+        display_error "未找到 qemu-img" "请先安装：apt install -y qemu-utils"
+        return 1
+    fi
+    if ! command -v qm >/dev/null 2>&1; then
+        display_error "未找到 qm 命令" "请确认当前环境为 PVE 宿主机。"
+        return 1
+    fi
+
+    local img_path
+    img_path="$(img_select_img_file)"
+    local rc=$?
+    if [[ "$rc" -eq 2 ]]; then
+        return 0
+    fi
+    if [[ -z "$img_path" ]]; then
+        return 1
+    fi
+
+    local vmid
+    vmid="$(img_select_vmid)"
+    rc=$?
+    if [[ "$rc" -eq 2 ]]; then
+        return 0
+    fi
+    if [[ -z "$vmid" ]]; then
+        return 1
+    fi
+
+    local store
+    store="$(img_select_storage)"
+    rc=$?
+    if [[ "$rc" -eq 2 ]]; then
+        return 0
+    fi
+    if [[ -z "$store" ]]; then
+        return 1
+    fi
+
+    local out_fmt
+    read -p "请选择目标格式 (qcow2/raw) [qcow2]: " out_fmt
+    out_fmt="${out_fmt:-qcow2}"
+    if [[ "$out_fmt" != "qcow2" && "$out_fmt" != "raw" ]]; then
+        display_error "不支持的格式: $out_fmt" "仅支持 qcow2/raw"
+        return 1
+    fi
+
+    local ts ext out_path out_dir
+    ts="$(date +%Y%m%d_%H%M%S)"
+    ext="$out_fmt"
+    out_dir="$(dirname "$img_path")"
+    out_path="${out_dir}/vm-${vmid}-disk-import-${ts}.${ext}"
+    if [[ -e "$out_path" ]]; then
+        out_path="${out_dir}/vm-${vmid}-disk-import-${ts}-1.${ext}"
+    fi
+
+    clear
+    show_menu_header "IMG 镜像转换并导入虚拟机"
+    local sz
+    sz="$(stat -c '%s' "$img_path" 2>/dev/null || echo "")"
+    echo -e "${YELLOW}源镜像:${NC} $img_path"
+    if [[ -n "$sz" ]]; then
+        echo -e "${YELLOW}大小:${NC} $(img_bytes_to_human "$sz")"
+    fi
+    echo -e "${YELLOW}目标 VMID:${NC} $vmid"
+    echo -e "${YELLOW}目标存储:${NC} $store"
+    echo -e "${YELLOW}目标格式:${NC} $out_fmt"
+    echo -e "${YELLOW}临时输出:${NC} $out_path"
+    echo -e "${UI_DIVIDER}"
+
+    if ! confirm_action "开始转换并导入磁盘？"; then
+        return 0
+    fi
+
+    log_step "开始转换（qemu-img convert）"
+    if ! qemu-img convert -p -f raw -O "$out_fmt" "$img_path" "$out_path"; then
+        display_error "镜像转换失败" "请检查镜像文件是否为 raw 格式，或查看日志输出。"
+        return 1
+    fi
+
+    log_step "开始导入（qm importdisk）"
+    local import_out vol
+    if ! import_out="$(qm importdisk "$vmid" "$out_path" "$store" 2>&1)"; then
+        echo "$import_out" | sed 's/^/  /'
+        display_error "导入失败" "请检查存储名称与空间，或查看上方输出。"
+        return 1
+    fi
+
+    vol="$(echo "$import_out" | sed -n "s/.*as '\\([^']\\+\\)'.*/\\1/p" | tail -n 1)"
+    [[ -z "$vol" ]] && vol="$(echo "$import_out" | grep -oE "${store}:[^ ]+" | tail -n 1)"
+
+    if [[ -n "$vol" ]]; then
+        log_success "导入完成: $vol"
+    else
+        log_success "导入完成"
+    fi
+
+    local attach_bus attach_slot cfg
+    local auto_attach="yes"
+    read -p "是否自动挂载到 VM？(yes/no) [yes]: " auto_attach
+    auto_attach="${auto_attach:-yes}"
+    if [[ "$auto_attach" == "yes" || "$auto_attach" == "YES" ]]; then
+        read -p "请选择总线类型 (scsi/sata/ide) [scsi]: " attach_bus
+        attach_bus="${attach_bus:-scsi}"
+        if [[ "$attach_bus" != "scsi" && "$attach_bus" != "sata" && "$attach_bus" != "ide" ]]; then
+            log_warn "不支持的总线类型，跳过自动挂载: $attach_bus"
+        else
+            cfg="$(qm config "$vmid" 2>/dev/null || true)"
+            if [[ -n "$vol" && -n "$cfg" ]] && echo "$cfg" | grep -Fq "$vol"; then
+                log_info "检测到该卷已写入 VM 配置（可能为 unusedX 或已挂载），跳过自动挂载。"
+            elif [[ -z "$vol" ]]; then
+                log_info "未能解析导入卷 ID，跳过自动挂载。"
+            else
+                attach_slot="$(rdm_find_free_slot "$vmid" "$attach_bus" 2>/dev/null)" || true
+                if [[ -z "$attach_slot" ]]; then
+                    log_warn "未找到可用插槽，跳过自动挂载"
+                else
+                    if confirm_action "将磁盘挂载到 VM $vmid（${attach_slot} = ${vol}）"; then
+                        if qm set "$vmid" "-$attach_slot" "$vol" >/dev/null 2>&1; then
+                            log_success "已挂载: $attach_slot"
+                        else
+                            log_warn "自动挂载失败，请在 PVE WebUI 中手动添加该磁盘"
+                        fi
+                    fi
+                fi
+            fi
+        fi
+    fi
+
+    local del_tmp="yes"
+    read -p "是否删除临时输出文件 $out_path ？(yes/no) [yes]: " del_tmp
+    del_tmp="${del_tmp:-yes}"
+    if [[ "$del_tmp" == "yes" || "$del_tmp" == "YES" ]]; then
+        rm -f "$out_path" >/dev/null 2>&1 || true
+    fi
+
+    display_success "处理完成" "如需从该磁盘引导，请在 VM 启动顺序中选择对应磁盘。"
+    return 0
+}
+
+img_convert_import_menu() {
+    clear
+    show_menu_header "IMG 镜像导入（转换为 QCOW2/RAW）"
+    echo -e "${CYAN}功能说明：${NC}"
+    echo -e "  - 自动扫描：/root、/var/lib/vz/template/iso、/home 下的 .img 文件"
+    echo -e "  - 使用 qemu-img 转换后，通过 qm importdisk 导入到指定 VM 与存储"
+    echo -e "${UI_DIVIDER}"
+    img_convert_and_import_to_vm
+}
+
 # 二级菜单：虚拟机与容器
 menu_vm_container() {
     while true; do
@@ -4908,14 +5537,16 @@ menu_vm_container() {
         show_menu_option "1" "${CYAN}FastPVE${NC} - 虚拟机快速下载"
         show_menu_option "2" "${CYAN}Community Scripts${NC} - 第三方工具集"
         show_menu_option "3" "虚拟机/容器定时开关机"
+        show_menu_option "4" "IMG 镜像导入（转 QCOW2/RAW）"
         echo "$UI_DIVIDER"
         show_menu_option "0" "返回主菜单"
         show_menu_footer
-        read -p "请选择操作 [0-3]: " choice
+        read -p "请选择操作 [0-4]: " choice
         case $choice in
             1) fastpve_quick_download_menu ;;
             2) third_party_tools_menu ;;
             3) manage_vm_schedule ;;
+            4) img_convert_import_menu ;;
             0) return ;;
             *) log_error "无效选择" ;;
         esac
@@ -4989,6 +5620,7 @@ menu_tools_about() {
 
 # 一键配置
 quick_setup() {
+    block_non_pve9_destructive "一键优化（换源+删弹窗+更新）" || return 1
     log_step "开始一键配置"
     log_step "天涯若比邻，海内存知己，坐和放宽，让我来搞定一切。"
     echo

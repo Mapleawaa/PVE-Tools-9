@@ -3,7 +3,7 @@
 <div align="center">
 你的下一个简单好用，简洁易用的 PVE9 配置脚本
 
-[文档](https://pve.u3u.icu) | [更新日志](https://pve.u3u.icu/update) | [疑难解答](https://pve.u3u.icu/faq)
+[文档](https://pve.u3u.icu) | [更新日志](https://pve.u3u.icu/update) | [疑难解答](https://pve.u3u.icu/faq) | [赞助喵！](https://pve.u3u.icu/sponsor)
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Shell Script](https://img.shields.io/badge/Shell-Script-4EAA25?logo=gnu-bash&logoColor=white)](https://www.gnu.org/software/bash/)
@@ -29,20 +29,20 @@ bash <(curl -sSL https://ghfast.top/raw.githubusercontent.com/Mapleawaa/PVE-Tool
 ```
 bash <(curl -sSL https://raw.githubusercontent.com/Mapleawaa/PVE-Tools-9/main/PVE-Tools.sh)
 ```
+
+> [!NOTE]
+> 想加入用户交流群？点击这里加入 [QQ群](https://qun.qq.com/universal-share/share?ac=1&authKey=WFmy%2BxG1k%2Brc6%2B4zEdURmihOrSdNsi%2BsgvyFSYsTcoG7DQr937Z%2BeIbNSjQxM%2BZx&busi_data=eyJncm91cENvZGUiOiIxMDMxOTc2NDYzIiwidG9rZW4iOiJVOHl5dEYzai9TVS9rbFhGUmgwTzRMQ0tFY0llVkZEbnR3dDZPbzNlNno2TDN2WDZQdDdqQldqQ2U4OWxFMGNxIiwidWluIjoiMTUyMDk0MjYyMSJ9&data=xZ9BNcGDjqHr3YBYrEviIev4mXAVYi8p_9_uqrt5zpv5TtYYUC191c08PbmwX2ThLlx_djc8Hz_uz6r-7lzavg&svctype=4&tempid=h5_group_info)
+
 > [!WARNING]
 > 请不要多次拉取文件，无论镜像站还是源站。否则会被服务器拒绝导致影响心情。
 
 ---
 
-### 公告
-
-> [!IMPORTANT]
-> 显卡拆分/直通 已新开仓库使用其他语言编写脚本。
-> 详细请看 👉 [N卡拆分仓库](https://github.com/Mapleawaa/NVIDIA-vGPU-Script-For-PVE) | [显卡直通脚本仓库](https://github.com/Mapleawaa/GPU-Pathrough-Script-For-PVE)
-> 更新：已停更。享年三个星期。
-
-> [!WARNING]
-> 3.0.0 起已加入 Proxmox 安全软件源，建议尽快更新以避免潜在安全风险。
+### 🔔 公告
+[官网已上线！点我查看！](https://pve.u3u.icu)
+[更新日志点我查看！](https://pve.u3u.icu/update)
+[疑难解答点我查看！](https://pve.u3u.icu/faq)
+[赞助喵！](https://pve.u3u.icu/sponsor)
 
 
 ### 📖 项目简介
@@ -82,38 +82,22 @@ chmod +x PVE-Tools.sh
 sudo ./PVE-Tools.sh
 ```
 ## 📁 文档知识库
-官方文档：[https://s.ow0.icu](https://s.ow0.icu) (推荐)
-备用地址：[https://docs.302200.xyz/pve](https://docs.302200.xyz/pve)
+官方文档：https://pve.u3u.icu (推荐)
 
 ---
 
 ## 📄 开源协议
 
-本项目采用 MIT 协议发布，详见 [LICENSE](LICENSE) 文件。
+本项目采用 **GPL-3.0** 许可证（详见 `LICENSE`）。
 
-```
-MIT License
+- 版权所有 (C) 2026 Ciriu Networks  
+- 作者：云汐月喵  
 
-Copyright (c) 2025 Sovitx IO
+## 免责声明  
 
-Permission is hereby granted, free of charge, to any person obtaining a copy
-of this software and associated documentation files (the "Software"), to deal
-in the Software without restriction, including without limitation the rights
-to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-copies of the Software, and to permit persons to whom the Software is
-furnished to do so, subject to the following conditions:
+这是一份用于 Proxmox VE（PVE）的系统配置工具。  
+使用风险自担，详见 [用户许可协议](https://pve.u3u.icu/ula)。
 
-The above copyright notice and this permission notice shall be included in all
-copies or substantial portions of the Software.
-
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-SOFTWARE.
-```
 
 ## 🙏 特别感谢
 
@@ -123,9 +107,6 @@ SOFTWARE.
   <img src="https://contrib.rocks/image?repo=Mapleawaa/PVE-Tools-9" />
 </a>
 
-特别感谢以下贡献者：
-- **[Mapleawaa](https://github.com/Mapleawaa)** - 项目创始人与主要维护者
-- **[Claude Code (Anthropic)](https://claude.ai)** - AI 代码助手，参与第三方工具集成、代码重构与优化
 
 ### 🏛️ 相关组织与项目
 
@@ -143,11 +124,6 @@ SOFTWARE.
 - 感谢代码参考：https://zhichao.org/posts/e0fe08
 - 参考了众多开源项目的最佳实践
 
-### 🎨 设计与界面
-
-- **ASCII 字符画** - 字符画设计灵感来源于社区创作
-- **配色方案** - 配色参考了现代终端美学
-
 ---
 
 <div align="center">
@@ -162,7 +138,7 @@ SOFTWARE.
 <!-- [**Qwen3**](https://github.com/QwenLM/Qwen3) - 阿里云 Qwen 团队开发的大语言模型系列 -->
 <!-- 这个太菜了不用了 ⬆️ -->
 
-[![GitHub](https://img.shields.io/badge/GitHub-SovitxNetworks-181717?logo=github&logoColor=white)](https://github.com/Mapleawaa)
+[![GitHub](https://img.shields.io/badge/GitHub-Ciriu-181717?logo=github&logoColor=white)](https://github.com/Mapleawaa)
 
 </div>
 <img src="https://api.star-history.com/svg?repos=Mapleawaa/PVE-Tools-9&type=Date)](https://www.star-history.com/#Mapleawaa/PVE-Tools-9&Date"> </img>
