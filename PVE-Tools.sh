@@ -6,7 +6,7 @@
 # Auther:Maple 二次修改使用请不要删除此段注释
 
 # 版本信息
-CURRENT_VERSION="6.3.1"
+CURRENT_VERSION="6.4.0"
 VERSION_FILE_URL="https://raw.githubusercontent.com/Mapleawaa/PVE-Tools-9/main/VERSION"
 UPDATE_FILE_URL="https://raw.githubusercontent.com/Mapleawaa/PVE-Tools-9/main/UPDATE"
 
@@ -1337,6 +1337,893 @@ hw_passth() {
         esac
     done
 }
+#--------------磁盘/控制器直通----------------
+
+# 磁盘/控制器直通总菜单
+menu_disk_controller_passthrough() {
+    while true; do
+        clear
+        show_menu_header "磁盘/控制器直通"
+        show_menu_option "1" "RDM（裸磁盘映射）- 单个磁盘直通"
+        show_menu_option "2" "RDM 取消直通（--delete）"
+        show_menu_option "3" "磁盘控制器直通（PCIe）"
+        show_menu_option "4" "NVMe 直通（含 MSI-X 重定位）"
+        show_menu_option "5" "引导配置辅助（UEFI/Legacy）"
+        show_menu_option "0" "返回"
+        show_menu_footer
+        read -p "请选择操作 [0-5]: " choice
+        case "$choice" in
+            1) rdm_single_disk_attach ;;
+            2) rdm_single_disk_detach ;;
+            3) storage_controller_passthrough ;;
+            4) nvme_passthrough ;;
+            5) boot_config_assistant ;;
+            0) return ;;
+            *) log_error "无效选择" ;;
+        esac
+        pause_function
+    done
+}
+
+# ============ RDM（裸磁盘映射）单盘直通 ============
+
+# 获取 VM 配置文件路径（不保证一定存在，需调用方自行判断）
+get_qm_conf_path() {
+    local vmid="$1"
+    echo "/etc/pve/qemu-server/${vmid}.conf"
+}
+
+# 校验 VMID 并确保 VM 存在
+validate_qm_vmid() {
+    local vmid="$1"
+    if [[ -z "$vmid" || ! "$vmid" =~ ^[0-9]+$ ]]; then
+        log_error "VMID 必须是数字"
+        return 1
+    fi
+    if ! qm status "$vmid" >/dev/null 2>&1; then
+        log_error "VMID 不存在或无法访问: $vmid"
+        return 1
+    fi
+    return 0
+}
+
+# 将 /dev/disk/by-id 的链接解析为真实磁盘设备，并过滤不可直通设备
+# 过滤规则：
+# - 排除分区：by-id 名称包含 -partX 或目标设备为分区（lsblk TYPE=part）
+# - 排除 DM/LVM：目标设备为 dm-* 或 /dev/mapper/*
+# - 仅保留 TYPE=disk 的完整磁盘
+rdm_discover_whole_disks() {
+    local byid_dir="/dev/disk/by-id"
+    if [[ ! -d "$byid_dir" ]]; then
+        log_error "未找到目录: $byid_dir"
+        return 1
+    fi
+
+    local -A best_id_for_dev=()
+    local -A best_pri_for_dev=()
+
+    local link
+    while IFS= read -r -d '' link; do
+        local base_name real_dev dev_name dev_type pri
+        base_name="$(basename "$link")"
+
+        if [[ "$base_name" =~ -part[0-9]+$ ]]; then
+            continue
+        fi
+
+        real_dev="$(readlink -f "$link" 2>/dev/null)"
+        if [[ -z "$real_dev" ]]; then
+            continue
+        fi
+
+        if [[ "$real_dev" == /dev/mapper/* || "$(basename "$real_dev")" == dm-* ]]; then
+            continue
+        fi
+
+        if [[ ! -b "$real_dev" ]]; then
+            continue
+        fi
+
+        dev_type="$(lsblk -dn -o TYPE "$real_dev" 2>/dev/null | head -n 1)"
+        if [[ "$dev_type" != "disk" ]]; then
+            continue
+        fi
+
+        pri=50
+        if [[ "$base_name" =~ ^wwn- ]]; then pri=10; fi
+        if [[ "$base_name" =~ ^nvme-eui ]]; then pri=10; fi
+        if [[ "$base_name" =~ ^nvme-uuid ]]; then pri=15; fi
+        if [[ "$base_name" =~ ^ata- ]]; then pri=20; fi
+        if [[ "$base_name" =~ ^scsi- ]]; then pri=30; fi
+        if [[ "$base_name" =~ ^pci- ]]; then pri=40; fi
+
+        if [[ -z "${best_id_for_dev[$real_dev]:-}" || "$pri" -lt "${best_pri_for_dev[$real_dev]}" ]]; then
+            best_id_for_dev["$real_dev"]="$link"
+            best_pri_for_dev["$real_dev"]="$pri"
+        fi
+    done < <(find "$byid_dir" -maxdepth 1 -type l -print0 2>/dev/null)
+
+    local dev
+    for dev in "${!best_id_for_dev[@]}"; do
+        local id_path size model
+        id_path="${best_id_for_dev[$dev]}"
+        size="$(lsblk -dn -o SIZE "$dev" 2>/dev/null | head -n 1)"
+        model="$(lsblk -dn -o MODEL "$dev" 2>/dev/null | head -n 1)"
+        printf '%s|%s|%s|%s\n' "$id_path" "$dev" "${size:-?}" "${model:-?}"
+    done | sort -t'|' -k2,2
+}
+
+# 自动查找总线类型下可用插槽（sata 最多 6 个，ide 最多 4 个）
+rdm_find_free_slot() {
+    local vmid="$1"
+    local bus="$2"
+
+    local max_idx=0
+    case "$bus" in
+        sata) max_idx=5 ;;
+        ide) max_idx=3 ;;
+        scsi) max_idx=30 ;;
+        *) log_error "不支持的总线类型: $bus"; return 1 ;;
+    esac
+
+    local cfg
+    cfg="$(qm config "$vmid" 2>/dev/null)"
+    if [[ -z "$cfg" ]]; then
+        log_error "无法读取 VM 配置: $vmid"
+        return 1
+    fi
+
+    local i
+    for ((i=0; i<=max_idx; i++)); do
+        if ! echo "$cfg" | grep -qE "^${bus}${i}:"; then
+            echo "${bus}${i}"
+            return 0
+        fi
+    done
+
+    log_error "无可用插槽: $bus (0-$max_idx)"
+    return 1
+}
+
+# RDM 单盘直通（添加）
+rdm_single_disk_attach() {
+    log_step "RDM 单盘直通 - 磁盘发现"
+
+    local disks
+    disks="$(rdm_discover_whole_disks)"
+    if [[ -z "$disks" ]]; then
+        display_error "未发现可直通的完整磁盘" "请检查 /dev/disk/by-id 是否存在可用磁盘，或确认磁盘未被 DM/LVM 接管。"
+        return 1
+    fi
+
+    echo -e "${CYAN}可直通磁盘列表（完整磁盘）：${NC}"
+    echo "$disks" | awk -F'|' '{printf "  [%d] %-55s -> %-12s  %-8s  %s\n", NR, $1, $2, $3, $4}'
+    echo -e "${UI_DIVIDER}"
+
+    local pick
+    read -p "请选择磁盘序号 (返回请输入 0): " pick
+    pick="${pick:-0}"
+    if [[ "$pick" == "0" ]]; then
+        return 0
+    fi
+    if [[ ! "$pick" =~ ^[0-9]+$ ]]; then
+        display_error "磁盘序号必须是数字"
+        return 1
+    fi
+
+    local selected
+    selected="$(echo "$disks" | awk -F'|' -v n="$pick" 'NR==n{print $0}')"
+    if [[ -z "$selected" ]]; then
+        display_error "无效的磁盘序号: $pick"
+        return 1
+    fi
+
+    local id_path real_dev
+    id_path="$(echo "$selected" | awk -F'|' '{print $1}')"
+    real_dev="$(echo "$selected" | awk -F'|' '{print $2}')"
+
+    local vmid
+    read -p "请输入目标 VMID: " vmid
+    if ! validate_qm_vmid "$vmid"; then
+        pause_function
+        return 1
+    fi
+
+    local bus
+    read -p "请选择总线类型 (scsi/sata/ide) [scsi]: " bus
+    bus="${bus:-scsi}"
+    if [[ "$bus" != "scsi" && "$bus" != "sata" && "$bus" != "ide" ]]; then
+        display_error "不支持的总线类型: $bus" "仅支持 scsi/sata/ide"
+        return 1
+    fi
+
+    local cfg
+    cfg="$(qm config "$vmid" 2>/dev/null)"
+    if echo "$cfg" | grep -Fq "$id_path" || echo "$cfg" | grep -Fq "$real_dev"; then
+        display_error "该磁盘已在 VM 配置中存在直通记录" "请先执行取消直通，或选择其他磁盘。"
+        return 1
+    fi
+
+    local slot
+    slot="$(rdm_find_free_slot "$vmid" "$bus")" || return 1
+
+    log_info "将直通磁盘: $id_path -> $real_dev"
+    log_info "目标 VM: $vmid, 插槽: $slot"
+
+    local conf_path
+    conf_path="$(get_qm_conf_path "$vmid")"
+    if [[ -f "$conf_path" ]]; then
+        log_tips "修改 VM 配置前建议备份原配置"
+        backup_file "$conf_path" >/dev/null 2>&1 || true
+    fi
+
+    if ! confirm_action "为 VM $vmid 添加直通磁盘（$slot = $id_path）"; then
+        return 0
+    fi
+
+    if qm set "$vmid" "-$slot" "$id_path" >/dev/null 2>&1; then
+        display_success "直通配置已写入" "如需引导此磁盘，请在 VM 启动顺序中选择该磁盘。"
+        return 0
+    else
+        display_error "qm set 执行失败" "请检查磁盘是否被占用、VM 是否锁定，或查看 /var/log/pve-tools.log。"
+        return 1
+    fi
+}
+
+# RDM 取消直通（--delete）
+rdm_single_disk_detach() {
+    log_step "RDM 取消直通（--delete）"
+
+    local vmid
+    read -p "请输入目标 VMID: " vmid
+    if ! validate_qm_vmid "$vmid"; then
+        return 1
+    fi
+
+    local cfg
+    cfg="$(qm config "$vmid" 2>/dev/null)"
+    if [[ -z "$cfg" ]]; then
+        display_error "无法读取 VM 配置: $vmid"
+        return 1
+    fi
+
+    local disks_lines
+    disks_lines="$(echo "$cfg" | grep -E '^(scsi|sata|ide)[0-9]+:')"
+    if [[ -z "$disks_lines" ]]; then
+        display_error "该 VM 未发现任何磁盘插槽配置" "如果只是没有直通盘，可忽略此提示。"
+        return 1
+    fi
+
+    echo -e "${CYAN}当前 VM 磁盘插槽：${NC}"
+    echo "$disks_lines" | awk '{printf "  [%d] %s\n", NR, $0}'
+    echo -e "${UI_DIVIDER}"
+
+    local pick
+    read -p "请选择要删除的插槽序号 (返回请输入 0): " pick
+    pick="${pick:-0}"
+    if [[ "$pick" == "0" ]]; then
+        return 0
+    fi
+    if [[ ! "$pick" =~ ^[0-9]+$ ]]; then
+        display_error "序号必须是数字"
+        return 1
+    fi
+
+    local line slot
+    line="$(echo "$disks_lines" | awk -v n="$pick" 'NR==n{print $0}')"
+    if [[ -z "$line" ]]; then
+        display_error "无效的序号: $pick"
+        return 1
+    fi
+    slot="$(echo "$line" | cut -d':' -f1)"
+
+    local conf_path
+    conf_path="$(get_qm_conf_path "$vmid")"
+    if [[ -f "$conf_path" ]]; then
+        log_tips "修改 VM 配置前建议备份原配置"
+        backup_file "$conf_path" >/dev/null 2>&1 || true
+    fi
+
+    if ! confirm_action "从 VM $vmid 删除磁盘插槽（--delete $slot）"; then
+        return 0
+    fi
+
+    if qm set "$vmid" --delete "$slot" >/dev/null 2>&1; then
+        display_success "插槽已删除: $slot"
+        return 0
+    else
+        display_error "qm set --delete 执行失败" "请检查 VM 是否锁定，或查看 /var/log/pve-tools.log。"
+        return 1
+    fi
+}
+
+# ============ PCIe 控制器 / NVMe 直通 ============
+
+# 检查 IOMMU 是否已开启（用于 PCIe 设备直通的前置条件）
+iommu_is_enabled() {
+    if [[ -d /sys/kernel/iommu_groups ]]; then
+        local group_count
+        group_count="$(find /sys/kernel/iommu_groups -maxdepth 1 -type d 2>/dev/null | wc -l)"
+        if [[ "${group_count:-0}" -gt 1 ]]; then
+            return 0
+        fi
+    fi
+
+    if dmesg 2>/dev/null | grep -Eiq 'DMAR: IOMMU enabled|IOMMU enabled|AMD-Vi:.*enabled'; then
+        return 0
+    fi
+
+    return 1
+}
+
+# 从 udev 路径中解析 PCI BDF（格式：0000:00:00.0）
+parse_pci_bdf_from_udev_path() {
+    local udev_path="$1"
+    if [[ "$udev_path" =~ ([0-9a-f]{4}:[0-9a-f]{2}:[0-9a-f]{2}\.[0-9a-f]) ]]; then
+        echo "${BASH_REMATCH[1]}"
+        return 0
+    fi
+    return 1
+}
+
+# 获取指定块设备所在的 PCI BDF（用于系统盘控制器保护、控制器磁盘映射）
+get_blockdev_pci_bdf() {
+    local dev_path="$1"
+    if [[ -z "$dev_path" || ! -b "$dev_path" ]]; then
+        return 1
+    fi
+
+    local udev_path
+    udev_path="$(udevadm info --query=path --name="$dev_path" 2>/dev/null)"
+    if [[ -n "$udev_path" ]]; then
+        parse_pci_bdf_from_udev_path "$udev_path" && return 0
+    fi
+
+    return 1
+}
+
+# 获取 PVE 系统盘对应的“整盘设备名”列表（sda / nvme0n1 等）
+get_system_whole_disks() {
+    local -A disks=()
+    local mount_src
+
+    for mp in / /boot /boot/efi; do
+        mount_src="$(findmnt -n -o SOURCE "$mp" 2>/dev/null || true)"
+        if [[ -z "$mount_src" ]]; then
+            continue
+        fi
+
+        if [[ "$mount_src" == /dev/mapper/* ]]; then
+            if command -v pvs >/dev/null 2>&1; then
+                while IFS= read -r pv; do
+                    pv="$(echo "$pv" | awk '{$1=$1;print}')"
+                    if [[ -n "$pv" && -b "$pv" ]]; then
+                        local pk
+                        pk="$(lsblk -dn -o PKNAME "$pv" 2>/dev/null | head -n 1)"
+                        if [[ -n "$pk" ]]; then
+                            disks["$pk"]=1
+                        else
+                            disks["$(basename "$pv")"]=1
+                        fi
+                    fi
+                done < <(pvs --noheadings -o pv_name 2>/dev/null)
+            fi
+            continue
+        fi
+
+        if [[ -b "$mount_src" ]]; then
+            local pk
+            pk="$(lsblk -dn -o PKNAME "$mount_src" 2>/dev/null | head -n 1)"
+            if [[ -n "$pk" ]]; then
+                disks["$pk"]=1
+            else
+                disks["$(basename "$mount_src")"]=1
+            fi
+        fi
+    done
+
+    for d in "${!disks[@]}"; do
+        echo "$d"
+    done | sort
+}
+
+# 获取“必须保护”的 PCI BDF（包含系统盘的控制器）
+get_protected_pci_bdfs() {
+    local -A bdfs=()
+    local disk
+    while IFS= read -r disk; do
+        local bdf
+        bdf="$(get_blockdev_pci_bdf "/dev/$disk" 2>/dev/null || true)"
+        if [[ -n "$bdf" ]]; then
+            bdfs["$bdf"]=1
+        fi
+    done < <(get_system_whole_disks)
+
+    for b in "${!bdfs[@]}"; do
+        echo "$b"
+    done | sort
+}
+
+# 列出系统内的 SATA/SCSI/RAID 控制器（用于整控制器直通）
+list_storage_controllers() {
+    lspci -Dnn 2>/dev/null | grep -Eiin 'SATA controller|RAID bus controller|SCSI storage controller|Serial Attached SCSI controller' | sed 's/^[0-9]\+://'
+}
+
+# 列出系统内的 NVMe 控制器（用于 NVMe 直通）
+list_nvme_controllers() {
+    lspci -Dnn 2>/dev/null | grep -Eiin 'Non-Volatile memory controller' | sed 's/^[0-9]\+://'
+}
+
+# 展示指定 PCI BDF 下的所有“整盘”设备（用于磁盘映射展示与保护提示）
+show_disks_under_pci_bdf() {
+    local bdf="$1"
+    if [[ -z "$bdf" ]]; then
+        return 1
+    fi
+
+    local found=0
+    while IFS= read -r name; do
+        local dev_bdf
+        dev_bdf="$(get_blockdev_pci_bdf "/dev/$name" 2>/dev/null || true)"
+        if [[ "$dev_bdf" == "$bdf" ]]; then
+            local size model
+            size="$(lsblk -dn -o SIZE "/dev/$name" 2>/dev/null | head -n 1)"
+            model="$(lsblk -dn -o MODEL "/dev/$name" 2>/dev/null | head -n 1)"
+            echo "  /dev/$name  ${size:-?}  ${model:-?}"
+            found=1
+        fi
+    done < <(lsblk -dn -o NAME,TYPE 2>/dev/null | awk '$2=="disk"{print $1}')
+
+    if [[ "$found" -eq 0 ]]; then
+        echo "  （未能识别到该控制器下的磁盘，可能是映射方式不同或权限受限）"
+    fi
+    return 0
+}
+
+# 获取 VM 是否为 q35（决定 hostpci 是否添加 pcie=1）
+qm_is_q35_machine() {
+    local vmid="$1"
+    local machine
+    machine="$(qm config "$vmid" 2>/dev/null | awk -F': ' '/^machine:/{print $2}' | head -n 1)"
+    if echo "$machine" | grep -q 'q35'; then
+        return 0
+    fi
+    return 1
+}
+
+# 获取可用的 hostpci 插槽号（0-15）
+qm_find_free_hostpci_index() {
+    local vmid="$1"
+    local cfg used
+    cfg="$(qm config "$vmid" 2>/dev/null)"
+    used="$(echo "$cfg" | awk -F'[: ]' '/^hostpci[0-9]+:/{gsub("hostpci","",$1); print $1}' | sort -n | uniq)"
+
+    local i
+    for ((i=0; i<=15; i++)); do
+        if ! echo "$used" | grep -qx "$i"; then
+            echo "$i"
+            return 0
+        fi
+    done
+    return 1
+}
+
+# 从 VM 配置中查找某个 BDF 是否已被直通
+qm_has_hostpci_bdf() {
+    local vmid="$1"
+    local bdf="$2"
+    qm config "$vmid" 2>/dev/null | grep -qE "^hostpci[0-9]+:.*\\b${bdf}\\b"
+}
+
+# 直通整个 SATA/SCSI/RAID 控制器到 VM（含系统盘控制器保护）
+storage_controller_passthrough() {
+    log_step "磁盘控制器直通 - 扫描控制器"
+
+    if ! iommu_is_enabled; then
+        display_error "未检测到 IOMMU 已开启" "请先在 BIOS 开启 VT-d/AMD-Vi，并在 PVE 中启用 IOMMU（可在“硬件直通一键配置(IOMMU)”里开启）。"
+        return 1
+    fi
+
+    local controllers
+    controllers="$(list_storage_controllers)"
+    if [[ -z "$controllers" ]]; then
+        display_error "未发现 SATA/SCSI/RAID 控制器" "可尝试手工执行 lspci -Dnn 确认控制器是否存在。"
+        return 1
+    fi
+
+    echo -e "${CYAN}可用控制器列表：${NC}"
+    echo "$controllers" | awk '{printf "  [%d] %s\n", NR, $0}'
+    echo -e "${UI_DIVIDER}"
+
+    local pick
+    read -p "请选择控制器序号 (返回请输入 0): " pick
+    pick="${pick:-0}"
+    if [[ "$pick" == "0" ]]; then
+        return 0
+    fi
+    if [[ ! "$pick" =~ ^[0-9]+$ ]]; then
+        display_error "序号必须是数字"
+        return 1
+    fi
+
+    local line bdf
+    line="$(echo "$controllers" | awk -v n="$pick" 'NR==n{print $0}')"
+    if [[ -z "$line" ]]; then
+        display_error "无效的序号: $pick"
+        return 1
+    fi
+    bdf="$(echo "$line" | awk '{print $1}')"
+
+    echo -e "${CYAN}该控制器下识别到的整盘设备：${NC}"
+    show_disks_under_pci_bdf "$bdf"
+    echo -e "${UI_DIVIDER}"
+
+    local protected
+    protected="$(get_protected_pci_bdfs)"
+    if echo "$protected" | grep -qx "$bdf"; then
+        display_error "安全拦截：禁止直通系统盘所在控制器 $bdf" "请勿直通包含 PVE 系统盘的控制器，否则会导致宿主机不可用。"
+        return 1
+    fi
+
+    local vmid
+    read -p "请输入目标 VMID: " vmid
+    if ! validate_qm_vmid "$vmid"; then
+        return 1
+    fi
+
+    if qm_has_hostpci_bdf "$vmid" "$bdf"; then
+        display_error "该控制器已在 VM 配置中存在直通记录" "无需重复直通。"
+        return 1
+    fi
+
+    local idx
+    idx="$(qm_find_free_hostpci_index "$vmid" 2>/dev/null)" || {
+        display_error "未找到可用 hostpci 插槽" "请先释放 VM 的 hostpci0-hostpci15 后再试。"
+        return 1
+    }
+
+    local hostpci_value="$bdf"
+    if qm_is_q35_machine "$vmid"; then
+        hostpci_value="${hostpci_value},pcie=1"
+    fi
+
+    local conf_path
+    conf_path="$(get_qm_conf_path "$vmid")"
+    if [[ -f "$conf_path" ]]; then
+        log_tips "修改 VM 配置前建议备份原配置"
+        backup_file "$conf_path" >/dev/null 2>&1 || true
+    fi
+
+    if ! confirm_action "为 VM $vmid 直通控制器（hostpci$idx = $hostpci_value）"; then
+        return 0
+    fi
+
+    if qm set "$vmid" "-hostpci${idx}" "$hostpci_value" >/dev/null 2>&1; then
+        local status
+        status="$(qm status "$vmid" 2>/dev/null | awk '{print $2}' | head -n 1)"
+        display_success "控制器直通已写入 VM 配置" "当前 VM 状态: ${status:-unknown}（如在运行中，需重启 VM 后生效）"
+        return 0
+    else
+        display_error "qm set 执行失败" "请检查 IOMMU/IOMMU group、VM 是否锁定，或查看 /var/log/pve-tools.log。"
+        return 1
+    fi
+}
+
+# 判断 NVMe 设备是否建议启用 MSI-X 重定位（启发式：存在 MSI-X 且存在 BAR2/Region 2）
+nvme_should_enable_msix_relocation() {
+    local bdf="$1"
+    local vv
+    vv="$(lspci -vv -s "$bdf" 2>/dev/null || true)"
+    if echo "$vv" | grep -q 'MSI-X:' && echo "$vv" | grep -qE 'Region 2: Memory|Region 2:.*Memory'; then
+        return 0
+    fi
+    return 1
+}
+
+# 获取当前 VM args（不存在则返回空）
+qm_get_args() {
+    local vmid="$1"
+    qm config "$vmid" 2>/dev/null | awk -F': ' '/^args:/{sub(/^args: /,""); print $0; exit}'
+}
+
+# 幂等追加 VM args 片段（通过 qm set -args 覆盖式写入，但内容基于现有 args 合并）
+qm_append_args() {
+    local vmid="$1"
+    local token="$2"
+
+    if [[ -z "$token" ]]; then
+        return 1
+    fi
+
+    local current
+    current="$(qm_get_args "$vmid")"
+    if echo "$current" | grep -Fq "$token"; then
+        return 0
+    fi
+
+    local new_args
+    if [[ -z "$current" ]]; then
+        new_args="$token"
+    else
+        new_args="${current} ${token}"
+    fi
+
+    qm set "$vmid" -args "$new_args" >/dev/null 2>&1
+}
+
+# NVMe 控制器直通到 VM（含系统盘控制器保护与 MSI-X 重定位 args）
+nvme_passthrough() {
+    log_step "NVMe 直通 - 扫描 NVMe 控制器"
+
+    if ! iommu_is_enabled; then
+        display_error "未检测到 IOMMU 已开启" "请先在 BIOS 开启 VT-d/AMD-Vi，并在 PVE 中启用 IOMMU（可在“硬件直通一键配置(IOMMU)”里开启）。"
+        return 1
+    fi
+
+    local controllers
+    controllers="$(list_nvme_controllers)"
+    if [[ -z "$controllers" ]]; then
+        display_error "未发现 NVMe 控制器" "可尝试手工执行 lspci -Dnn | grep -i NVMe 确认设备是否存在。"
+        return 1
+    fi
+
+    echo -e "${CYAN}可用 NVMe 控制器列表：${NC}"
+    echo "$controllers" | awk '{printf "  [%d] %s\n", NR, $0}'
+    echo -e "${UI_DIVIDER}"
+
+    local pick
+    read -p "请选择 NVMe 控制器序号 (返回请输入 0): " pick
+    pick="${pick:-0}"
+    if [[ "$pick" == "0" ]]; then
+        return 0
+    fi
+    if [[ ! "$pick" =~ ^[0-9]+$ ]]; then
+        display_error "序号必须是数字"
+        return 1
+    fi
+
+    local line bdf
+    line="$(echo "$controllers" | awk -v n="$pick" 'NR==n{print $0}')"
+    if [[ -z "$line" ]]; then
+        display_error "无效的序号: $pick"
+        return 1
+    fi
+    bdf="$(echo "$line" | awk '{print $1}')"
+
+    echo -e "${CYAN}该 NVMe 控制器下识别到的整盘设备：${NC}"
+    show_disks_under_pci_bdf "$bdf"
+    echo -e "${UI_DIVIDER}"
+
+    local protected
+    protected="$(get_protected_pci_bdfs)"
+    if echo "$protected" | grep -qx "$bdf"; then
+        display_error "安全拦截：禁止直通系统盘所在 NVMe 控制器 $bdf" "请勿直通包含 PVE 系统盘的 NVMe 控制器，否则会导致宿主机不可用。"
+        return 1
+    fi
+
+    local vmid
+    read -p "请输入目标 VMID: " vmid
+    if ! validate_qm_vmid "$vmid"; then
+        return 1
+    fi
+
+    if qm_has_hostpci_bdf "$vmid" "$bdf"; then
+        display_error "该 NVMe 已在 VM 配置中存在直通记录" "无需重复直通。"
+        return 1
+    fi
+
+    local idx
+    idx="$(qm_find_free_hostpci_index "$vmid" 2>/dev/null)" || {
+        display_error "未找到可用 hostpci 插槽" "请先释放 VM 的 hostpci0-hostpci15 后再试。"
+        return 1
+    }
+
+    local hostpci_value="$bdf"
+    if qm_is_q35_machine "$vmid"; then
+        hostpci_value="${hostpci_value},pcie=1"
+    fi
+
+    local enable_msix="no"
+    if nvme_should_enable_msix_relocation "$bdf"; then
+        echo -e "${YELLOW}检测到该 NVMe 可能需要 MSI-X 重定位（bar2）以提高兼容性。${NC}"
+        local ans
+        read -p "是否写入 MSI-X 重定位 args？(yes/no) [yes]: " ans
+        ans="${ans:-yes}"
+        if [[ "$ans" == "yes" || "$ans" == "YES" ]]; then
+            enable_msix="yes"
+        fi
+    fi
+
+    local conf_path
+    conf_path="$(get_qm_conf_path "$vmid")"
+    if [[ -f "$conf_path" ]]; then
+        log_tips "修改 VM 配置前建议备份原配置"
+        backup_file "$conf_path" >/dev/null 2>&1 || true
+    fi
+
+    if ! confirm_action "为 VM $vmid 直通 NVMe（hostpci$idx = $hostpci_value），并写入 MSI-X 重定位参数（${enable_msix}）"; then
+        return 0
+    fi
+
+    if ! qm set "$vmid" "-hostpci${idx}" "$hostpci_value" >/dev/null 2>&1; then
+        display_error "qm set 执行失败" "请检查 IOMMU/IOMMU group、VM 是否锁定，或查看 /var/log/pve-tools.log。"
+        return 1
+    fi
+
+    if [[ "$enable_msix" == "yes" ]]; then
+        local token
+        token="-set device.hostpci${idx}.x-msix-relocation=bar2"
+        if qm_append_args "$vmid" "$token"; then
+            log_success "已写入 args: $token"
+        else
+            log_warn "args 写入失败（已完成 hostpci 直通）"
+        fi
+    fi
+
+    local status
+    status="$(qm status "$vmid" 2>/dev/null | awk '{print $2}' | head -n 1)"
+    display_success "NVMe 直通已写入 VM 配置" "当前 VM 状态: ${status:-unknown}（如在运行中，需重启 VM 后生效）"
+    return 0
+}
+
+# ============ 引导配置辅助 ============
+
+# 解析用户输入的磁盘路径为真实整盘设备（返回 /dev/sdX 或 /dev/nvme0n1）
+resolve_whole_disk() {
+    local input="$1"
+    if [[ -z "$input" ]]; then
+        return 1
+    fi
+
+    local real
+    if [[ "$input" == /dev/disk/by-id/* ]]; then
+        real="$(readlink -f "$input" 2>/dev/null || true)"
+    else
+        real="$input"
+    fi
+
+    if [[ ! -b "$real" ]]; then
+        return 1
+    fi
+
+    local t
+    t="$(lsblk -dn -o TYPE "$real" 2>/dev/null | head -n 1)"
+    if [[ "$t" == "disk" ]]; then
+        echo "$real"
+        return 0
+    fi
+
+    local pk
+    pk="$(lsblk -dn -o PKNAME "$real" 2>/dev/null | head -n 1)"
+    if [[ -n "$pk" && -b "/dev/$pk" ]]; then
+        echo "/dev/$pk"
+        return 0
+    fi
+
+    return 1
+}
+
+# 识别直通磁盘上的引导类型（UEFI / Legacy / Unknown）
+detect_disk_boot_mode() {
+    local disk="$1"
+    if [[ -z "$disk" || ! -b "$disk" ]]; then
+        echo "Unknown"
+        return 1
+    fi
+
+    if command -v lsblk >/dev/null 2>&1; then
+        local esp_guid="c12a7328-f81f-11d2-ba4b-00a0c93ec93b"
+        local parts
+        parts="$(lsblk -rno NAME,PARTTYPE,FSTYPE "$disk" 2>/dev/null | awk 'NF>=2{print}')"
+        if echo "$parts" | grep -qi "$esp_guid"; then
+            echo "UEFI"
+            return 0
+        fi
+        if echo "$parts" | awk '{print $3}' | grep -qi '^vfat$'; then
+            if echo "$parts" | grep -Eqi 'EFI|esp'; then
+                echo "UEFI"
+                return 0
+            fi
+        fi
+    fi
+
+    if command -v parted >/dev/null 2>&1; then
+        local out
+        out="$(parted -s "$disk" print 2>/dev/null || true)"
+        if echo "$out" | grep -Eqi 'Partition Table:\s*gpt'; then
+            if echo "$out" | grep -Eqi '\besp\b|EFI System|boot, esp'; then
+                echo "UEFI"
+                return 0
+            fi
+            echo "Unknown"
+            return 0
+        fi
+        if echo "$out" | grep -Eqi 'Partition Table:\s*msdos'; then
+            echo "Legacy"
+            return 0
+        fi
+    fi
+
+    echo "Unknown"
+    return 0
+}
+
+# 根据磁盘引导类型与直通方式给出 VM 配置建议（仅提示，不修改配置）
+boot_config_assistant() {
+    log_step "引导配置辅助"
+
+    local disk_input
+    read -p "请输入直通磁盘路径（/dev/disk/by-id/... 或 /dev/sdX /dev/nvme0n1）（返回请输入 0）: " disk_input
+    disk_input="${disk_input:-0}"
+    if [[ "$disk_input" == "0" ]]; then
+        return 0
+    fi
+
+    local disk
+    disk="$(resolve_whole_disk "$disk_input" 2>/dev/null || true)"
+    if [[ -z "$disk" ]]; then
+        display_error "磁盘路径无效或不可访问: $disk_input" "请确认输入为块设备或 by-id 路径，并在宿主机上存在。"
+        return 1
+    fi
+
+    local boot_mode
+    boot_mode="$(detect_disk_boot_mode "$disk")"
+
+    echo -e "${CYAN}检测结果：${NC}"
+    echo "  磁盘: $disk"
+    echo "  引导类型: $boot_mode"
+    echo -e "${UI_DIVIDER}"
+
+    echo -e "${CYAN}直通方式选择（用于生成更贴近场景的建议）：${NC}"
+    echo "  1) 单个磁盘直通（RDM）"
+    echo "  2) 整控制器直通（SATA/SCSI/RAID）"
+    echo "  3) NVMe 控制器直通"
+    local mode
+    read -p "请选择直通方式 [1-3] [1]: " mode
+    mode="${mode:-1}"
+    if [[ "$mode" != "1" && "$mode" != "2" && "$mode" != "3" ]]; then
+        display_error "无效选择: $mode" "请输入 1/2/3"
+        return 1
+    fi
+
+    local slot=""
+    if [[ "$mode" == "1" ]]; then
+        read -p "如果已知 VM 插槽（如 scsi0/sata1/ide0）可输入用于 boot order（回车跳过）: " slot
+        if [[ -n "$slot" && ! "$slot" =~ ^(scsi|sata|ide)[0-9]+$ ]]; then
+            display_error "插槽格式不合法: $slot" "示例：scsi0 / sata0 / ide0"
+            return 1
+        fi
+    fi
+
+    echo -e "${UI_DIVIDER}"
+    echo -e "${CYAN}配置建议（不自动修改）：${NC}"
+
+    if [[ "$boot_mode" == "UEFI" ]]; then
+        echo "  1) 固件建议：OVMF（UEFI）"
+        echo "  2) 额外建议：添加 efidisk0 用于 NVRAM（PVE 界面可创建）"
+        if [[ "$mode" != "1" ]]; then
+            echo "  3) 机器类型建议：q35（PCIe 设备直通更友好）"
+        fi
+    elif [[ "$boot_mode" == "Legacy" ]]; then
+        echo "  1) 固件建议：SeaBIOS（Legacy）"
+    else
+        echo "  1) 未能可靠判断 UEFI/Legacy：建议检查磁盘分区表与是否存在 ESP"
+        echo "  2) 如果是 UEFI 系统：优先使用 OVMF + q35"
+    fi
+
+    if [[ "$mode" == "1" ]]; then
+        echo "  4) 总线类型建议：优先 scsi；总线受限时使用 sata/ide"
+        if [[ -n "$slot" ]]; then
+            echo "  5) 启动顺序建议：boot: order=${slot};ide2;net0（按实际设备调整）"
+        else
+            echo "  5) 启动顺序建议：确保直通磁盘所在插槽在 boot order 中靠前"
+        fi
+    else
+        echo "  4) 启动建议：控制器/NVMe 直通后，来宾系统会直接看到物理设备；建议使用 UEFI 启动管理器选择启动项"
+    fi
+    return 0
+}
+
 #--------------开启硬件直通----------------
 
 #--------------设置CPU电源模式----------------
@@ -3866,14 +4753,16 @@ menu_gpu_passthrough() {
         show_menu_option "2" "Intel 核显直通配置 (修改版 QEMU)"
         show_menu_option "3" "NVIDIA 显卡直通/虚拟化 (开发中)"
         show_menu_option "4" "硬件直通一键配置 (IOMMU)"
+        show_menu_option "5" "磁盘/控制器直通 (RDM/PCIe/NVMe)"
         show_menu_option "0" "返回主菜单"
         show_menu_footer
-        read -p "请选择操作 [0-4]: " choice
+        read -p "请选择操作 [0-5]: " choice
         case $choice in
             1) igpu_management_menu ;;
             2) intel_gpu_passthrough ;;
             3) nvidia_gpu_management_menu ;;
             4) hw_passth ;;
+            5) menu_disk_controller_passthrough ;;
             0) return ;;
             *) log_error "无效选择" ;;
         esac
