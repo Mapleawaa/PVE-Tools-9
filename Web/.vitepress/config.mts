@@ -25,6 +25,8 @@ export default defineConfig({
       { text: '使用指南', link: '/guide' },
       { text: '高级教程', link: '/advanced/' },
       { text: '更新日志', link: '/update' },
+      { text: 'TOS', link: '/tos' },
+      { text: 'ULA', link: '/ula' },
       { text: 'GitHub', link: 'https://github.com/Mapleawaa/PVE-Tools-9' }
     ],
     sidebar: [
@@ -34,6 +36,8 @@ export default defineConfig({
           { text: '简介', link: '/guide' },
           { text: '功能特性', link: '/features' },
           { text: '更新日志', link: '/update' },
+          { text: '服务条款（TOS）', link: '/tos' },
+          { text: '最终用户许可（ULA）', link: '/ula' },
           { text: '常见问题', link: '/faq' }
         ]
       },

@@ -1,21 +1,50 @@
-MIT License
+GNU Lesser General Public License v3 (LGPL‑3.0)
 
-Copyright (c) 2025 MareCyra
+Copyright (C) 2007 Free Software Foundation, Inc.
+Copyright (C) 2026 Ciriu Networks
+Authors: 云汐月喵
 
-Permission is hereby granted, free of charge, to any person obtaining a copy
-of this software and associated documentation files (the "Software"), to deal
-in the Software without restriction, including without limitation the rights
-to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-copies of the Software, and to permit persons to whom the Software is
-furnished to do so, subject to the following conditions:
+Everyone is permitted to copy and distribute verbatim copies
+of this license document, but changing it is not allowed.
 
-The above copyright notice and this permission notice shall be included in all
-copies or substantial portions of the Software.
+### Preamble
 
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-SOFTWARE.
+The GNU Lesser General Public License is a free software license that
+allows developers and companies to use and integrate software released
+under this License into their own (even proprietary) software, with
+certain conditions. However, if you modify the licensed code itself,
+you must make your modifications available under the same license.
+
+### Terms and Conditions
+
+#### 0. Definitions
+- “Library” refers to the covered work (PVE‑Tools‑9).
+- “You” means an individual or legal entity using, modifying, or distributing the Library.
+- “Source Code” means the preferred form for making modifications.
+
+#### 1. Source Code
+You must make available the source code of the LGPL portions upon distribution,
+including modifications or derivative works, under the same license.
+
+#### 2. Conveying Modified Versions
+Modified versions must be licensed as a whole at no charge to all third parties
+under the terms of this License.
+
+#### 3. Combined Works
+You may combine this Library with other code. Terms of use of other code remain
+subject to their own licenses.
+
+#### 4. Proprietary Use
+You may use and distribute this Library in a proprietary program, provided you
+comply with all terms of this License, including:
+
+- Relinking or providing object code for user relinking.
+- Providing source for the LGPL components.
+
+#### 5. No Warranty
+This Library is distributed without any warranty; without even the implied
+warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
+
+---
+
+For full license text, see: https://www.gnu.org/licenses/lgpl-3.0.html

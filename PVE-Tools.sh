@@ -4,6 +4,7 @@
 # 支持换源、删除订阅弹窗、硬盘管理等功能
 # 适用于 Proxmox VE 9.0 (基于 Debian 13)
 # Auther:Maple 二次修改使用请不要删除此段注释
+# 请注意开源协议，请勿商用批量使用。
 
 # 版本信息
 CURRENT_VERSION="6.4.0"
@@ -144,6 +145,39 @@ confirm_action() {
         log_info "操作已取消"
         return 1
     fi
+}
+
+LEGAL_VERSION="1.0"
+LEGAL_EFFECTIVE_DATE="2026-__-__"
+
+ensure_legal_acceptance() {
+    local dir="/var/lib/pve-tools"
+    local marker="${dir}/legal_acceptance_${LEGAL_VERSION}"
+    mkdir -p "$dir" >/dev/null 2>&1 || true
+
+    if [[ -f "$marker" ]]; then
+        return 0
+    fi
+
+    clear
+    show_menu_header "许可与服务条款"
+    echo -e "${CYAN}继续使用本脚本前，请阅读并同意以下条款：${NC}"
+    echo -e "  - ULA（最终用户许可与使用协议）: https://pve.u3u.icu/ula"
+    echo -e "  - TOS（服务条款）: https://pve.u3u.icu/tos"
+    echo -e "${RED} 您可以随时撤回同意，只需删除 ${marker} 文件即可。${NC}"
+    echo -e "${UI_DIVIDER}"
+    echo -n "是否同意并继续？(Y/N): "
+    local ans
+    read -n 1 -r ans
+    echo
+    if [[ "$ans" == "Y" || "$ans" == "y" ]]; then
+        printf '%s\n' "accepted_version=${LEGAL_VERSION}" "accepted_time=$(date +%F\ %T)" > "$marker" 2>/dev/null || true
+        log_success "已记录同意条款，后续将跳过许可检查。"
+        return 0
+    fi
+
+    log_info "未同意条款，退出脚本"
+    exit 0
 }
 
 # ============ 配置文件安全管理函数 ============
@@ -5692,20 +5726,790 @@ intel_gpu_passthrough() {
 }
 
 # NVIDIA显卡管理菜单
-nvidia_gpu_management_menu() {
+nvidia_t() {
+    local key="$1"
+    case "$key" in
+        MENU_TITLE) echo "NVIDIA 显卡管理" ;;
+        MENU_DESC) echo "请选择功能模块（高风险操作会强制二次确认）" ;;
+        OPT_PT) echo "显卡直通虚拟机" ;;
+        OPT_VGPU) echo "vGPU 配置与分配" ;;
+        OPT_DRV_INFO) echo "驱动信息与监控" ;;
+        OPT_DRV_SWITCH) echo "驱动切换（开源/闭源）" ;;
+        OPT_BACK) echo "返回" ;;
+        ERR_NO_GPU) echo "未检测到 NVIDIA GPU" ;;
+        ERR_IOMMU) echo "未检测到 IOMMU 已开启" ;;
+        TIP_ENABLE_IOMMU) echo "请先开启 BIOS 的 VT-d/AMD-Vi，并在脚本中启用 IOMMU（硬件直通一键配置）。" ;;
+        INPUT_CHOICE) echo "请选择操作" ;;
+        INPUT_PICK) echo "请选择序号" ;;
+        WARN_HIGH_RISK) echo "高风险操作：不同驱动性能侧重点不同，误操作可能导致宿主机不可用。" ;;
+        OK_DONE) echo "操作完成" ;;
+        *) echo "$key" ;;
+    esac
+}
 
-    log_step "诶？怎么没进度了？"
-    log_tips "前面有个小纸条，捡起来："
-    log_error "该功能尚在开发中，敬请期待！"
-    log_tips "如果您急需该功能，请前往作者的GitHub提交pr 谢谢喵"
-    echo -e "3秒后自动回城 …"
-    sleep 3
-    main "$@"
+nvidia_get_cols() {
+    tput cols 2>/dev/null || echo 80
+}
+
+nvidia_trunc() {
+    local s="$1"
+    local w="$2"
+    if [[ -z "$w" || "$w" -le 0 ]]; then
+        echo "$s"
+        return 0
+    fi
+    if [[ "${#s}" -le "$w" ]]; then
+        echo "$s"
+        return 0
+    fi
+    echo "${s:0:$((w-3))}..."
+}
+
+nvidia_list_vms() {
+    qm list 2>/dev/null | awk 'NR>1{print $1 "|" $2 "|" $3}'
+}
+
+nvidia_list_nvidia_gpus() {
+    lspci -Dnn 2>/dev/null | grep -Ei 'VGA compatible controller|3D controller' | grep -i 'NVIDIA' | awk '{bdf=$1; sub(/^[0-9a-f]{4}:/,"",bdf); print $1 "|" $0}'
+}
+
+nvidia_get_pci_ids() {
+    local bdf="$1"
+    lspci -n -s "$bdf" 2>/dev/null | awk '{for(i=1;i<=NF;i++) if($i ~ /^[0-9a-fA-F]{4}:[0-9a-fA-F]{4}$/){print tolower($i); exit}}'
+}
+
+nvidia_pci_has_function() {
+    local bdf="$1"
+    local func="$2"
+    local base
+    base="${bdf%.*}"
+    lspci -Dnn 2>/dev/null | awk '{print $1}' | grep -qx "${base}.${func}"
+}
+
+nvidia_pci_kernel_driver() {
+    local bdf="$1"
+    lspci -nnk -s "$bdf" 2>/dev/null | awk -F': ' '/Kernel driver in use:/{print $2; exit}'
+}
+
+nvidia_select_vmid() {
+    local vms
+    vms="$(nvidia_list_vms)"
+    if [[ -z "$vms" ]]; then
+        log_error "未发现虚拟机"
+        log_tips "请先创建虚拟机后再操作。"
+        return 1
+    fi
+
+    {
+        echo -e "${CYAN}可用虚拟机列表：${NC}"
+        echo "$vms" | awk -F'|' '{printf "  [%d] VMID: %-6s Name: %-22s Status: %s\n", NR, $1, $2, $3}'
+        echo -e "${UI_DIVIDER}"
+    } >&2
+
+    local pick
+    read -p "$(nvidia_t INPUT_PICK) (0 返回): " pick
+    pick="${pick:-0}"
+    if [[ "$pick" == "0" ]]; then
+        return 2
+    fi
+    if [[ ! "$pick" =~ ^[0-9]+$ ]]; then
+        log_error "序号必须是数字"
+        return 1
+    fi
+
+    local line vmid
+    line="$(echo "$vms" | awk -v n="$pick" -F'|' 'NR==n{print $0}')"
+    vmid="$(echo "$line" | awk -F'|' '{print $1}')"
+    if [[ -z "$vmid" ]]; then
+        log_error "无效选择"
+        return 1
+    fi
+    if ! validate_qm_vmid "$vmid"; then
+        return 1
+    fi
+    echo "$vmid"
+    return 0
+}
+
+nvidia_select_gpu_bdf() {
+    local gpus
+    gpus="$(nvidia_list_nvidia_gpus)"
+    if [[ -z "$gpus" ]]; then
+        log_error "$(nvidia_t ERR_NO_GPU)"
+        log_tips "请先确认已安装 NVIDIA GPU 并执行 lspci 可见。"
+        return 1
+    fi
+
+    local cols
+    cols="$(nvidia_get_cols)"
+    local max_line=$((cols-6))
+    if [[ "$max_line" -lt 40 ]]; then
+        max_line=40
+    fi
+
+    {
+        echo -e "${CYAN}可用 NVIDIA GPU 列表：${NC}"
+        echo "$gpus" | awk -F'|' -v w="$max_line" '{
+            line=$2;
+            if (length(line)>w) line=substr(line,1,w-3)"...";
+            printf "  [%d] %s\n", NR, line
+        }'
+        echo -e "${UI_DIVIDER}"
+    } >&2
+
+    local pick
+    read -p "$(nvidia_t INPUT_PICK) (0 返回): " pick
+    pick="${pick:-0}"
+    if [[ "$pick" == "0" ]]; then
+        return 2
+    fi
+    if [[ ! "$pick" =~ ^[0-9]+$ ]]; then
+        log_error "序号必须是数字"
+        return 1
+    fi
+
+    local line bdf
+    line="$(echo "$gpus" | awk -v n="$pick" -F'|' 'NR==n{print $0}')"
+    bdf="$(echo "$line" | awk -F'|' '{print $1}')"
+    if [[ -z "$bdf" ]]; then
+        log_error "无效选择"
+        return 1
+    fi
+    echo "$bdf"
+    return 0
+}
+
+nvidia_show_passthrough_status() {
+    local bdf="$1"
+    local drv
+    drv="$(nvidia_pci_kernel_driver "$bdf")"
+    echo -e "${CYAN}设备: ${NC}$bdf"
+    echo -e "${CYAN}Kernel driver in use: ${NC}${drv:-unknown}"
+    lspci -nnk -s "$bdf" 2>/dev/null | sed 's/^/  /'
+}
+
+nvidia_try_write_vfio_ids_conf() {
+    local ids_csv="$1"
+    local file="/etc/modprobe.d/pve-tools-nvidia-vfio.conf"
+
+    local other
+    other="$(grep -RhsE '^\s*options\s+vfio-pci\s+ids=' /etc/modprobe.d 2>/dev/null | grep -vF "pve-tools-nvidia-vfio.conf" || true)"
+    if [[ -n "$other" ]]; then
+        display_error "检测到系统已存在 vfio-pci ids 配置" "为避免冲突，本功能不会自动写入。请手工合并 vfio-pci ids 后再 update-initramfs -u。"
+        return 1
+    fi
+
+    if ! confirm_action "写入 VFIO 绑定配置（$file）并要求重启宿主机？"; then
+        return 0
+    fi
+
+    local content
+    content="options vfio-pci ids=${ids_csv}"
+    apply_block "$file" "NVIDIA_VFIO_IDS" "$content"
+    display_success "VFIO 绑定配置已写入" "请执行 update-initramfs -u 并重启宿主机后再进行直通。"
+    return 0
+}
+
+nvidia_gpu_passthrough_vm() {
+    log_step "$(nvidia_t OPT_PT)"
+
+    if ! iommu_is_enabled; then
+        display_error "$(nvidia_t ERR_IOMMU)" "$(nvidia_t TIP_ENABLE_IOMMU)"
+        return 1
+    fi
+
+    local vmid
+    vmid="$(nvidia_select_vmid)"
+    local rc=$?
+    if [[ "$rc" -eq 2 ]]; then
+        return 0
+    fi
+    if [[ -z "$vmid" ]]; then
+        return 1
+    fi
+
+    local gpu_bdf
+    gpu_bdf="$(nvidia_select_gpu_bdf)"
+    rc=$?
+    if [[ "$rc" -eq 2 ]]; then
+        return 0
+    fi
+    if [[ -z "$gpu_bdf" ]]; then
+        return 1
+    fi
+
+    clear
+    show_menu_header "$(nvidia_t OPT_PT)"
+    echo -e "${YELLOW}VMID: ${NC}$vmid"
+    echo -e "${YELLOW}GPU: ${NC}$gpu_bdf"
+    echo -e "${UI_DIVIDER}"
+    nvidia_show_passthrough_status "$gpu_bdf"
+
+    local audio_bdf=""
+    if nvidia_pci_has_function "$gpu_bdf" "1"; then
+        audio_bdf="${gpu_bdf%.*}.1"
+        echo -e "${UI_DIVIDER}"
+        nvidia_show_passthrough_status "$audio_bdf"
+    fi
+
+    local gpu_id audio_id ids_csv
+    gpu_id="$(nvidia_get_pci_ids "$gpu_bdf")"
+    audio_id=""
+    if [[ -n "$audio_bdf" ]]; then
+        audio_id="$(nvidia_get_pci_ids "$audio_bdf")"
+    fi
+    ids_csv="$gpu_id"
+    if [[ -n "$audio_id" ]]; then
+        ids_csv="${ids_csv},${audio_id}"
+    fi
+
+    echo -e "${UI_DIVIDER}"
+    if [[ -n "$ids_csv" ]]; then
+        echo -e "${CYAN}VFIO ids 建议: ${NC}$ids_csv"
+    fi
+    echo -e "${YELLOW}提示：如果宿主机正在加载 nvidia/nouveau 驱动，直通可能失败。${NC}"
+    echo -e "${UI_DIVIDER}"
+
+    local include_audio="yes"
+    if [[ -n "$audio_bdf" ]]; then
+        read -p "是否同时直通显卡音频功能（${audio_bdf}）？(yes/no) [yes]: " include_audio
+        include_audio="${include_audio:-yes}"
+    else
+        include_audio="no"
+    fi
+
+    if qm_has_hostpci_bdf "$vmid" "$gpu_bdf"; then
+        display_error "该 GPU 已存在于 VM 的 hostpci 配置中" "无需重复添加。"
+        return 1
+    fi
+
+    local idx0
+    idx0="$(qm_find_free_hostpci_index "$vmid" 2>/dev/null)" || {
+        display_error "未找到可用 hostpci 插槽" "请先释放 VM 的 hostpci0-hostpci15。"
+        return 1
+    }
+
+    local hostpci0_value="${gpu_bdf}"
+    if qm_is_q35_machine "$vmid"; then
+        hostpci0_value="${hostpci0_value},pcie=1,x-vga=1"
+    else
+        hostpci0_value="${hostpci0_value},x-vga=1"
+    fi
+
+    local conf_path
+    conf_path="$(get_qm_conf_path "$vmid")"
+    if [[ -f "$conf_path" ]]; then
+        backup_file "$conf_path" >/dev/null 2>&1 || true
+    fi
+
+    if ! confirm_action "为 VM $vmid 添加 GPU 直通（hostpci${idx0} = ${hostpci0_value}）"; then
+        return 0
+    fi
+
+    if ! qm set "$vmid" "-hostpci${idx0}" "$hostpci0_value" >/dev/null 2>&1; then
+        display_error "qm set 执行失败" "请检查 VM 是否锁定，或查看 /var/log/pve-tools.log。"
+        return 1
+    fi
+
+    if [[ "$include_audio" == "yes" && -n "$audio_bdf" ]]; then
+        local idx1
+        idx1="$(qm_find_free_hostpci_index "$vmid" 2>/dev/null)" || {
+            display_error "显卡已添加，但未找到可用 hostpci 插槽添加音频功能" "请手工添加 $audio_bdf。"
+            return 1
+        }
+
+        local hostpci1_value="${audio_bdf}"
+        if qm_is_q35_machine "$vmid"; then
+            hostpci1_value="${hostpci1_value},pcie=1"
+        fi
+
+        if ! qm set "$vmid" "-hostpci${idx1}" "$hostpci1_value" >/dev/null 2>&1; then
+            log_warn "音频功能直通写入失败（GPU 已写入）"
+        else
+            log_success "音频功能已写入: hostpci${idx1} = $hostpci1_value"
+        fi
+    fi
+
+    local ignore_msrs="no"
+    read -p "是否写入 KVM ignore_msrs（Windows/NVIDIA 常见告警缓解）（yes/no）[no]: " ignore_msrs
+    ignore_msrs="${ignore_msrs:-no}"
+    if [[ "$ignore_msrs" == "yes" || "$ignore_msrs" == "YES" ]]; then
+        if confirm_action "写入 /etc/modprobe.d/kvm.conf 的 ignore_msrs 配置并要求重启？"; then
+            local kvm_content
+            kvm_content="options kvm ignore_msrs=1 report_ignored_msrs=0"
+            apply_block "/etc/modprobe.d/kvm.conf" "NVIDIA_IGNORE_MSRS" "$kvm_content"
+            log_success "已写入 KVM ignore_msrs 配置"
+        fi
+    fi
+
+    if [[ -n "$ids_csv" ]]; then
+        local set_vfio="no"
+        read -p "是否写入 VFIO ids 绑定配置（用于将设备绑定到 vfio-pci）（yes/no）[no]: " set_vfio
+        set_vfio="${set_vfio:-no}"
+        if [[ "$set_vfio" == "yes" || "$set_vfio" == "YES" ]]; then
+            nvidia_try_write_vfio_ids_conf "$ids_csv" || true
+        fi
+    fi
+
+    display_success "$(nvidia_t OK_DONE)" "如 VM 正在运行中，请重启 VM；如写入了 VFIO/kvm 配置，请按提示重启宿主机。"
+    return 0
+}
+
+nvidia_vgpu_list_types() {
+    if [[ ! -d /sys/class/mdev_bus ]]; then
+        return 1
+    fi
+    find /sys/class/mdev_bus -maxdepth 4 -type d -name mdev_supported_types 2>/dev/null | while read -r d; do
+        find "$d" -maxdepth 1 -mindepth 1 -type d 2>/dev/null
+    done
+}
+
+nvidia_vgpu_show_license() {
+    local conf="/etc/nvidia/gridd.conf"
+    if [[ -f "$conf" ]]; then
+        echo -e "${CYAN}gridd.conf:${NC} $conf"
+        grep -E '^(ServerAddress|ServerPort|FeatureType|EnableUI)=' "$conf" 2>/dev/null | sed 's/^/  /'
+    fi
+    if command -v systemctl >/dev/null 2>&1; then
+        systemctl is-enabled nvidia-gridd >/dev/null 2>&1 && echo -e "${CYAN}nvidia-gridd:${NC} enabled" || true
+        systemctl is-active nvidia-gridd >/dev/null 2>&1 && echo -e "${CYAN}nvidia-gridd:${NC} active" || true
+    fi
+    if command -v nvidia-smi >/dev/null 2>&1; then
+        nvidia-smi -q 2>/dev/null | grep -Ei 'License|vGPU' | head -n 30 | sed 's/^/  /' || true
+    fi
+}
+
+nvidia_vgpu_update_license() {
+    local conf="/etc/nvidia/gridd.conf"
+    if [[ ! -f "$conf" ]]; then
+        display_error "未找到 gridd.conf" "请先安装 NVIDIA vGPU 驱动/组件后再配置许可证。"
+        return 1
+    fi
+
+    local addr port
+    read -p "许可证服务器地址（例: 1.2.3.4 或 lic.example.com）: " addr
+    read -p "许可证服务器端口 [7070]: " port
+    port="${port:-7070}"
+
+    if [[ -z "$addr" ]]; then
+        display_error "地址不能为空"
+        return 1
+    fi
+    if [[ ! "$port" =~ ^[0-9]+$ || "$port" -lt 1 || "$port" -gt 65535 ]]; then
+        display_error "端口不合法: $port"
+        return 1
+    fi
+
+    if ! confirm_action "更新 vGPU 许可证服务器配置并重启 nvidia-gridd？"; then
+        return 0
+    fi
+
+    backup_file "$conf" >/dev/null 2>&1 || true
+    if grep -q '^ServerAddress=' "$conf"; then
+        sed -i "s/^ServerAddress=.*/ServerAddress=${addr}/" "$conf"
+    else
+        echo "ServerAddress=${addr}" >> "$conf"
+    fi
+
+    if grep -q '^ServerPort=' "$conf"; then
+        sed -i "s/^ServerPort=.*/ServerPort=${port}/" "$conf"
+    else
+        echo "ServerPort=${port}" >> "$conf"
+    fi
+
+    if command -v systemctl >/dev/null 2>&1; then
+        systemctl restart nvidia-gridd >/dev/null 2>&1 || true
+    fi
+    display_success "许可证配置已更新"
+    return 0
+}
+
+nvidia_vgpu_assign_to_vm() {
+    log_step "$(nvidia_t OPT_VGPU)"
+
+    if ! iommu_is_enabled; then
+        display_error "$(nvidia_t ERR_IOMMU)" "$(nvidia_t TIP_ENABLE_IOMMU)"
+        return 1
+    fi
+
+    if [[ ! -d /sys/class/mdev_bus ]]; then
+        display_error "未检测到 mdev 支持" "请确认内核与硬件支持 mediated device，并且已加载相关驱动。"
+        return 1
+    fi
+
+    local vmid
+    vmid="$(nvidia_select_vmid)"
+    local rc=$?
+    if [[ "$rc" -eq 2 ]]; then
+        return 0
+    fi
+    if [[ -z "$vmid" ]]; then
+        return 1
+    fi
+
+    local gpu_bdf
+    gpu_bdf="$(nvidia_select_gpu_bdf)"
+    rc=$?
+    if [[ "$rc" -eq 2 ]]; then
+        return 0
+    fi
+    if [[ -z "$gpu_bdf" ]]; then
+        return 1
+    fi
+
+    local base_sysfs="/sys/bus/pci/devices/${gpu_bdf}/mdev_supported_types"
+    if [[ ! -d "$base_sysfs" ]]; then
+        display_error "该 GPU 未提供 mdev_supported_types" "该卡可能不支持 vGPU/mdev，或驱动未正确加载。"
+        return 1
+    fi
+
+    local types
+    types="$(find "$base_sysfs" -maxdepth 1 -mindepth 1 -type d 2>/dev/null)"
+    if [[ -z "$types" ]]; then
+        display_error "未发现可用 vGPU 类型" "请确认 vGPU 驱动已安装，并且该设备支持 vGPU。"
+        return 1
+    fi
+
+    echo -e "${CYAN}可用 vGPU 类型：${NC}"
+    echo "$types" | awk -v base="$base_sysfs" '{
+        type=$0;
+        n=split(type,a,"/");
+        id=a[n];
+        name_file=type"/name";
+        avail_file=type"/available_instances";
+        name="";
+        avail="";
+        if ((getline l < name_file) > 0) name=l;
+        close(name_file);
+        if ((getline k < avail_file) > 0) avail=k;
+        close(avail_file);
+        printf "  [%d] %s | %s | available=%s\n", NR, id, name, avail
+    }'
+    echo -e "${UI_DIVIDER}"
+
+    local pick
+    read -p "$(nvidia_t INPUT_PICK) (0 返回): " pick
+    pick="${pick:-0}"
+    if [[ "$pick" == "0" ]]; then
+        return 0
+    fi
+    if [[ ! "$pick" =~ ^[0-9]+$ ]]; then
+        display_error "序号必须是数字"
+        return 1
+    fi
+
+    local type_path
+    type_path="$(echo "$types" | awk -v n="$pick" 'NR==n{print $0}')"
+    if [[ -z "$type_path" ]]; then
+        display_error "无效选择"
+        return 1
+    fi
+
+    local avail
+    avail="$(cat "${type_path}/available_instances" 2>/dev/null || echo 0)"
+    if [[ ! "$avail" =~ ^[0-9]+$ || "$avail" -le 0 ]]; then
+        display_error "该类型无可用实例" "请释放已有 vGPU 实例，或选择其他类型。"
+        return 1
+    fi
+
+    local uuid
+    uuid="$(cat /proc/sys/kernel/random/uuid 2>/dev/null || true)"
+    if [[ -z "$uuid" ]]; then
+        display_error "无法生成 UUID"
+        return 1
+    fi
+
+    if ! confirm_action "创建 vGPU 实例并分配给 VM $vmid？"; then
+        return 0
+    fi
+
+    if ! echo "$uuid" > "${type_path}/create" 2>/dev/null; then
+        display_error "vGPU 实例创建失败" "请检查驱动/权限，并确认该类型可用。"
+        return 1
+    fi
+
+    local idx
+    idx="$(qm_find_free_hostpci_index "$vmid" 2>/dev/null)" || {
+        display_error "已创建 vGPU 实例，但未找到可用 hostpci 插槽" "请手工将 mdev=$uuid 添加到 VM。"
+        return 1
+    }
+
+    local value="${gpu_bdf},mdev=${uuid}"
+    if qm_is_q35_machine "$vmid"; then
+        value="${value},pcie=1"
+    fi
+
+    local conf_path
+    conf_path="$(get_qm_conf_path "$vmid")"
+    if [[ -f "$conf_path" ]]; then
+        backup_file "$conf_path" >/dev/null 2>&1 || true
+    fi
+
+    if ! qm set "$vmid" "-hostpci${idx}" "$value" >/dev/null 2>&1; then
+        display_error "qm set 写入失败" "请手工添加 hostpci${idx}: ${value}"
+        return 1
+    fi
+
+    display_success "$(nvidia_t OK_DONE)" "已创建并绑定 mdev=${uuid}，如 VM 运行中请重启 VM。"
+    return 0
+}
+
+nvidia_vgpu_menu() {
+    while true; do
+        clear
+        show_menu_header "$(nvidia_t OPT_VGPU)"
+        show_menu_option "1" "vGPU 类型选择与分配"
+        show_menu_option "2" "vGPU 许可证状态"
+        show_menu_option "3" "更新 vGPU 许可证配置"
+        show_menu_option "0" "$(nvidia_t OPT_BACK)"
+        show_menu_footer
+        read -p "$(nvidia_t INPUT_CHOICE) [0-3]: " choice
+        case "$choice" in
+            1) nvidia_vgpu_assign_to_vm ;;
+            2) clear; show_menu_header "$(nvidia_t OPT_VGPU)"; nvidia_vgpu_show_license ;;
+            3) nvidia_vgpu_update_license ;;
+            0) return ;;
+            *) log_error "无效选择" ;;
+        esac
+        pause_function
+    done
+}
+
+nvidia_driver_info() {
+    clear
+    show_menu_header "$(nvidia_t OPT_DRV_INFO)"
+
+    local open_loaded="no"
+    local prop_loaded="no"
+    if lsmod 2>/dev/null | grep -q '^nouveau'; then
+        open_loaded="yes"
+    fi
+    if lsmod 2>/dev/null | grep -q '^nvidia'; then
+        prop_loaded="yes"
+    fi
+
+    echo -e "${CYAN}驱动状态：${NC}"
+    echo "  nouveau 已加载: $open_loaded"
+    echo "  nvidia 已加载:  $prop_loaded"
+    echo -e "${UI_DIVIDER}"
+
+    if command -v nvidia-smi >/dev/null 2>&1; then
+        echo -e "${CYAN}nvidia-smi：${NC}"
+        nvidia-smi 2>/dev/null | sed 's/^/  /' || true
+        echo -e "${UI_DIVIDER}"
+        echo -e "${CYAN}GPU 指标（CSV）：${NC}"
+        nvidia-smi --query-gpu=index,name,driver_version,temperature.gpu,utilization.gpu,power.draw,power.limit,memory.used,memory.total --format=csv,noheader,nounits 2>/dev/null | sed 's/^/  /' || true
+    else
+        display_error "未找到 nvidia-smi" "如需查看驱动信息，请先安装 NVIDIA 驱动或确认 PATH。"
+    fi
+}
+
+nvidia_driver_export_report() {
+    local ts
+    ts="$(date +%Y%m%d_%H%M%S)"
+    local out="/var/log/pve-tools-nvidia-report-${ts}.txt"
+    {
+        echo "time: $(date)"
+        echo "pveversion: $(pveversion 2>/dev/null || true)"
+        echo "kernel: $(uname -r)"
+        echo
+        echo "lspci (nvidia):"
+        lspci -Dnn 2>/dev/null | grep -i nvidia || true
+        echo
+        echo "lsmod (nvidia/nouveau):"
+        lsmod 2>/dev/null | grep -E '^(nvidia|nouveau)\b' || true
+        echo
+        if command -v nvidia-smi >/dev/null 2>&1; then
+            echo "nvidia-smi:"
+            nvidia-smi 2>/dev/null || true
+            echo
+            echo "nvidia-smi -q (head):"
+            nvidia-smi -q 2>/dev/null | head -n 200 || true
+        fi
+    } > "$out" 2>/dev/null || {
+        display_error "导出失败" "请检查 /var/log 写入权限与磁盘空间。"
+        return 1
+    }
+    log_success "已导出: $out"
+    return 0
+}
+
+nvidia_driver_info_menu() {
+    while true; do
+        clear
+        show_menu_header "$(nvidia_t OPT_DRV_INFO)"
+        show_menu_option "1" "查看驱动与监控面板"
+        show_menu_option "2" "导出驱动诊断报告"
+        show_menu_option "0" "$(nvidia_t OPT_BACK)"
+        show_menu_footer
+        read -p "$(nvidia_t INPUT_CHOICE) [0-2]: " choice
+        case "$choice" in
+            1) nvidia_driver_info ;;
+            2) nvidia_driver_export_report ;;
+            0) return ;;
+            *) log_error "无效选择" ;;
+        esac
+        pause_function
+    done
+}
+
+nvidia_apt_has_pkg() {
+    local pkg="$1"
+    apt-cache show "$pkg" >/dev/null 2>&1
+}
+
+nvidia_driver_switch_to_proprietary() {
+    echo -e "${YELLOW}$(nvidia_t WARN_HIGH_RISK)${NC}"
+    if ! confirm_action "安装并启用官方 NVIDIA 驱动（闭源）？"; then
+        return 0
+    fi
+
+    log_step "更新软件包列表..."
+    apt-get update -y >/dev/null 2>&1 || true
+
+    if nvidia_apt_has_pkg "nvidia-driver"; then
+        log_step "安装 nvidia-driver..."
+        apt-get install -y nvidia-driver
+    else
+        display_error "未找到可用的 nvidia-driver 软件包" "请检查软件源，或使用 NVIDIA 官方安装方式。"
+        return 1
+    fi
+
+    if confirm_action "安装完成，是否现在重启宿主机？"; then
+        reboot
+    fi
+    return 0
+}
+
+nvidia_driver_switch_to_open() {
+    echo -e "${YELLOW}$(nvidia_t WARN_HIGH_RISK)${NC}"
+    if ! confirm_action "卸载 NVIDIA 驱动并切回开源驱动（nouveau）？"; then
+        return 0
+    fi
+
+    log_step "卸载 NVIDIA 驱动..."
+    apt-get purge -y 'nvidia-*' || true
+    apt-get autoremove -y || true
+
+    if confirm_action "是否更新 initramfs（推荐）？"; then
+        update-initramfs -u || true
+    fi
+
+    if confirm_action "操作完成，是否现在重启宿主机？"; then
+        reboot
+    fi
+    return 0
+}
+
+nvidia_restore_latest_backup_file() {
+    local target="$1"
+    local backup_dir="/var/backups/pve-tools"
+    local base
+    base="$(basename "$target")"
+
+    if [[ ! -d "$backup_dir" ]]; then
+        return 1
+    fi
+
+    local latest
+    latest="$(ls -1t "${backup_dir}/${base}."*.bak 2>/dev/null | head -n 1)"
+    if [[ -z "$latest" ]]; then
+        return 1
+    fi
+
+    backup_file "$target" >/dev/null 2>&1 || true
+    if cp -a "$latest" "$target" >/dev/null 2>&1; then
+        log_success "已回滚: $target"
+        log_info "使用备份: $latest"
+        return 0
+    fi
+    return 1
+}
+
+nvidia_driver_rollback() {
+    echo -e "${YELLOW}$(nvidia_t WARN_HIGH_RISK)${NC}"
+    if ! confirm_action "回滚最近一次驱动相关配置备份？"; then
+        return 0
+    fi
+
+    local files=(
+        "/etc/modprobe.d/pve-blacklist.conf"
+        "/etc/modprobe.d/kvm.conf"
+        "/etc/modprobe.d/pve-tools-nvidia-vfio.conf"
+        "/etc/modprobe.d/vfio.conf"
+        "/etc/default/grub"
+        "/etc/nvidia/gridd.conf"
+    )
+
+    local ok=0
+    local f
+    for f in "${files[@]}"; do
+        if nvidia_restore_latest_backup_file "$f"; then
+            ok=$((ok+1))
+        fi
+    done
+
+    if [[ "$ok" -le 0 ]]; then
+        display_error "未找到可用备份" "请确认之前确实产生过备份（/var/backups/pve-tools），或手工回滚配置。"
+        return 1
+    fi
+
+    display_success "回滚完成" "建议执行 update-initramfs -u，并按需重启宿主机。"
+    return 0
+}
+
+nvidia_driver_switch_menu() {
+    while true; do
+        clear
+        show_menu_header "$(nvidia_t OPT_DRV_SWITCH)"
+        echo -e "${YELLOW}$(nvidia_t WARN_HIGH_RISK)${NC}"
+        echo -e "${UI_DIVIDER}"
+        show_menu_option "1" "切换到闭源驱动（官方 NVIDIA）"
+        show_menu_option "2" "切换到开源驱动（nouveau）"
+        show_menu_option "3" "回滚最近一次备份"
+        show_menu_option "0" "$(nvidia_t OPT_BACK)"
+        show_menu_footer
+        read -p "$(nvidia_t INPUT_CHOICE) [0-3]: " choice
+        case "$choice" in
+            1) nvidia_driver_switch_to_proprietary ;;
+            2) nvidia_driver_switch_to_open ;;
+            3) nvidia_driver_rollback ;;
+            0) return ;;
+            *) log_error "无效选择" ;;
+        esac
+        pause_function
+    done
+}
+
+nvidia_gpu_management_menu() {
+    while true; do
+        clear
+        show_menu_header "$(nvidia_t MENU_TITLE)"
+        echo -e "${CYAN}$(nvidia_t MENU_DESC)${NC}"
+        echo -e "${UI_DIVIDER}"
+        show_menu_option "1" "$(nvidia_t OPT_PT)"
+        show_menu_option "2" "$(nvidia_t OPT_VGPU)"
+        show_menu_option "3" "$(nvidia_t OPT_DRV_INFO)"
+        show_menu_option "4" "$(nvidia_t OPT_DRV_SWITCH)"
+        show_menu_option "0" "$(nvidia_t OPT_BACK)"
+        show_menu_footer
+        read -p "$(nvidia_t INPUT_CHOICE) [0-4]: " choice
+        case "$choice" in
+            1) nvidia_gpu_passthrough_vm ;;
+            2) nvidia_vgpu_menu ;;
+            3) nvidia_driver_info_menu ;;
+            4) nvidia_driver_switch_menu ;;
+            0) return ;;
+            *) log_error "无效选择" ;;
+        esac
+        pause_function
+    done
 }
 
 # 主程序
 main() {
     check_root
+    ensure_legal_acceptance
     check_debug_mode "$@"
     check_pve_version
     
