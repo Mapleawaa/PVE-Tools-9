@@ -11,11 +11,12 @@
 
 
 # 版本信息
-CURRENT_VERSION="6.6.0"
+CURRENT_VERSION="6.6.1"
 VERSION_FILE_URL="https://raw.githubusercontent.com/Mapleawaa/PVE-Tools-9/main/VERSION"
 UPDATE_FILE_URL="https://raw.githubusercontent.com/Mapleawaa/PVE-Tools-9/main/UPDATE"
 PVE_VERSION_DETECTED=""
 PVE_MAJOR_VERSION=""
+RISK_ACK_BYPASS=false
 
 # ============ 颜色系统 ============
 
@@ -468,7 +469,7 @@ EOF
     echo "$UI_BORDER"
     echo -e "  ${H1}PVE-Tools-9 一键脚本${NC}"
     echo "  让每个人都能体验虚拟化技术的的便利。"
-    echo -e "  作者: ${PINK}Maple${NC} | 交流群: ${CYAN}1031976463${NC}"
+    echo -e "  作者: ${PINK}Maple${NC} | 交流群: ${CYAN}1031976463${NC} & t.me/pvetools9"
     echo -e "  当前版本: ${GREEN}$CURRENT_VERSION${NC} | 最新版本: ${remote_version:-"未检测"}"
     echo "$UI_BORDER"
 }
@@ -485,6 +486,12 @@ check_root() {
 
 # 检查调试模式
 check_debug_mode() {
+    for arg in "$@"; do
+        if [[ "$arg" == "--i-know-what-i-do" ]]; then
+            RISK_ACK_BYPASS=true
+        fi
+    done
+
     for arg in "$@"; do
         if [[ "$arg" == "--debug" ]]; then
             log_warn "警告：您正在使用调试模式！"
@@ -538,13 +545,31 @@ check_pve_version() {
         exit 1
     fi
     
-    local pve_version
-    pve_version="$(pveversion | head -n1 | cut -d'/' -f2 | cut -d'-' -f1)"
+    local pve_version pkg_ver out
+    out="$(pveversion 2>/dev/null || true)"
+    if [[ "$out" =~ pve-manager/([0-9]+(\.[0-9]+)*) ]]; then
+        pve_version="${BASH_REMATCH[1]}"
+    else
+        pve_version=""
+    fi
+    if [[ -z "$pve_version" ]] && command -v dpkg-query >/dev/null 2>&1; then
+        pkg_ver="$(dpkg-query -W -f='${Version}' pve-manager 2>/dev/null || true)"
+        pve_version="$(echo "$pkg_ver" | grep -oE '^[0-9]+(\.[0-9]+)*' | head -n 1)"
+    fi
+    if [[ -z "$pve_version" ]]; then
+        pve_version="unknown"
+    fi
+
     PVE_VERSION_DETECTED="$pve_version"
-    PVE_MAJOR_VERSION="$(echo "$pve_version" | cut -d'.' -f1)"
+    if [[ "$pve_version" =~ ^[0-9]+(\.[0-9]+)*$ ]]; then
+        PVE_MAJOR_VERSION="$(echo "$pve_version" | cut -d'.' -f1)"
+    else
+        PVE_MAJOR_VERSION="unknown"
+    fi
+
     log_info "太好了！检测到 PVE 版本: $pve_version"
 
-    if [[ "$PVE_MAJOR_VERSION" != "9" ]]; then
+    if [[ "$PVE_MAJOR_VERSION" != "9" && "$RISK_ACK_BYPASS" != "true" ]]; then
         clear
         show_menu_header "高风险提示：非 PVE9 环境"
         echo -e "${RED}警告：检测到当前不是 PVE 9.x（当前：${PVE_VERSION_DETECTED}）。${NC}"
@@ -580,8 +605,11 @@ block_non_pve9_destructive() {
     if [[ "$DEBUG_MODE" == "true" ]]; then
         return 0
     fi
+    if [[ "$RISK_ACK_BYPASS" == "true" ]]; then
+        return 0
+    fi
     if [[ "${PVE_MAJOR_VERSION:-}" != "9" ]]; then
-        display_error "已拦截：非 PVE9 环境禁止执行该自动化操作" "功能：${feature}。请在 PVE9 上使用，或手动参考文档/自行处理。"
+        display_error "已拦截：非 PVE9 环境禁止执行该自动化操作" "功能：${feature}。请在 PVE9 上使用，或手动参考文档/自行处理。如需强制执行，请加启动参数 --i-know-what-i-do"
         return 1
     fi
     return 0
