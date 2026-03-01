@@ -469,7 +469,7 @@ EOF
     echo "$UI_BORDER"
     echo -e "  ${H1}PVE-Tools-9 一键脚本${NC}"
     echo "  让每个人都能体验虚拟化技术的的便利。"
-    echo -e "  作者: ${PINK}Maple${NC} | 交流群: ${CYAN}1031976463${NC} & t.me/pvetools9"
+    echo -e "  作者: ${PINK}Maple${NC} | 交流群: ${CYAN}1031976463${NC}"
     echo -e "  当前版本: ${GREEN}$CURRENT_VERSION${NC} | 最新版本: ${remote_version:-"未检测"}"
     echo "$UI_BORDER"
 }
