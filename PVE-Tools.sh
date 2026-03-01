@@ -866,8 +866,10 @@ pve_mail_notification_setup() {
 
 # 获取已安装的 PVE 内核包（兼容 pve-kernel / proxmox-kernel 以及 -signed 后缀）
 get_installed_kernel_packages() {
-    dpkg -l 2>/dev/null | awk '
-        ($1 == "ii" || $1 == "hi") &&
+    local status_regex="${1:-ii|hi}"
+
+    dpkg -l 2>/dev/null | awk -v sr="$status_regex" '
+        $1 ~ ("^(" sr ")$") &&
         $2 ~ /^(pve-kernel|proxmox-kernel)-[0-9].*-pve(-signed)?$/ {
             print $2
         }
@@ -1093,7 +1095,8 @@ remove_old_kernels() {
     
     # 获取所有已安装的内核
     local installed_kernels
-    installed_kernels="$(get_installed_kernel_packages)"
+    installed_kernels="$(get_installed_kernel_packages "ii")"
+    local -a kernel_list
     mapfile -t kernel_list < <(printf '%s\n' "$installed_kernels" | sed '/^$/d')
     local kernel_count=${#kernel_list[@]}
     
