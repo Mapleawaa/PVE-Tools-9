@@ -864,6 +864,18 @@ pve_mail_notification_setup() {
     return 0
 }
 
+# 获取已安装的 PVE 内核包（兼容 pve-kernel / proxmox-kernel 以及 -signed 后缀）
+get_installed_kernel_packages() {
+    local status_regex="${1:-ii|hi}"
+
+    dpkg -l 2>/dev/null | awk -v sr="$status_regex" '
+        $1 ~ ("^(" sr ")$") &&
+        $2 ~ /^(pve-kernel|proxmox-kernel)-[0-9].*-pve(-signed)?$/ {
+            print $2
+        }
+    ' | sort -Vu
+}
+
 # 检测当前内核版本
 check_kernel_version() {
     log_info "检测当前内核信息..."
@@ -888,7 +900,7 @@ check_kernel_version() {
     echo -e "  类型: ${GREEN}$kernel_variant${NC}"
     
     # 检测可用的内核版本
-    local installed_kernels=$(dpkg -l | grep -E 'pve-kernel|linux-image' | grep -E 'ii|hi' | awk '{print $2}' | sort -V)
+    local installed_kernels=$(get_installed_kernel_packages)
     if [[ -n "$installed_kernels" ]]; then
         echo -e "${CYAN}已安装的内核版本：${NC}"
         while IFS= read -r kernel; do
@@ -1082,8 +1094,11 @@ remove_old_kernels() {
     log_info "清理旧内核..."
     
     # 获取所有已安装的内核
-    local installed_kernels=$(dpkg -l | grep -E '^ii.*pve-kernel' | awk '{print $2}' | sort -V)
-    local kernel_count=$(echo "$installed_kernels" | wc -l)
+    local installed_kernels
+    installed_kernels="$(get_installed_kernel_packages "ii")"
+    local -a kernel_list
+    mapfile -t kernel_list < <(printf '%s\n' "$installed_kernels" | sed '/^$/d')
+    local kernel_count=${#kernel_list[@]}
     
     if [[ $kernel_count -le 2 ]]; then
         log_info "当前只有 $kernel_count 个内核，无需清理"
@@ -1097,7 +1112,7 @@ remove_old_kernels() {
     echo -e "${YELLOW}将删除 $remove_count 个旧内核，保留最新的 $keep_count 个内核${NC}"
     
     # 获取要删除的内核列表（最旧的几个）
-    local kernels_to_remove=$(echo "$installed_kernels" | head -n $remove_count)
+    local kernels_to_remove=("${kernel_list[@]:0:$remove_count}")
     
     read -p "是否继续？(y/N): " confirm
     if [[ "$confirm" != "y" && "$confirm" != "Y" ]]; then
@@ -1106,14 +1121,14 @@ remove_old_kernels() {
     fi
     
     # 删除旧内核
-    while IFS= read -r kernel; do
+    for kernel in "${kernels_to_remove[@]}"; do
         log_info "正在删除内核: $kernel"
         if apt-get remove -y --purge "$kernel"; then
             log_success "内核 $kernel 删除成功"
         else
             log_error "删除内核 $kernel 失败"
         fi
-    done <<< "$kernels_to_remove"
+    done
     
     # 更新引导配置
     update_grub_config
