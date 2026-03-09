@@ -11,7 +11,7 @@
 
 
 # 版本信息
-CURRENT_VERSION="6.6.1"
+CURRENT_VERSION="6.7.0"
 VERSION_FILE_URL="https://raw.githubusercontent.com/Mapleawaa/PVE-Tools-9/main/VERSION"
 UPDATE_FILE_URL="https://raw.githubusercontent.com/Mapleawaa/PVE-Tools-9/main/UPDATE"
 PVE_VERSION_DETECTED=""
@@ -1441,58 +1441,28 @@ remove_subscription_popup() {
     fi
 }
 
+reinstall_pve_webui_packages() {
+    log_step "正在重新安装官方 Web UI 相关软件包"
+    if apt-get install --reinstall -y pve-manager proxmox-widget-toolkit; then
+        systemctl restart pveproxy.service
+        log_success "官方 Web UI 文件已恢复"
+        return 0
+    fi
+
+    log_error "重新安装失败，请检查软件源或网络后重试：apt-get install --reinstall -y pve-manager proxmox-widget-toolkit"
+    return 1
+}
+
 # 恢复 proxmoxlib.js 文件
 restore_proxmoxlib() {
-    log_step "准备恢复 proxmoxlib.js 官方原版文件"
-    local js_file="/usr/share/javascript/proxmox-widget-toolkit/proxmoxlib.js"
-    local download_url="https://ghfast.top/github.com/Mapleawaa/PVE-Tools-9/blob/main/proxmoxlib.js"
-    
-    # 警告提示
-    log_warn "此操作将从云端下载官方原版文件覆盖当前文件"
-    log_warn "如果之前有过修改，将会丢失！"
-    echo -e "${YELLOW}您确定要继续吗？输入 'yes' 确认: ${NC}"
-    read -r confirm
-    if [[ "$confirm" != "yes" ]]; then
-        log_info "操作已取消"
+    log_step "准备恢复官方 Web UI 文件"
+    log_warn "此操作会重新安装 pve-manager 和 proxmox-widget-toolkit，并覆盖当前前端补丁"
+
+    if ! confirm_action "确定要恢复官方 Web UI 文件吗？"; then
         return
     fi
 
-    # 备份当前文件
-    if [[ -f "$js_file" ]]; then
-        backup_file "$js_file"
-    fi
-
-    # 下载文件
-    log_info "正在下载文件..."
-    # 注意：github blob链接下载需要处理，这里假设用户提供的链接可以直接wget下载或者通过raw格式下载
-    # 修正链接为 raw 格式，虽然 ghfast.top 做了加速，但 blob 页面是 html，需要 raw 链接
-    # 用户给的是 blob 链接: https://ghfast.top/github.com/Mapleawaa/PVE-Tools-9/blob/main/proxmoxlib.js
-    # 尝试转换为 raw 链接，通常 github 加速镜像也支持 raw
-    # 假设 ghfast.top 支持 /raw/ 路径或者直接替换 blob 为 raw
-    # 既然是镜像，我们尝试直接去下载用户提供的链接，如果不行可能需要调整
-    # 但根据经验，github 文件下载通常用 raw.githubusercontent.com 或加速镜像的对应 raw 路径
-    # 我们可以尝试构造一个更稳妥的 raw 链接
-    # 原始: https://github.com/Mapleawaa/PVE-Tools-9/raw/main/proxmoxlib.js
-    # 加速: https://ghfast.top/https://github.com/Mapleawaa/PVE-Tools-9/raw/main/proxmoxlib.js
-    
-    local raw_url="https://ghfast.top/https://github.com/Mapleawaa/PVE-Tools-9/raw/main/proxmoxlib.js"
-    
-    if curl -L -o "$js_file" "$raw_url"; then
-        if [[ -s "$js_file" ]]; then
-            log_success "下载成功！正在重启 pveproxy 服务..."
-            systemctl restart pveproxy.service
-            log_success "恢复完成！文件已重置为官方状态"
-        else
-            log_error "下载的文件为空，恢复失败"
-            # 尝试恢复备份
-            if [[ -f "${js_file}.bak" ]]; then
-                mv "${js_file}.bak" "$js_file"
-                log_info "已恢复之前的备份文件"
-            fi
-        fi
-    else
-        log_error "下载失败，请检查网络连接"
-    fi
+    reinstall_pve_webui_packages
 }
 
 # 合并 local 与 local-lvm
@@ -2794,18 +2764,6 @@ cpu_add() {
     backup_file "$pvemanagerlib"
     backup_file "$proxmoxlib"
 
-    # 备份当前版本文件 (这部分看起来和 backup_file 功能重复，但可能用于特定版本的还原逻辑)
-    # 将其输出也重定向到日志
-    if [[ ! -f "$nodes.$pvever.bak" ]]; then
-        cp "$nodes" "$nodes.$pvever.bak"
-    fi
-    if [[ ! -f "$pvemanagerlib.$pvever.bak" ]]; then
-        cp "$pvemanagerlib" "$pvemanagerlib.$pvever.bak"
-    fi
-    if [[ ! -f "$proxmoxlib.$pvever.bak" ]]; then
-        cp "$proxmoxlib" "$proxmoxlib.$pvever.bak"
-    fi
-
     log_info "是否启用 UPS 监控？"
     echo -n "（如果没有 UPS 设备或不想显示，请选择 N，默认Y）(y/N): "
     read -n 1 -r
@@ -2977,10 +2935,24 @@ EOF
           itemId: 'thermal',
           colspan: 2,
           printBar: false,
-          title: gettext('CPU温度'),
-          textField: 'thermalstate',
-          renderer:function(value){
-              console.log(value);
+	          title: gettext('CPU温度'),
+	          textField: 'thermalstate',
+	          renderer:function(value){
+	              function colorizeTemp(temp) {
+	                  let tempNum = Number(temp);
+	                  if (Number.isNaN(tempNum)) {
+	                      return temp + '°C';
+	                  }
+	                  if (tempNum < 60) {
+	                      return '<span style="color: #27ae60; font-weight: 600;">' + tempNum.toFixed(0) + '°C</span>';
+	                  }
+	                  if (tempNum < 80) {
+	                      return '<span style="color: #f39c12; font-weight: 600;">' + tempNum.toFixed(0) + '°C</span>';
+	                  }
+	                  return '<span style="color: #e74c3c; font-weight: 600;">' + tempNum.toFixed(0) + '°C</span>';
+	              }
+
+	              console.log(value);
               let b = value.trim().split(/\s+(?=^\w+-)/m).sort();
               let cpuResults = [];
               let otherResults = [];
@@ -3008,32 +2980,32 @@ EOF
                   // 只处理 CPU 温度（Intel coretemp 或 AMD 相关传感器）
                   const isCpuSensor = cpuSensorRegex.test(name) || amdLabelRegex.test(v);
 
-                  if (isCpuSensor) {
-                      let packageTemp = temps[0].toFixed(0);
+	                  if (isCpuSensor) {
+	                      let packageTemp = temps[0];
 
-                      if (temps.length > 1) {
-                          let coreTemps = temps.slice(1);
-                          let avgCore = (coreTemps.reduce((a, b) => a + b, 0) / coreTemps.length).toFixed(0);
-                          let maxCore = Math.max(...coreTemps).toFixed(0);
-                          let minCore = Math.min(...coreTemps).toFixed(0);
+	                      if (temps.length > 1) {
+	                          let coreTemps = temps.slice(1);
+	                          let avgCore = coreTemps.reduce((a, b) => a + b, 0) / coreTemps.length;
+	                          let maxCore = Math.max(...coreTemps);
+	                          let minCore = Math.min(...coreTemps);
 
-                          cpuResults.push(`封装: ${packageTemp}°C | 核心: 平均 ${avgCore}°C (${minCore}~${maxCore}°C)`);
-                      } else {
-                          cpuResults.push(`封装: ${packageTemp}°C`);
-                      }
+	                          cpuResults.push(`封装: ${colorizeTemp(packageTemp)} | 核心: 平均 ${colorizeTemp(avgCore)} (${colorizeTemp(minCore)}~${colorizeTemp(maxCore)})`);
+	                      } else {
+	                          cpuResults.push(`封装: ${colorizeTemp(packageTemp)}`);
+	                      }
 
-                      // 添加临界温度
-                      let crit = v.match(/(?<=\bcrit\b[^+]+\+)\d+/);
-                      if (crit) {
-                          cpuResults[cpuResults.length - 1] += ` | 临界: ${crit[0]}°C`;
-                      }
-                  } else {
-                      // 非 CPU 温度（主板、NVME等）放到其他结果中
-                      let tempStr = `${name}: ${temps[0].toFixed(0)}°C`;
-                      let crit = v.match(/(?<=\bcrit\b[^+]+\+)\d+/);
-                      if (crit) {
-                          tempStr += ` (临界: ${crit[0]}°C)`;
-                      }
+	                      // 添加临界温度
+	                      let crit = v.match(/(?<=\bcrit\b[^+]+\+)\d+/);
+	                      if (crit) {
+	                          cpuResults[cpuResults.length - 1] += ` | 临界: ${colorizeTemp(crit[0])}`;
+	                      }
+	                  } else {
+	                      // 非 CPU 温度（主板、NVME等）放到其他结果中
+	                      let tempStr = `${name}: ${colorizeTemp(temps[0])}`;
+	                      let crit = v.match(/(?<=\bcrit\b[^+]+\+)\d+/);
+	                      if (crit) {
+	                          tempStr += ` (临界: ${colorizeTemp(crit[0])})`;
+	                      }
                       otherResults.push(tempStr);
                   }
               });
@@ -3062,11 +3034,39 @@ EOF
           itemId: 'nvme${i}0',
           colspan: 2,
           printBar: false,
-          title: gettext('NVME${i}'),
-          textField: 'nvme${i}',
-          renderer:function(value){
-              try{
-                  let  v = JSON.parse(value);
+	          title: gettext('NVME${i}'),
+	          textField: 'nvme${i}',
+	          renderer:function(value){
+	              function colorizeTemp(temp) {
+	                  let tempNum = Number(temp);
+	                  if (Number.isNaN(tempNum)) {
+	                      return temp + '°C';
+	                  }
+	                  if (tempNum < 50) {
+	                      return '<span style="color: #27ae60; font-weight: 600;">' + tempNum + '°C</span>';
+	                  }
+	                  if (tempNum < 70) {
+	                      return '<span style="color: #f39c12; font-weight: 600;">' + tempNum + '°C</span>';
+	                  }
+	                  return '<span style="color: #e74c3c; font-weight: 600;">' + tempNum + '°C</span>';
+	              }
+
+	              function colorizeHealth(percent) {
+	                  let healthNum = Number(percent);
+	                  if (Number.isNaN(healthNum)) {
+	                      return percent + '%';
+	                  }
+	                  if (healthNum >= 80) {
+	                      return '<span style="color: #27ae60; font-weight: 600;">' + healthNum + '%</span>';
+	                  }
+	                  if (healthNum >= 50) {
+	                      return '<span style="color: #f39c12; font-weight: 600;">' + healthNum + '%</span>';
+	                  }
+	                  return '<span style="color: #e74c3c; font-weight: 600;">' + healthNum + '%</span>';
+	              }
+
+	              try{
+	                  let  v = JSON.parse(value);
 
                   // 检查是否为空 JSON（硬盘不存在或已直通）
                   if (Object.keys(v).length === 0) {
@@ -3083,26 +3083,33 @@ EOF
                   let parts = [model];
                   let hasData = false;
 
-                  // 温度
-                  if (v.temperature?.current !== undefined) {
-                      parts.push(v.temperature.current + '°C');
-                      hasData = true;
-                  }
+	                  // 温度
+	                  if (v.temperature?.current !== undefined) {
+	                      parts.push('温度: ' + colorizeTemp(v.temperature.current));
+	                      hasData = true;
+	                  }
 
                   // 健康度和读写
                   let log = v.nvme_smart_health_information_log;
-                  if (log) {
-                      // 健康度
-                      if (log.percentage_used !== undefined) {
-                          let health = '健康: ' + (100 - log.percentage_used) + '%';
-                          if (log.media_errors !== undefined && log.media_errors > 0) {
-                              health += ' <span style="color: #e74c3c;">(0E: ' + log.media_errors + ')</span>';
-                          }
-                          parts.push(health);
-                          hasData = true;
-                      }
+	                  if (log) {
+	                      // 健康度
+	                      if (log.percentage_used !== undefined) {
+	                          let healthRemain = 100 - log.percentage_used;
+	                          let health = '健康: ' + colorizeHealth(healthRemain);
+	                          if (log.media_errors !== undefined && log.media_errors > 0) {
+	                              health += ' <span style="color: #e74c3c;">(0E: ' + log.media_errors + ')</span>';
+	                          }
+	                          parts.push(health);
+	                          hasData = true;
+	                      }
 
-                      // 读写
+	                      if (log.unsafe_shutdowns !== undefined) {
+	                          let shutdownColor = Number(log.unsafe_shutdowns) > 0 ? '#e74c3c' : '#27ae60';
+	                          parts.push('异常断电: <span style="color: ' + shutdownColor + '; font-weight: 600;">' + log.unsafe_shutdowns + '</span>');
+	                          hasData = true;
+	                      }
+
+	                      // 读写
                       if (log.data_units_read && log.data_units_written) {
                           let read = (log.data_units_read / 1956882).toFixed(1);
                           let write = (log.data_units_written / 1956882).toFixed(1);
@@ -3161,12 +3168,37 @@ EOF
           itemId: 'sd${i}0',
           colspan: 2,
           printBar: false,
-          title: gettext('${sdtype}'),
-          textField: 'sd${i}',
-          renderer:function(value){
-              try{
-                  let  v = JSON.parse(value);
-                  console.log(v)
+	          title: gettext('${sdtype}'),
+	          textField: 'sd${i}',
+	          renderer:function(value){
+	              function colorizeTemp(temp) {
+	                  let tempNum = Number(temp);
+	                  if (Number.isNaN(tempNum)) {
+	                      return temp + '°C';
+	                  }
+	                  if (tempNum < 40) {
+	                      return '<span style="color: #27ae60; font-weight: 600;">' + tempNum + '°C</span>';
+	                  }
+	                  if (tempNum < 50) {
+	                      return '<span style="color: #f39c12; font-weight: 600;">' + tempNum + '°C</span>';
+	                  }
+	                  return '<span style="color: #e74c3c; font-weight: 600;">' + tempNum + '°C</span>';
+	              }
+
+	              function findAtaSmartRawValue(table, ids) {
+	                  if (!Array.isArray(table)) {
+	                      return null;
+	                  }
+	                  let found = table.find(item => ids.includes(item?.id));
+	                  if (!found || !found.raw) {
+	                      return null;
+	                  }
+	                  return found.raw.string ?? found.raw.value ?? null;
+	              }
+
+	              try{
+	                  let  v = JSON.parse(value);
+	                  console.log(v)
 
                   // 场景 1：硬盘休眠（节能模式）
                   if (v.standy === true) {
@@ -3187,10 +3219,10 @@ EOF
                   // 场景 4：构建正常显示内容
                   let parts = [model];
 
-                  // 温度
-                  if (v.temperature?.current !== undefined) {
-                      parts.push('温度: ' + v.temperature.current + '°C');
-                  }
+	                  // 温度
+	                  if (v.temperature?.current !== undefined) {
+	                      parts.push('温度: ' + colorizeTemp(v.temperature.current));
+	                  }
 
                   // 通电时间
                   if (v.power_on_time?.hours !== undefined) {
@@ -3201,10 +3233,17 @@ EOF
                       parts.push(pot);
                   }
 
-                  // SMART 状态
-                  if (v.smart_status?.passed !== undefined) {
-                      parts.push('SMART: ' + (v.smart_status.passed ? '正常' : '<span style="color: #e74c3c;">警告!</span>'));
-                  }
+	                  // SMART 状态
+	                  if (v.smart_status?.passed !== undefined) {
+	                      parts.push('SMART: ' + (v.smart_status.passed ? '<span style="color: #27ae60;">正常</span>' : '<span style="color: #e74c3c;">警告!</span>'));
+	                  }
+
+	                  let unsafeShutdowns = findAtaSmartRawValue(v.ata_smart_attributes?.table, [174, 192]);
+	                  if (unsafeShutdowns !== null && unsafeShutdowns !== undefined && unsafeShutdowns !== '') {
+	                      let shutdownCount = String(unsafeShutdowns).trim();
+	                      let shutdownColor = Number(shutdownCount) > 0 ? '#e74c3c' : '#27ae60';
+	                      parts.push('异常断电: <span style="color: ' + shutdownColor + '; font-weight: 600;">' + shutdownCount + '</span>');
+	                  }
 
                   return parts.join(' | ');
 
@@ -3374,15 +3413,7 @@ EOF
         log_warn "找不到左栏高度修改点"
     fi
 
-    # 修改右栏高度和左栏一致，解决浮动错位（原高度 325）
-    log_step "修改右栏高度和左栏一致，解决浮动错位"
-    nph=$(sed -n -E '/nodeStatus:\s*nodeStatus/,+10{/minHeight:/{s/[^0-9]*([0-9]+).*/\1/p;q}}' "$pvemanagerlib")
-    if [ -n "$nph" ]; then
-        sed -i -E "/nodeStatus:\s*nodeStatus/,+10{/minHeight:/{s#[0-9]+#$((nph + addHei - (nph - wph)))#}}" $pvemanagerlib
-        echo "右栏高度: $nph → $((nph + addHei - (nph - wph)))" >> /var/log/pve-tools.log
-    else
-        log_warn "找不到右栏高度修改点"
-    fi
+    log_info "跳过强制修改右栏 minHeight，避免磁盘较多时图表区域被异常拉高"
 
     # 调整显示布局
     ln=$(expr $(sed -n -e '/widget.pveDcGuests/=' $pvemanagerlib) + 10)
@@ -3404,25 +3435,23 @@ EOF
 }
 
 cpu_del() {
+    local nodes="/usr/share/perl5/PVE/API2/Nodes.pm"
+    local pvemanagerlib="/usr/share/pve-manager/js/pvemanagerlib.js"
+    local proxmoxlib="/usr/share/javascript/proxmox-widget-toolkit/proxmoxlib.js"
+    local pvever
 
-nodes="/usr/share/perl5/PVE/API2/Nodes.pm"
-pvemanagerlib="/usr/share/pve-manager/js/pvemanagerlib.js"
-proxmoxlib="/usr/share/javascript/proxmox-widget-toolkit/proxmoxlib.js"
+    pvever=$(pveversion | awk -F"/" '{print $2}')
+    log_step "Restore official node overview files"
+    log_warn "This will remove the temperature patch and reinstall official pve-manager / proxmox-widget-toolkit files"
 
-pvever=$(pveversion | awk -F"/" '{print $2}')
-echo pve版本$pvever
-if [ -f "$nodes.$pvever.bak" ];then
-rm -f $nodes $pvemanagerlib $proxmoxlib
-mv $nodes.$pvever.bak $nodes
-mv $pvemanagerlib.$pvever.bak $pvemanagerlib
-mv $proxmoxlib.$pvever.bak $proxmoxlib
+    if ! confirm_action "Restore official node overview files?"; then
+        return
+    fi
 
-log_success "已删除温度显示，请重新刷新浏览器缓存."
-else
-log_warn "你没有添加过温度显示，退出脚本."
-fi
-
-
+    if reinstall_pve_webui_packages; then
+        rm -f "$nodes.$pvever.bak" "$pvemanagerlib.$pvever.bak" "$proxmoxlib.$pvever.bak"
+        log_success "Official node overview files restored. Use Shift+F5 to refresh browser cache."
+    fi
 }
 #--------------CPU、主板、硬盘温度显示----------------
 
@@ -5005,7 +5034,7 @@ show_menu_rescue() {
         show_menu_header "应急救砖工具箱"
         echo -e "${RED}警告：本工具箱用于修复因误操作导致的系统问题，请谨慎使用！${NC}"
         echo
-        show_menu_option "1" "恢复 proxmoxlib.js (修复弹窗去除失败)"
+        show_menu_option "1" "恢复官方 Web UI 文件 (重装 pve-manager / proxmox-widget-toolkit)"
         show_menu_option "2" "恢复官方 pve-qemu-kvm (修复修改版 QEMU 问题)"
         show_menu_option "3" "清理驱动黑名单 (i915/snd_hda_intel)"
         show_menu_option "0" "返回主菜单"

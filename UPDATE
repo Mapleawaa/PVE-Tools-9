@@ -1,4 +1,4 @@
-fix: 修复 PVE 9.1.5 误拦截（版本识别更稳）
-
-- 修复部分环境下 `pveversion` 输出解析不稳定导致的误拦截（例如 PVE 9.1.5 + 不同内核版本）
-- 版本识别改为直接从 `pveversion` 输出中提取 `pve-manager/x.y.z`，并保留 dpkg-query 回退方案
+fix: 修复温控概览布局与恢复逻辑，增强磁盘 SMART 展示
+- 移除温控功能对节点概览右侧 `minHeight` 的强制拉伸，修复硬盘较多时 CPU / Memory 折线图被异常拉高的问题
+- 温控恢复与 Web UI 恢复改为通过 `apt-get install --reinstall pve-manager proxmox-widget-toolkit` 恢复官方文件，避免多次补丁后 `.bak` 文件不再纯净
+- 为 CPU / NVMe / SATA 温度增加颜色显示，新增 NVMe `异常断电` 指标，并为 SATA SMART 属性 `174/192` 提供异常断电兜底显示
