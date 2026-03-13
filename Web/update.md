@@ -3,26 +3,19 @@ title: 更新日志
 description: 基于 Commit 记录整理（含正文与文件变更摘要）
 ---
 
-## 2026年3月13日 - v6.8.0
-### GPU 监控可选与磁盘温度兼容性增强
-- **新增 GPU 监控项**：自动识别 `nvidia-smi/gpustat/rocm-smi/intel_gpu_top`，可选启用并展示简要状态
-- **温度监控配置可交互跳过空数据硬盘**：遇到 SMART 空输出时询问是否加入监控
-- **增强 NVME/SATA 兼容性**：型号字段兜底与空数据判定，减少误报
-- **SAS 采集兜底**：SAS 盘使用 `smartctl -d scsi` 回退以提高取数稳定性
-
----
-## 2026年3月9日 - v6.7.0
-### 修复温控概览布局并增强 SMART 展示
-- **修复节点概览图表被拉高问题**：移除温控功能对右侧 `minHeight` 的重复补丁，解决硬盘数量较多时 CPU Usage、Memory Usage 等折线图被异常拉高的问题
-- **重构温控恢复逻辑**：恢复 Web UI / 温控文件时改为直接重新安装 `pve-manager` 与 `proxmox-widget-toolkit` 官方包，避免多次打补丁后 `.bak` 文件不再是纯净原版
-- **增强硬件状态可读性**：为 CPU、NVMe、SATA 温度增加颜色显示，新增 NVMe `异常断电` 指标，并为 SATA SMART 属性 `174/192` 提供异常断电兜底展示
-
----
-
 # 更新日志（PVE-Tools-9）
 
 > 本文基于仓库 Commit 记录整理，覆盖从项目创建到如今所有的主要迭代内容。
 
+## 2026年3月14日 - v6.9.0
+### 修复 6.8.0 引发的 GPU/温控稳定性问题，并补充 SR-IOV 重启提示
+- **修复 pveproxy 崩溃**：nvidia-smi 解析脚本转义 `$`，避免注入 Nodes.pm 后触发 Perl 变量未声明
+- **修复 Intel GPU 监控为空**：intel_gpu_top 输出默认在 stderr，改为 2>&1 捕获
+- **SR-IOV 未生效重启提示**：检测不到 VF 时提示并可立即重启
+- **温度监控兼容性增强**：空数据硬盘交互提示、NVME/SATA 型号兜底与 SAS `-d scsi` 兜底
+- **事故报告**：Perl 全责
+
+---
 ## 2026年2月22日 - v6.6.1
 ### 🛠️ 热修复：PVE 9.1.5 误拦截
 - **修复版本识别不稳定**：改为直接从 `pveversion` 输出提取 `pve-manager/x.y.z`，并保留 dpkg-query 回退

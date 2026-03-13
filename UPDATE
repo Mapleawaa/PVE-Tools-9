@@ -1,5 +1,7 @@
-﻿fix: 新增 GPU 监控与温度监控兼容性增强
-- 新增 GPU 监控可选项，自动识别 nvidia-smi / gpustat / rocm-smi / intel_gpu_top 并展示简要状态
-- 温度监控配置阶段检测 SMART 空输出时提示用户是否继续显示该硬盘
-- NVME/SATA 型号字段兜底与空数据判定优化，减少误报
-- SAS 盘 smartctl 增加 -d scsi 兜底以提升取数稳定性
+﻿fix: 6.9.0 修复 SR-IOV 重启提示与 GPU/温控稳定性
+- 修复 6.8.0 引发的 pveproxy 编译错误（nvidia-smi awk $ 转义）
+- 修复 Intel GPU 监控为空（intel_gpu_top stderr 捕获）
+- SR-IOV 未生效时提示重启并询问是否立即重启
+- 温度监控空数据硬盘交互与 NVME/SATA 兼容性增强
+- SAS 盘 smartctl -d scsi 兜底提升取数稳定性
+- 事故报告：Perl 全责

@@ -2883,16 +2883,16 @@ EOF
         cat >> $tmpf << 'EOF'
         $res->{gpu_status} = `
             if command -v nvidia-smi >/dev/null 2>&1; then
-                nvidia-smi --query-gpu=index,name,temperature.gpu,utilization.gpu,memory.used,memory.total --format=csv,noheader,nounits 2>/dev/null | awk -F',' '{for(i=1;i<=NF;i++){gsub(/^[ \t]+|[ \t]+$/, "", $i)}; printf "[%s] %s | %sC, %s %% | %s / %s MB\n", $1, $2, $3, $4, $5, $6}'
+                nvidia-smi --query-gpu=index,name,temperature.gpu,utilization.gpu,memory.used,memory.total --format=csv,noheader,nounits 2>/dev/null | awk -F',' '{for(i=1;i<=NF;i++){gsub(/^[ \t]+|[ \t]+$/, "", \$i)}; printf "[%s] %s | %sC, %s %% | %s / %s MB\\n", \$1, \$2, \$3, \$4, \$5, \$6}'
             elif command -v gpustat >/dev/null 2>&1; then
                 gpustat --no-color 2>/dev/null | head -n 5
             elif command -v rocm-smi >/dev/null 2>&1; then
                 rocm-smi --showproductname --showtemp --showuse --showmemuse 2>/dev/null | head -n 8
             elif command -v intel_gpu_top >/dev/null 2>&1; then
                 if command -v timeout >/dev/null 2>&1; then
-                    timeout 2s intel_gpu_top -l 1 2>/dev/null | head -n 1
+                    timeout 2s intel_gpu_top -l 1 2>&1 | head -n 1
                 else
-                    intel_gpu_top -l 1 2>/dev/null | head -n 1
+                    intel_gpu_top -l 1 2>&1 | head -n 1
                 fi
             else
                 echo ""
@@ -4422,6 +4422,13 @@ igpu_verify() {
         echo "  提示: 虚拟核显 00:02.1 ~ 00:02.$vf_count 可直通给虚拟机"
     else
         echo -e "  ! 未检测到 SR-IOV 虚拟核显"
+        echo -e "  提示: 许多机器需要重启后 SR-IOV 才会生效"
+        if confirm_action "是否现在重启系统"; then
+            echo "正在重启系统..."
+            reboot
+        else
+            echo "请记得手动重启系统以使配置生效"
+        fi
     fi
     echo
 
