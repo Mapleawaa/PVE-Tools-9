@@ -11,7 +11,7 @@
 
 
 # 版本信息
-CURRENT_VERSION="6.8.0"
+CURRENT_VERSION="6.9.0"
 VERSION_FILE_URL="https://raw.githubusercontent.com/Mapleawaa/PVE-Tools-9/main/VERSION"
 UPDATE_FILE_URL="https://raw.githubusercontent.com/Mapleawaa/PVE-Tools-9/main/UPDATE"
 PVE_VERSION_DETECTED=""
