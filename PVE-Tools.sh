@@ -11,7 +11,7 @@
 
 
 # 版本信息
-CURRENT_VERSION="6.7.0"
+CURRENT_VERSION="6.8.0"
 VERSION_FILE_URL="https://raw.githubusercontent.com/Mapleawaa/PVE-Tools-9/main/VERSION"
 UPDATE_FILE_URL="https://raw.githubusercontent.com/Mapleawaa/PVE-Tools-9/main/UPDATE"
 PVE_VERSION_DETECTED=""
@@ -152,6 +152,41 @@ confirm_action() {
         log_info "操作已取消"
         return 1
     fi
+}
+
+# 判断 smartctl JSON 是否为空或缺少关键字段
+is_empty_smart_json() {
+    local data="$1"
+    if [[ -z "$data" ]]; then
+        return 0
+    fi
+    local compact
+    compact=$(echo "$data" | tr -d ' \t\r\n')
+    if [[ "$compact" == "{}" ]]; then
+        return 0
+    fi
+    if echo "$data" | grep -Eq '"(model_name|model_number|device_model|vendor|product|model|temperature|smart_status|nvme_smart_health_information_log|ata_smart_attributes|power_on_time|serial_number)"'; then
+        return 1
+    fi
+    return 0
+}
+
+# 询问是否保留空数据硬盘
+prompt_keep_empty_disk() {
+    local dev="$1"
+    local reason="$2"
+    log_warn "检测到 $dev SMART 输出为空或不完整"
+    if [[ -n "$reason" ]]; then
+        echo -e "${YELLOW}原因: $reason${NC}"
+    fi
+    echo -n "是否仍然显示该硬盘？(y/N): "
+    local ans
+    read -n 1 -r ans
+    echo
+    if [[ "$ans" == "y" || "$ans" == "Y" ]]; then
+        return 0
+    fi
+    return 1
 }
 
 LEGAL_VERSION="1.0"
@@ -2791,6 +2826,28 @@ cpu_add() {
         log_info "已选择跳过UPS监控"
     fi
 
+    enable_gpu=false
+    gpu_tools=()
+    for gpu_cmd in nvidia-smi gpustat rocm-smi intel_gpu_top; do
+        if command -v "$gpu_cmd" >/dev/null 2>&1; then
+            gpu_tools+=("$gpu_cmd")
+        fi
+    done
+    if [ "${#gpu_tools[@]}" -eq 0 ]; then
+        log_info "未检测到 GPU 工具，跳过 GPU 监控"
+    else
+        log_info "检测到 GPU 工具: ${gpu_tools[*]}"
+        echo -n "是否启用 GPU 监控？(y/N): "
+        read -n 1 -r
+        echo
+        if [[ $REPLY =~ ^[Yy]$ ]]; then
+            enable_gpu=true
+            log_success "已选择启用 GPU 监控"
+        else
+            log_info "已选择跳过 GPU 监控"
+        fi
+    fi
+
     # 生成系统变量 (参考 PVE 8 脚本的改进实现)
     tmpf=tmpfile.temp
     touch $tmpf
@@ -2822,15 +2879,47 @@ EOF
 EOF
     fi
 
+    if [ "$enable_gpu" = true ]; then
+        cat >> $tmpf << 'EOF'
+        $res->{gpu_status} = `
+            if command -v nvidia-smi >/dev/null 2>&1; then
+                nvidia-smi --query-gpu=index,name,temperature.gpu,utilization.gpu,memory.used,memory.total --format=csv,noheader,nounits 2>/dev/null | awk -F',' '{for(i=1;i<=NF;i++){gsub(/^[ \t]+|[ \t]+$/, "", $i)}; printf "[%s] %s | %sC, %s %% | %s / %s MB\n", $1, $2, $3, $4, $5, $6}'
+            elif command -v gpustat >/dev/null 2>&1; then
+                gpustat --no-color 2>/dev/null | head -n 5
+            elif command -v rocm-smi >/dev/null 2>&1; then
+                rocm-smi --showproductname --showtemp --showuse --showmemuse 2>/dev/null | head -n 8
+            elif command -v intel_gpu_top >/dev/null 2>&1; then
+                if command -v timeout >/dev/null 2>&1; then
+                    timeout 2s intel_gpu_top -l 1 2>/dev/null | head -n 1
+                else
+                    intel_gpu_top -l 1 2>/dev/null | head -n 1
+                fi
+            else
+                echo ""
+            fi
+        `;
+EOF
+    fi
+
 
     echo >> $tmpf
 
     # NVME 硬盘变量 (动态检测，参考 PVE 8 实现)
     log_info "检测系统中的 NVME 硬盘"
+    nvme_list=()
     nvi=0
     for nvme in $(ls /dev/nvme[0-9] 2> /dev/null); do
         chmod +s /usr/sbin/smartctl 2>/dev/null
 
+        smart_out=$(smartctl $nvme -a -j 2>/dev/null)
+        if is_empty_smart_json "$smart_out"; then
+            if ! prompt_keep_empty_disk "$nvme" ""; then
+                log_info "已跳过 $nvme"
+                continue
+            fi
+        fi
+
+        nvme_list+=("$nvme")
         cat >> $tmpf << EOF
 
         \$res->{nvme$nvi} = \`smartctl $nvme -a -j\`;
@@ -2842,6 +2931,8 @@ EOF
 
     # SATA 硬盘变量 (动态检测，参考 PVE 8 实现)
     log_info "检测系统中的 SATA 固态和机械硬盘"
+    sd_list=()
+    sdtype_list=()
     sdi=0
     for sd in $(ls /dev/sd[a-z] 2> /dev/null); do
         chmod +s /usr/sbin/smartctl 2>/dev/null
@@ -2854,11 +2945,44 @@ EOF
 
         if [ "$(cat $sdcr)" = "0" ]; then
             hddisk=false
-            sdtype="固态硬盘"
+            sdtype_base="固态硬盘"
         else
             hddisk=true
-            sdtype="机械硬盘"
+            sdtype_base="机械硬盘"
         fi
+        sdtype="${sdtype_base}${sdi}"
+
+        is_sas=false
+        if smartctl -i $sd | grep -q "Transport protocol:.*SAS"; then
+            is_sas=true
+        fi
+
+        standby=false
+        reason=""
+        if $hddisk && [ "$is_sas" = false ] && hdparm -C $sd 2>/dev/null | grep -iq 'standby'; then
+            standby=true
+            reason="硬盘处于休眠，未获取到 SMART 数据"
+        fi
+
+        if [ "$standby" = true ]; then
+            smart_out=""
+        else
+            if [ "$is_sas" = true ]; then
+                smart_out=$(smartctl -a -j -d scsi $sd 2>/dev/null || smartctl -a -j $sd 2>/dev/null)
+            else
+                smart_out=$(smartctl -a -j $sd 2>/dev/null)
+            fi
+        fi
+
+        if is_empty_smart_json "$smart_out"; then
+            if ! prompt_keep_empty_disk "$sd" "$reason"; then
+                log_info "已跳过 $sd"
+                continue
+            fi
+        fi
+
+        sd_list+=("$sd")
+        sdtype_list+=("$sdtype")
 
         # 硬盘输出信息逻辑，如果硬盘不存在就输出空 JSON
         cat >> $tmpf << EOF
@@ -2866,10 +2990,18 @@ EOF
         \$res->{sd$sdi} = \`
             if [ -b $sd ]; then
                 # 增加 SAS 盘检测，SAS 盘不使用 hdparm 检测休眠，防止误报
-                if $hddisk && ! smartctl -i $sd | grep -q "Transport protocol:.*SAS" && hdparm -C $sd 2>/dev/null | grep -iq 'standby'; then
+                is_sas=false
+                if smartctl -i $sd | grep -q "Transport protocol:.*SAS"; then
+                    is_sas=true
+                fi
+                if $hddisk && [ "\$is_sas" = false ] && hdparm -C $sd 2>/dev/null | grep -iq 'standby'; then
                     echo '{"standy": true}'
                 else
-                    smartctl $sd -a -j
+                    if [ "\$is_sas" = true ]; then
+                        smartctl -a -j -d scsi $sd 2>/dev/null || smartctl -a -j $sd 2>/dev/null
+                    else
+                        smartctl -a -j $sd 2>/dev/null
+                    fi
                 fi
             else
                 echo '{}'
@@ -3066,21 +3198,32 @@ EOF
 	                  return '<span style="color: #e74c3c; font-weight: 600;">' + tempNum + '°C</span>';
 	              }
 
-	              function colorizeHealth(percent) {
-	                  let healthNum = Number(percent);
-	                  if (Number.isNaN(healthNum)) {
-	                      return percent + '%';
-	                  }
-	                  if (healthNum >= 80) {
-	                      return '<span style="color: #27ae60; font-weight: 600;">' + healthNum + '%</span>';
-	                  }
-	                  if (healthNum >= 50) {
-	                      return '<span style="color: #f39c12; font-weight: 600;">' + healthNum + '%</span>';
-	                  }
-	                  return '<span style="color: #e74c3c; font-weight: 600;">' + healthNum + '%</span>';
-	              }
+		              function colorizeHealth(percent) {
+		                  let healthNum = Number(percent);
+		                  if (Number.isNaN(healthNum)) {
+		                      return percent + '%';
+		                  }
+		                  if (healthNum >= 80) {
+		                      return '<span style="color: #27ae60; font-weight: 600;">' + healthNum + '%</span>';
+		                  }
+		                  if (healthNum >= 50) {
+		                      return '<span style="color: #f39c12; font-weight: 600;">' + healthNum + '%</span>';
+		                  }
+		                  return '<span style="color: #e74c3c; font-weight: 600;">' + healthNum + '%</span>';
+		              }
 
-	              try{
+		              function pickModel(info) {
+		                  if (!info || typeof info !== 'object') {
+		                      return null;
+		                  }
+		                  let model = info.model_name || info.model_number || info.model || info.device_model || info.product || info.model_family;
+		                  if (model && typeof model === 'object') {
+		                      model = model.string ?? model.value ?? null;
+		                  }
+		                  return model;
+		              }
+
+		              try{
 	                  let  v = JSON.parse(value);
 
                   // 检查是否为空 JSON（硬盘不存在或已直通）
@@ -3089,9 +3232,10 @@ EOF
                   }
 
                   // 检查型号
-                  let model = v.model_name;
-                  if (!model) {
-                      return '<span style="color: #f39c12;">NVME 信息不完整（建议检查连接状态）</span>';
+                  let model = pickModel(v);
+                  let hasModel = !!model;
+                  if (!hasModel) {
+                      model = 'NVME(未知型号)';
                   }
 
                   // 构建显示内容
@@ -3150,7 +3294,11 @@ EOF
                   }
 
                   // 如果只有型号，没有其他数据，说明可能是权限或驱动问题
-                  if (!hasData) {
+	                  if (!hasData && !hasModel) {
+	                      return '<span style="color: #f39c12;">NVME 信息不完整（建议检查连接状态）</span>';
+	                  }
+
+	                  if (!hasData) {
                       return model + ' <span style="color: #888;">| 无法获取详细信息（检查 smartctl 权限或驱动）</span>';
                   }
 
@@ -3167,15 +3315,7 @@ EOF
 
     # 动态为每个 SATA 硬盘添加 JavaScript 代码
     for i in $(seq 0 $((sdi - 1))); do
-        # 获取硬盘类型（固态/机械）
-        sd="/dev/sd$(echo {a..z} | cut -d' ' -f$((i+1)))"
-        sdsn=$(basename $sd 2>/dev/null)
-        sdcr=/sys/block/$sdsn/queue/rotational
-        if [ -f $sdcr ] && [ "$(cat $sdcr)" = "0" ]; then
-            sdtype="固态硬盘$i"
-        else
-            sdtype="机械硬盘$i"
-        fi
+        sdtype="${sdtype_list[$i]}"
 
         cat >> $tmpf << EOF
 
@@ -3200,18 +3340,32 @@ EOF
 	                  return '<span style="color: #e74c3c; font-weight: 600;">' + tempNum + '°C</span>';
 	              }
 
-	              function findAtaSmartRawValue(table, ids) {
-	                  if (!Array.isArray(table)) {
-	                      return null;
-	                  }
-	                  let found = table.find(item => ids.includes(item?.id));
-	                  if (!found || !found.raw) {
-	                      return null;
-	                  }
-	                  return found.raw.string ?? found.raw.value ?? null;
-	              }
+		              function findAtaSmartRawValue(table, ids) {
+		                  if (!Array.isArray(table)) {
+		                      return null;
+		                  }
+		                  let found = table.find(item => ids.includes(item?.id));
+		                  if (!found || !found.raw) {
+		                      return null;
+		                  }
+		                  return found.raw.string ?? found.raw.value ?? null;
+		              }
 
-	              try{
+		              function pickModel(info) {
+		                  if (!info || typeof info !== 'object') {
+		                      return null;
+		                  }
+		                  let model = info.model_name || info.model_number || info.model || info.device_model || info.model_family;
+		                  if (!model && (info.vendor || info.product)) {
+		                      model = [info.vendor, info.product].filter(Boolean).join(' ');
+		                  }
+		                  if (model && typeof model === 'object') {
+		                      model = model.string ?? model.value ?? null;
+		                  }
+		                  return model;
+		              }
+
+		              try{
 	                  let  v = JSON.parse(value);
 	                  console.log(v)
 
@@ -3226,18 +3380,21 @@ EOF
                   }
 
                   // 场景 3：检查型号
-                  let model = v.model_name;
-                  if (!model) {
-                      return '<span style="color: #f39c12;">硬盘信息不完整（建议检查连接状态）</span>';
+                  let model = pickModel(v);
+                  let hasModel = !!model;
+                  if (!hasModel) {
+                      model = '硬盘(未知型号)';
                   }
 
                   // 场景 4：构建正常显示内容
                   let parts = [model];
+                  let hasData = false;
 
 	                  // 温度
-	                  if (v.temperature?.current !== undefined) {
-	                      parts.push('温度: ' + colorizeTemp(v.temperature.current));
-	                  }
+                  if (v.temperature?.current !== undefined) {
+                      parts.push('温度: ' + colorizeTemp(v.temperature.current));
+                      hasData = true;
+                  }
 
                   // 通电时间
                   if (v.power_on_time?.hours !== undefined) {
@@ -3253,12 +3410,26 @@ EOF
 	                      parts.push('SMART: ' + (v.smart_status.passed ? '<span style="color: #27ae60;">正常</span>' : '<span style="color: #e74c3c;">警告!</span>'));
 	                  }
 
-	                  let unsafeShutdowns = findAtaSmartRawValue(v.ata_smart_attributes?.table, [174, 192]);
-	                  if (unsafeShutdowns !== null && unsafeShutdowns !== undefined && unsafeShutdowns !== '') {
-	                      let shutdownCount = String(unsafeShutdowns).trim();
-	                      let shutdownColor = Number(shutdownCount) > 0 ? '#e74c3c' : '#27ae60';
-	                      parts.push('异常断电: <span style="color: ' + shutdownColor + '; font-weight: 600;">' + shutdownCount + '</span>');
-	                  }
+                  let unsafeShutdowns = findAtaSmartRawValue(v.ata_smart_attributes?.table, [174, 192]);
+                  if (unsafeShutdowns !== null && unsafeShutdowns !== undefined && unsafeShutdowns !== '') {
+                      let shutdownCount = String(unsafeShutdowns).trim();
+                      let shutdownColor = Number(shutdownCount) > 0 ? '#e74c3c' : '#27ae60';
+                      parts.push('异常断电: <span style="color: ' + shutdownColor + '; font-weight: 600;">' + shutdownCount + '</span>');
+                  }
+
+                  if (!hasData) {
+                      if (v.power_on_time?.hours !== undefined || v.smart_status?.passed !== undefined || (unsafeShutdowns !== null && unsafeShutdowns !== undefined && unsafeShutdowns !== '')) {
+                          hasData = true;
+                      }
+                  }
+
+                  if (!hasData && !hasModel) {
+                      return '<span style="color: #f39c12;">硬盘信息不完整（建议检查连接状态）</span>';
+                  }
+
+                  if (!hasData) {
+                      return model + ' <span style="color: #888;">| 无法获取详细信息（检查 smartctl 权限或驱动）</span>';
+                  }
 
                   return parts.join(' | ');
 
@@ -3270,6 +3441,26 @@ EOF
     },
 EOF
     done
+
+    if [ "$enable_gpu" = true ]; then
+        cat >> $tmpf << 'EOF'
+
+    {
+        itemId: 'gpu-status',
+        colspan: 2,
+        printBar: false,
+        title: gettext('GPU 信息'),
+        textField: 'gpu_status',
+        cellWrap: true,
+        renderer:function(value){
+            if (!value || value.trim().length === 0) {
+                return '<span style="color: #888;">未检测到 GPU 信息</span>';
+            }
+            return value.replace(/\n/g, '<br>');
+        }
+    },
+EOF
+    fi
 
     if [ "$enable_ups" = true ]; then
         cat >> $tmpf << 'EOF'
@@ -3362,18 +3553,21 @@ EOF
     # sed -n '/pveversion/,+30p' $pvemanagerlib
 
     log_info "修改页面高度"
-    # 统计添加了几条内容（2个基础项 + NVME + SATA + UPS）
-    if [ "$has_ups" = true ]; then
-        addRs=$((2 + nvi + sdi + 1))
-        ups_info="+ 1 个UPS"
-    else
-        addRs=$((2 + nvi + sdi))
-        ups_info=""
+    # 统计添加了几条内容（2个基础项 + NVME + SATA + GPU + UPS）
+    addRs=$((2 + nvi + sdi))
+    add_info="2个基础项 + $nvi 个NVME + $sdi 个SATA"
+    if [ "$enable_gpu" = true ]; then
+        addRs=$((addRs + 1))
+        add_info="$add_info + 1 个GPU"
+    fi
+    if [ "$enable_ups" = true ]; then
+        addRs=$((addRs + 1))
+        add_info="$add_info + 1 个UPS"
     fi
 
     echo
     echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-    echo "检测到添加了 $addRs 条监控项 (2个基础项 + $nvi 个NVME + $sdi 个SATA $ups_info)"
+    echo "检测到添加了 $addRs 条监控项 ($add_info)"
     echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
     echo "请选择高度调整方式："
     echo "  1. 自动计算 (推荐，参考 PVE 8 算法：28px/项)"
@@ -6156,7 +6350,7 @@ intel_gpu_passthrough() {
     echo "详细原理与教程：https://pve.u3u.icu/advanced/gpu-passthrough"
     echo "适用于需要将 Intel 核显直通给 Windows 虚拟机且遇到代码 43 或黑屏的情况"
     echo "支持的 CPU 架构：6代(Skylake) 到 14代(Raptor Lake Refresh)"
-    echo "项目地址：https://github.com/lixiaoliu666/intel6-14rom"
+    echo "项目地址：https://github.com/AICodo/intel-ultra-rom"
     echo
     log_warn "警告"
     log_warn "本功能并非能100%一次成功！"
@@ -6215,18 +6409,18 @@ intel_gpu_passthrough() {
     echo "正在获取最新 release 版本..."
     
     # 尝试获取最新下载链接 (这里为了稳定性暂时写死或使用最新已知的逻辑，实际可爬虫获取)
-    # 根据用户提供的信息，修改版 QEMU 下载地址: https://github.com/lixiaoliu666/pve-anti-detection/releases
+    # 根据用户提供的信息，修改版 QEMU 下载地址: https://github.com/AICodo/intel-ultra-rom
     # 为了简化，我们使用 ghfast.top 加速下载最新的 release
     # 注意：这里需要动态获取最新 deb 包链接，或者让用户手动输入链接
     # 为方便起见，这里演示自动获取逻辑
     
-    local qemu_releases_url="https://api.github.com/repos/lixiaoliu666/pve-anti-detection/releases/latest"
+    local qemu_releases_url="https://api.github.com/repos/AICodo/intel-ultra-rom/releases/latest"
     local qemu_deb_url=$(curl -s $qemu_releases_url | grep "browser_download_url.*deb" | cut -d '"' -f 4 | head -n 1)
     
     if [ -z "$qemu_deb_url" ]; then
         log_warn "无法自动获取修改版 QEMU 下载链接，尝试使用备用链接或手动下载"
         # 备用逻辑：提示用户手动下载
-        echo "请访问 https://github.com/lixiaoliu666/pve-anti-detection/releases 下载最新 deb 包"
+        echo "请访问 https://github.com/AICodo/intel-ultra-rom/releases 下载最新 deb 包"
         echo "然后使用 dpkg -i 安装"
     else
         # 加速下载
@@ -6284,7 +6478,7 @@ intel_gpu_passthrough() {
     done
 
     # 下载 ROM 文件
-    local rom_releases_url="https://api.github.com/repos/lixiaoliu666/intel6-14rom/releases/latest"
+    local rom_releases_url="https://api.github.com/repos/AICodo/intel-ultra-rom/releases/latest"
     log_info "正在获取 ROM 列表..."
     
     # 获取 release 信息

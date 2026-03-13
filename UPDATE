@@ -1,4 +1,5 @@
-fix: 修复温控概览布局与恢复逻辑，增强磁盘 SMART 展示
-- 移除温控功能对节点概览右侧 `minHeight` 的强制拉伸，修复硬盘较多时 CPU / Memory 折线图被异常拉高的问题
-- 温控恢复与 Web UI 恢复改为通过 `apt-get install --reinstall pve-manager proxmox-widget-toolkit` 恢复官方文件，避免多次补丁后 `.bak` 文件不再纯净
-- 为 CPU / NVMe / SATA 温度增加颜色显示，新增 NVMe `异常断电` 指标，并为 SATA SMART 属性 `174/192` 提供异常断电兜底显示
+﻿fix: 新增 GPU 监控与温度监控兼容性增强
+- 新增 GPU 监控可选项，自动识别 nvidia-smi / gpustat / rocm-smi / intel_gpu_top 并展示简要状态
+- 温度监控配置阶段检测 SMART 空输出时提示用户是否继续显示该硬盘
+- NVME/SATA 型号字段兜底与空数据判定优化，减少误报
+- SAS 盘 smartctl 增加 -d scsi 兜底以提升取数稳定性
