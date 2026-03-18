@@ -25,6 +25,7 @@ export default defineConfig({
       { text: '使用指南', link: '/guide' },
       { text: '高级教程', link: '/advanced/' },
       { text: '更新日志', link: '/update' },
+      { text: '开发计划', link: '/todo' },
       { text: 'TOS', link: '/tos' },
       { text: 'ULA', link: '/ula' },
       { text: 'GitHub', link: 'https://github.com/Mapleawaa/PVE-Tools-9' }
@@ -36,6 +37,7 @@ export default defineConfig({
           { text: '简介', link: '/guide' },
           { text: '功能特性', link: '/features' },
           { text: '更新日志', link: '/update' },
+          { text: '开发计划', link: '/todo' },
           { text: '服务条款（TOS）', link: '/tos' },
           { text: '最终用户许可（ULA）', link: '/ula' },
           { text: '常见问题', link: '/faq' }
@@ -49,7 +51,8 @@ export default defineConfig({
           { text: '核显虚拟化 SR-IOV', link: '/advanced/gpu-virtualization' },
           { text: 'CPU 性能调优', link: '/advanced/cpu-optimization' },
           { text: 'PVE 8 升级 9', link: '/advanced/pve-upgrade' },
-          { text: '存储管理与休眠', link: '/advanced/storage-management' }
+          { text: '存储管理与休眠', link: '/advanced/storage-management' },
+          { text: 'NVIDIA vGPU 驱动说明', link: '/advanced/nvidia-vgpu-driver-notes' }
         ]
       }
     ],

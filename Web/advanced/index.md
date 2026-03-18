@@ -24,6 +24,10 @@
 搞懂 local 与 local-lvm 的区别，掌握合并存储与硬盘休眠的精髓。
 - [点击阅读教程](./storage-management)
 
+### 6. NVIDIA vGPU 驱动安装说明
+解释为何不建议自动化安装驱动，并给出手工安装与版本匹配建议。
+- [点击阅读教程](./nvidia-vgpu-driver-notes)
+
 ---
 
 > [!CAUTION]
