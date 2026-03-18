@@ -11,7 +11,7 @@
 
 
 # 版本信息
-CURRENT_VERSION="6.7.0"
+CURRENT_VERSION="6.8.0"
 VERSION_FILE_URL="https://raw.githubusercontent.com/Mapleawaa/PVE-Tools-9/main/VERSION"
 UPDATE_FILE_URL="https://raw.githubusercontent.com/Mapleawaa/PVE-Tools-9/main/UPDATE"
 PVE_VERSION_DETECTED=""
@@ -76,10 +76,17 @@ CF_TRACE_URL="https://www.cloudflare.com/cdn-cgi/trace"
 GITHUB_MIRROR_PREFIX="https://ghfast.top/"
 USE_MIRROR_FOR_UPDATE=0
 USER_COUNTRY_CODE=""
+NETWORK_MODE="auto"
+IS_OFFLINE_MODE=0
 
 # 快速虚拟机下载脚本配置
 FASTPVE_INSTALLER_URL="https://raw.githubusercontent.com/kspeeder/fastpve/main/fastpve-install.sh"
 FASTPVE_PROJECT_URL="https://github.com/kspeeder/fastpve"
+THIRD_PARTY_MODULES_TREE_API_MAIN_URL="https://api.github.com/repos/Mapleawaa/PVE-Tools-9/git/trees/main?recursive=1"
+THIRD_PARTY_MODULES_TREE_API_MASTER_URL="https://api.github.com/repos/Mapleawaa/PVE-Tools-9/git/trees/master?recursive=1"
+THIRD_PARTY_MODULES_RAW_BASE_URL="https://raw.githubusercontent.com/Mapleawaa/PVE-Tools-9/main/Modules"
+NVIDIA_ASSETS_BASE_URL="https://raw.githubusercontent.com/Mapleawaa/PVE-Tools-9/main/Modules/NVIDIA"
+NVIDIA_VGPU_UNLOCK_SO_URL="${NVIDIA_ASSETS_BASE_URL}/libvgpu_unlock_rs.so"
 
 # 日志函数
 log_info() {
@@ -450,6 +457,85 @@ detect_network_region() {
         USE_MIRROR_FOR_UPDATE=1
     fi
 
+    return 0
+}
+
+network_show_diagnostics() {
+    echo "${UI_DIVIDER}"
+    echo -e "${CYAN}当前网络诊断信息：${NC}"
+    echo -e "${CYAN}IPv4 地址：${NC}"
+    ip -4 -o addr show scope global 2>/dev/null | awk '{print "  "$2": "$4}' || true
+    echo -e "${CYAN}默认路由：${NC}"
+    ip route 2>/dev/null | sed -n '1,3p' | sed 's/^/  /' || true
+    echo -e "${CYAN}DNS 配置：${NC}"
+    grep -E '^\s*nameserver\s+' /etc/resolv.conf 2>/dev/null | sed 's/^/  /' || true
+    echo "${UI_DIVIDER}"
+}
+
+network_can_access_internet() {
+    local test_url="$VERSION_FILE_URL"
+    if command -v curl >/dev/null 2>&1; then
+        curl -fsSL --connect-timeout 5 --max-time 8 "$test_url" >/dev/null 2>&1
+        return $?
+    fi
+    if command -v wget >/dev/null 2>&1; then
+        wget -q --timeout=8 -O - "$test_url" >/dev/null 2>&1
+        return $?
+    fi
+    return 1
+}
+
+network_offline_guard() {
+    IS_OFFLINE_MODE=0
+    if [[ "$NETWORK_MODE" == "offline" ]]; then
+        IS_OFFLINE_MODE=1
+        log_warn "已配置为离线模式：将跳过在线更新检查与在线资源拉取。"
+        return 0
+    fi
+
+    if network_can_access_internet; then
+        log_success "网络连通性检测通过。"
+        return 0
+    fi
+
+    IS_OFFLINE_MODE=1
+    log_warn "检测到当前主机无法访问互联网，在线资源可能不可用。"
+    network_show_diagnostics
+    echo -e "${YELLOW}请先确认是否为本机网络问题（网关、DNS、NAT、防火墙）再继续。${NC}"
+    echo -e "${YELLOW}如果你确定当前环境需要离线使用，可继续，但涉及在线下载/更新的功能会失败。${NC}"
+    read -p "输入 'offline' 继续离线模式，其他任意键退出排查网络: " offline_confirm
+    if [[ "$offline_confirm" != "offline" ]]; then
+        log_info "已取消执行，请先修复网络后重试。"
+        exit 0
+    fi
+    return 0
+}
+
+disable_ups_service() {
+    if ! command -v systemctl >/dev/null 2>&1; then
+        log_warn "系统不支持 systemctl，无法自动管理 UPS 服务"
+        return 1
+    fi
+    if ! systemctl list-unit-files 2>/dev/null | grep -q '^apcupsd\.service'; then
+        log_info "未检测到 apcupsd.service，跳过 UPS 服务管理"
+        return 0
+    fi
+
+    systemctl stop apcupsd >/dev/null 2>&1 || true
+    systemctl disable apcupsd >/dev/null 2>&1 || true
+    log_success "已执行 UPS 服务关闭: systemctl stop/disable apcupsd"
+    return 0
+}
+
+enable_ups_service() {
+    if ! command -v systemctl >/dev/null 2>&1; then
+        return 1
+    fi
+    if ! systemctl list-unit-files 2>/dev/null | grep -q '^apcupsd\.service'; then
+        return 1
+    fi
+    systemctl enable apcupsd >/dev/null 2>&1 || true
+    systemctl start apcupsd >/dev/null 2>&1 || true
     return 0
 }
 
@@ -2786,9 +2872,15 @@ cpu_add() {
     if [[ $REPLY =~ ^[Yy]$ ]]; then
         enable_ups=true
         log_success "已选择启用UPS监控"
+        if enable_ups_service; then
+            log_info "已启用并启动 apcupsd 服务"
+        else
+            log_warn "未能自动启用 apcupsd 服务，UPS 信息可能为空"
+        fi
     else
         enable_ups=false
         log_info "已选择跳过UPS监控"
+        disable_ups_service
     fi
 
     # 生成系统变量 (参考 PVE 8 脚本的改进实现)
@@ -3363,7 +3455,7 @@ EOF
 
     log_info "修改页面高度"
     # 统计添加了几条内容（2个基础项 + NVME + SATA + UPS）
-    if [ "$has_ups" = true ]; then
+    if [ "$enable_ups" = true ]; then
         addRs=$((2 + nvi + sdi + 1))
         ups_info="+ 1 个UPS"
     else
@@ -4643,6 +4735,230 @@ fastpve_quick_download_menu() {
 
     return $run_status
 }
+
+third_party_market_menu() {
+    local -a download_cmd
+
+    if command -v curl &> /dev/null; then
+        download_cmd=(curl -fsSL --connect-timeout 10 --max-time 60 -o)
+    elif command -v wget &> /dev/null; then
+        download_cmd=(wget -q -O)
+    else
+        log_error "未检测到 curl 或 wget，无法访问第三方软件市场"
+        return 1
+    fi
+
+    local tmp_index
+    if ! tmp_index=$(mktemp /tmp/pve-third-party-index.XXXXXX.json); then
+        log_error "无法创建临时文件，第三方软件市场启动失败"
+        return 1
+    fi
+
+    local api_main_url="$THIRD_PARTY_MODULES_TREE_API_MAIN_URL"
+    local api_master_url="$THIRD_PARTY_MODULES_TREE_API_MASTER_URL"
+    local index_ok=0
+
+    log_info "正在通过 GitHub API 拉取第三方软件列表..."
+    if command -v curl &> /dev/null; then
+        if curl -fsSL --connect-timeout 10 --max-time 60 \
+            -H "Accept: application/vnd.github+json" \
+            -H "User-Agent: pve-tools" \
+            -o "$tmp_index" "$api_main_url"; then
+            index_ok=1
+        else
+            log_warn "main 分支列表拉取失败，尝试使用 master 分支..."
+            : > "$tmp_index"
+            if curl -fsSL --connect-timeout 10 --max-time 60 \
+                -H "Accept: application/vnd.github+json" \
+                -H "User-Agent: pve-tools" \
+                -o "$tmp_index" "$api_master_url"; then
+                index_ok=1
+            fi
+        fi
+    else
+        if wget -q --timeout=60 \
+            --header="Accept: application/vnd.github+json" \
+            --user-agent="pve-tools" \
+            -O "$tmp_index" "$api_main_url"; then
+            index_ok=1
+        else
+            log_warn "main 分支列表拉取失败，尝试使用 master 分支..."
+            : > "$tmp_index"
+            if wget -q --timeout=60 \
+                --header="Accept: application/vnd.github+json" \
+                --user-agent="pve-tools" \
+                -O "$tmp_index" "$api_master_url"; then
+                index_ok=1
+            fi
+        fi
+    fi
+
+    if [[ $index_ok -ne 1 ]]; then
+        log_error "第三方软件列表拉取失败，请稍后重试"
+        rm -f "$tmp_index"
+        return 1
+    fi
+
+    local -a module_files
+    while IFS= read -r module_name; do
+        [[ -z "$module_name" ]] && continue
+        module_files+=("$module_name")
+    done < <(grep -oE '"path":[[:space:]]*"Modules/[^"]+\.sh"' "$tmp_index" | sed -E 's#.*"path":[[:space:]]*"Modules/([^"]+)".*#\1#')
+    rm -f "$tmp_index"
+
+    if [[ ${#module_files[@]} -eq 0 ]]; then
+        log_warn "未在 Modules 目录发现可用的 .sh 第三方脚本"
+        return 1
+    fi
+
+    local -a valid_files valid_names valid_authors valid_versions valid_githubs
+    for module_file in "${module_files[@]}"; do
+        local module_url="${THIRD_PARTY_MODULES_RAW_BASE_URL}/${module_file}"
+        local module_mirror_url="${GITHUB_MIRROR_PREFIX}${module_url}"
+        local module_preferred_url="$module_url"
+        local module_fallback_url="$module_mirror_url"
+
+        if [[ $USE_MIRROR_FOR_UPDATE -eq 1 ]]; then
+            module_preferred_url="$module_mirror_url"
+            module_fallback_url="$module_url"
+        fi
+
+        local tmp_module
+        if ! tmp_module=$(mktemp /tmp/pve-third-party-meta.XXXXXX.sh); then
+            continue
+        fi
+
+        if ! "${download_cmd[@]}" "$tmp_module" "$module_preferred_url"; then
+            : > "$tmp_module"
+            if ! "${download_cmd[@]}" "$tmp_module" "$module_fallback_url"; then
+                rm -f "$tmp_module"
+                continue
+            fi
+        fi
+
+        local meta_block
+        meta_block=$(sed -n '2,5p' "$tmp_module")
+        rm -f "$tmp_module"
+
+        local script_name script_author script_version script_github
+        script_name=$(echo "$meta_block" | grep -m1 '^## name:' | cut -d: -f2- | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
+        script_author=$(echo "$meta_block" | grep -m1 '^## author:' | cut -d: -f2- | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
+        script_version=$(echo "$meta_block" | grep -m1 '^## version:' | cut -d: -f2- | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
+        script_github=$(echo "$meta_block" | grep -m1 '^## github:' | cut -d: -f2- | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
+
+        if [[ -z "$script_name" || -z "$script_author" || -z "$script_version" || -z "$script_github" ]]; then
+            continue
+        fi
+
+        valid_files+=("$module_file")
+        valid_names+=("$script_name")
+        valid_authors+=("$script_author")
+        valid_versions+=("$script_version")
+        valid_githubs+=("$script_github")
+    done
+
+    if [[ ${#valid_files[@]} -eq 0 ]]; then
+        log_warn "已发现 .sh 文件，但没有符合元信息规范（第2-5行）的脚本"
+        return 1
+    fi
+
+    while true; do
+        clear
+        show_menu_header "第三方软件市场 (Modules)"
+        echo "  数据源: $THIRD_PARTY_MODULES_RAW_BASE_URL"
+        echo "  共发现 ${#valid_files[@]} 个符合规范的脚本"
+        echo "${UI_DIVIDER}"
+        local idx=1
+        while [[ $idx -le ${#valid_files[@]} ]]; do
+            local arr_idx=$((idx - 1))
+            echo -e "  ${CYAN}${idx}.${NC} ${valid_names[$arr_idx]}"
+            echo "      作者: ${valid_authors[$arr_idx]} | 版本: ${valid_versions[$arr_idx]}"
+            echo "      脚本: ${valid_files[$arr_idx]}"
+            echo "      仓库: ${valid_githubs[$arr_idx]}"
+            ((idx++))
+        done
+        echo "${UI_DIVIDER}"
+        show_menu_option "0" "返回上级菜单"
+        show_menu_footer
+
+        local choice
+        read -p "请选择要运行的脚本 [0-${#valid_files[@]}]: " choice
+        if [[ "$choice" == "0" ]]; then
+            return 0
+        fi
+        if [[ ! "$choice" =~ ^[0-9]+$ ]] || (( choice < 1 || choice > ${#valid_files[@]} )); then
+            log_error "无效选择"
+            pause_function
+            continue
+        fi
+
+        local selected_idx=$((choice - 1))
+        local selected_file="${valid_files[$selected_idx]}"
+        local selected_name="${valid_names[$selected_idx]}"
+        local selected_author="${valid_authors[$selected_idx]}"
+        local selected_version="${valid_versions[$selected_idx]}"
+        local selected_url="${THIRD_PARTY_MODULES_RAW_BASE_URL}/${selected_file}"
+        local selected_mirror_url="${GITHUB_MIRROR_PREFIX}${selected_url}"
+        local selected_preferred_url="$selected_url"
+        local selected_fallback_url="$selected_mirror_url"
+        local selected_preferred_label="GitHub"
+        local selected_fallback_label="加速镜像"
+
+        if [[ $USE_MIRROR_FOR_UPDATE -eq 1 ]]; then
+            selected_preferred_url="$selected_mirror_url"
+            selected_fallback_url="$selected_url"
+            selected_preferred_label="加速镜像"
+            selected_fallback_label="GitHub"
+        fi
+
+        echo
+        echo -e "${RED}⚠️  第三方脚本风险提示:${NC}"
+        echo "  名称: $selected_name"
+        echo "  作者: $selected_author"
+        echo "  版本: $selected_version"
+        echo "  来源: $selected_url"
+        echo "  本工具仅负责下载和执行，请确认你已审计脚本内容并接受风险。"
+        read -p "输入 'run' 确认执行，其他任意键取消: " confirm_run
+        if [[ "$confirm_run" != "run" ]]; then
+            log_info "已取消执行 $selected_name"
+            pause_function
+            continue
+        fi
+
+        local tmp_script
+        if ! tmp_script=$(mktemp /tmp/pve-third-party-run.XXXXXX.sh); then
+            log_error "无法创建临时脚本文件"
+            pause_function
+            continue
+        fi
+
+        log_info "使用 $selected_preferred_label 下载脚本 ($selected_file)..."
+        if ! "${download_cmd[@]}" "$tmp_script" "$selected_preferred_url"; then
+            log_warn "$selected_preferred_label 下载失败，尝试改用 $selected_fallback_label..."
+            : > "$tmp_script"
+            if ! "${download_cmd[@]}" "$tmp_script" "$selected_fallback_url"; then
+                log_error "脚本下载失败: $selected_file"
+                rm -f "$tmp_script"
+                pause_function
+                continue
+            fi
+        fi
+
+        chmod +x "$tmp_script"
+        echo "${UI_BORDER}"
+        sh "$tmp_script"
+        local run_status=$?
+        echo "${UI_BORDER}"
+        rm -f "$tmp_script"
+
+        if [[ $run_status -eq 0 ]]; then
+            log_success "$selected_name 执行完成"
+        else
+            log_error "$selected_name 执行失败 (退出码: $run_status)"
+        fi
+        pause_function
+    done
+}
 #---------FastPVE 虚拟机快速下载-----------
 
 # 社区第三方工具集合提示
@@ -5179,7 +5495,7 @@ menu_gpu_passthrough() {
         show_menu_header "直通与显卡"
         show_menu_option "1" "Intel 核显虚拟化管理 (SR-IOV/GVT-g)"
         show_menu_option "2" "Intel 核显直通配置 (修改版 QEMU)"
-        show_menu_option "3" "NVIDIA 显卡直通/虚拟化 (开发中)"
+        show_menu_option "3" "NVIDIA 显卡直通/虚拟化"
         show_menu_option "4" "硬件直通一键配置 (IOMMU)"
         show_menu_option "5" "磁盘/控制器直通 (RDM/PCIe/NVMe)"
         show_menu_option "0" "返回主菜单"
@@ -5607,18 +5923,20 @@ menu_vm_container() {
         clear
         show_menu_header "虚拟机与容器"
         show_menu_option "1" "${CYAN}FastPVE${NC} - 虚拟机快速下载"
-        show_menu_option "2" "${CYAN}Community Scripts${NC} - 第三方工具集"
-        show_menu_option "3" "虚拟机/容器定时开关机"
-        show_menu_option "4" "IMG 镜像导入（转 QCOW2/RAW）"
+        show_menu_option "2" "第三方软件市场 (Modules)"
+        show_menu_option "3" "${CYAN}Community Scripts${NC} - 第三方工具集"
+        show_menu_option "4" "虚拟机/容器定时开关机"
+        show_menu_option "5" "IMG 镜像导入（转 QCOW2/RAW）"
         echo "$UI_DIVIDER"
         show_menu_option "0" "返回主菜单"
         show_menu_footer
-        read -p "请选择操作 [0-4]: " choice
+        read -p "请选择操作 [0-5]: " choice
         case $choice in
             1) fastpve_quick_download_menu ;;
-            2) third_party_tools_menu ;;
-            3) manage_vm_schedule ;;
-            4) img_convert_import_menu ;;
+            2) third_party_market_menu ;;
+            3) third_party_tools_menu ;;
+            4) manage_vm_schedule ;;
+            5) img_convert_import_menu ;;
             0) return ;;
             *) log_error "无效选择" ;;
         esac
@@ -5904,11 +6222,12 @@ temp_monitoring_menu() {
         show_menu_option "1" "配置温度监控 ${CYAN}(CPU/硬盘温度显示)${NC}"
         show_menu_option "2" "${RED}移除温度监控${NC} (移除温度监控功能)"
         show_menu_option "3" "自定义温度监控选项 ${MAGENTA}(高级)${NC}"
+        show_menu_option "4" "UPS 服务管理 ${CYAN}(apcupsd)${NC}"
         echo "${UI_DIVIDER}"
         show_menu_option "0" "返回上级菜单"
         show_menu_footer
         echo
-        read -p "请选择 [0-3]: " temp_choice
+        read -p "请选择 [0-4]: " temp_choice
         echo
         
         case $temp_choice in
@@ -5920,6 +6239,26 @@ temp_monitoring_menu() {
                 ;;
             3)
                 custom_temp_monitoring
+                ;;
+            4)
+                if command -v systemctl >/dev/null 2>&1 && systemctl list-unit-files 2>/dev/null | grep -q '^apcupsd\.service'; then
+                    local active_state enabled_state
+                    active_state=$(systemctl is-active apcupsd 2>/dev/null || echo unknown)
+                    enabled_state=$(systemctl is-enabled apcupsd 2>/dev/null || echo unknown)
+                    echo "当前 UPS 服务状态: active=${active_state}, enabled=${enabled_state}"
+                    echo "1) 禁用 UPS 服务（stop + disable）"
+                    echo "2) 启用 UPS 服务（enable + start）"
+                    echo "0) 返回"
+                    read -p "请选择 [0-2]: " ups_choice
+                    case "$ups_choice" in
+                        1) disable_ups_service ;;
+                        2) enable_ups_service && log_success "已启用 UPS 服务" || log_warn "启用 UPS 服务失败，请手工检查" ;;
+                        0) ;;
+                        *) log_error "无效选择" ;;
+                    esac
+                else
+                    log_warn "未检测到 apcupsd.service，无法管理 UPS 服务"
+                fi
                 ;;
             0)
                 break
@@ -6152,11 +6491,11 @@ restore_qemu_kvm() {
 #英特尔核显直通
 intel_gpu_passthrough() {
     log_step "开始 Intel 核显直通配置"
-    echo "注意：此功能基于 lixiaoliu666 的修改版 QEMU 和 ROM"
+    echo "注意：此功能基于 AICodo 的修改版 QEMU 和 ROM"
     echo "详细原理与教程：https://pve.u3u.icu/advanced/gpu-passthrough"
     echo "适用于需要将 Intel 核显直通给 Windows 虚拟机且遇到代码 43 或黑屏的情况"
     echo "支持的 CPU 架构：6代(Skylake) 到 14代(Raptor Lake Refresh)"
-    echo "项目地址：https://github.com/lixiaoliu666/intel6-14rom"
+    echo "项目地址：https://github.com/AICodo/intel6-14rom"
     echo
     log_warn "警告"
     log_warn "本功能并非能100%一次成功！"
@@ -6170,7 +6509,7 @@ intel_gpu_passthrough() {
     log_tips "如果配置失败，请访问文档站查看详细教程并留言反馈："
     log_tips "🔗 https://pve.u3u.icu/advanced/gpu-passthrough"
     echo
-    log_tips "如需要反馈或者请求更新ROM文件适配你的CPU，请前往lixiaoliu666的GitHub仓库开ISSUE反馈，不是找我。"
+    log_tips "如需要反馈或者请求更新ROM文件适配你的CPU，请前往AICodo的GitHub仓库开ISSUE反馈，不是找我。"
     echo
 
     echo "请选择操作："
@@ -6215,18 +6554,18 @@ intel_gpu_passthrough() {
     echo "正在获取最新 release 版本..."
     
     # 尝试获取最新下载链接 (这里为了稳定性暂时写死或使用最新已知的逻辑，实际可爬虫获取)
-    # 根据用户提供的信息，修改版 QEMU 下载地址: https://github.com/lixiaoliu666/pve-anti-detection/releases
+    # 根据用户提供的信息，修改版 QEMU 下载地址: https://github.com/AICodo/pve-anti-detection/releases
     # 为了简化，我们使用 ghfast.top 加速下载最新的 release
     # 注意：这里需要动态获取最新 deb 包链接，或者让用户手动输入链接
     # 为方便起见，这里演示自动获取逻辑
     
-    local qemu_releases_url="https://api.github.com/repos/lixiaoliu666/pve-anti-detection/releases/latest"
+    local qemu_releases_url="https://api.github.com/repos/AICodo/pve-anti-detection/releases/latest"
     local qemu_deb_url=$(curl -s $qemu_releases_url | grep "browser_download_url.*deb" | cut -d '"' -f 4 | head -n 1)
     
     if [ -z "$qemu_deb_url" ]; then
         log_warn "无法自动获取修改版 QEMU 下载链接，尝试使用备用链接或手动下载"
         # 备用逻辑：提示用户手动下载
-        echo "请访问 https://github.com/lixiaoliu666/pve-anti-detection/releases 下载最新 deb 包"
+        echo "请访问 https://github.com/AICodo/pve-anti-detection/releases 下载最新 deb 包"
         echo "然后使用 dpkg -i 安装"
     else
         # 加速下载
@@ -6284,7 +6623,7 @@ intel_gpu_passthrough() {
     done
 
     # 下载 ROM 文件
-    local rom_releases_url="https://api.github.com/repos/lixiaoliu666/intel6-14rom/releases/latest"
+    local rom_releases_url="https://api.github.com/repos/AICodo/intel6-14rom/releases/latest"
     log_info "正在获取 ROM 列表..."
     
     # 获取 release 信息
@@ -6436,9 +6775,10 @@ nvidia_t() {
         MENU_TITLE) echo "NVIDIA 显卡管理" ;;
         MENU_DESC) echo "请选择功能模块（高风险操作会强制二次确认）" ;;
         OPT_PT) echo "显卡直通虚拟机" ;;
-        OPT_VGPU) echo "vGPU 配置与分配" ;;
         OPT_DRV_INFO) echo "驱动信息与监控" ;;
         OPT_DRV_SWITCH) echo "驱动切换（开源/闭源）" ;;
+        OPT_HOST_PREP) echo "宿主机预配置（IOMMU/VFIO/黑名单）" ;;
+        OPT_UNLOCK) echo "部署 vGPU Unlock（外部库）" ;;
         OPT_BACK) echo "返回" ;;
         ERR_NO_GPU) echo "未检测到 NVIDIA GPU" ;;
         ERR_IOMMU) echo "未检测到 IOMMU 已开启" ;;
@@ -6759,226 +7099,6 @@ nvidia_gpu_passthrough_vm() {
     return 0
 }
 
-nvidia_vgpu_list_types() {
-    if [[ ! -d /sys/class/mdev_bus ]]; then
-        return 1
-    fi
-    find /sys/class/mdev_bus -maxdepth 4 -type d -name mdev_supported_types 2>/dev/null | while read -r d; do
-        find "$d" -maxdepth 1 -mindepth 1 -type d 2>/dev/null
-    done
-}
-
-nvidia_vgpu_show_license() {
-    local conf="/etc/nvidia/gridd.conf"
-    if [[ -f "$conf" ]]; then
-        echo -e "${CYAN}gridd.conf:${NC} $conf"
-        grep -E '^(ServerAddress|ServerPort|FeatureType|EnableUI)=' "$conf" 2>/dev/null | sed 's/^/  /'
-    fi
-    if command -v systemctl >/dev/null 2>&1; then
-        systemctl is-enabled nvidia-gridd >/dev/null 2>&1 && echo -e "${CYAN}nvidia-gridd:${NC} enabled" || true
-        systemctl is-active nvidia-gridd >/dev/null 2>&1 && echo -e "${CYAN}nvidia-gridd:${NC} active" || true
-    fi
-    if command -v nvidia-smi >/dev/null 2>&1; then
-        nvidia-smi -q 2>/dev/null | grep -Ei 'License|vGPU' | head -n 30 | sed 's/^/  /' || true
-    fi
-}
-
-nvidia_vgpu_update_license() {
-    local conf="/etc/nvidia/gridd.conf"
-    if [[ ! -f "$conf" ]]; then
-        display_error "未找到 gridd.conf" "请先安装 NVIDIA vGPU 驱动/组件后再配置许可证。"
-        return 1
-    fi
-
-    local addr port
-    read -p "许可证服务器地址（例: 1.2.3.4 或 lic.example.com）: " addr
-    read -p "许可证服务器端口 [7070]: " port
-    port="${port:-7070}"
-
-    if [[ -z "$addr" ]]; then
-        display_error "地址不能为空"
-        return 1
-    fi
-    if [[ ! "$port" =~ ^[0-9]+$ || "$port" -lt 1 || "$port" -gt 65535 ]]; then
-        display_error "端口不合法: $port"
-        return 1
-    fi
-
-    if ! confirm_action "更新 vGPU 许可证服务器配置并重启 nvidia-gridd？"; then
-        return 0
-    fi
-
-    backup_file "$conf" >/dev/null 2>&1 || true
-    if grep -q '^ServerAddress=' "$conf"; then
-        sed -i "s/^ServerAddress=.*/ServerAddress=${addr}/" "$conf"
-    else
-        echo "ServerAddress=${addr}" >> "$conf"
-    fi
-
-    if grep -q '^ServerPort=' "$conf"; then
-        sed -i "s/^ServerPort=.*/ServerPort=${port}/" "$conf"
-    else
-        echo "ServerPort=${port}" >> "$conf"
-    fi
-
-    if command -v systemctl >/dev/null 2>&1; then
-        systemctl restart nvidia-gridd >/dev/null 2>&1 || true
-    fi
-    display_success "许可证配置已更新"
-    return 0
-}
-
-nvidia_vgpu_assign_to_vm() {
-    log_step "$(nvidia_t OPT_VGPU)"
-
-    if ! iommu_is_enabled; then
-        display_error "$(nvidia_t ERR_IOMMU)" "$(nvidia_t TIP_ENABLE_IOMMU)"
-        return 1
-    fi
-
-    if [[ ! -d /sys/class/mdev_bus ]]; then
-        display_error "未检测到 mdev 支持" "请确认内核与硬件支持 mediated device，并且已加载相关驱动。"
-        return 1
-    fi
-
-    local vmid
-    vmid="$(nvidia_select_vmid)"
-    local rc=$?
-    if [[ "$rc" -eq 2 ]]; then
-        return 0
-    fi
-    if [[ -z "$vmid" ]]; then
-        return 1
-    fi
-
-    local gpu_bdf
-    gpu_bdf="$(nvidia_select_gpu_bdf)"
-    rc=$?
-    if [[ "$rc" -eq 2 ]]; then
-        return 0
-    fi
-    if [[ -z "$gpu_bdf" ]]; then
-        return 1
-    fi
-
-    local base_sysfs="/sys/bus/pci/devices/${gpu_bdf}/mdev_supported_types"
-    if [[ ! -d "$base_sysfs" ]]; then
-        display_error "该 GPU 未提供 mdev_supported_types" "该卡可能不支持 vGPU/mdev，或驱动未正确加载。"
-        return 1
-    fi
-
-    local types
-    types="$(find "$base_sysfs" -maxdepth 1 -mindepth 1 -type d 2>/dev/null)"
-    if [[ -z "$types" ]]; then
-        display_error "未发现可用 vGPU 类型" "请确认 vGPU 驱动已安装，并且该设备支持 vGPU。"
-        return 1
-    fi
-
-    echo -e "${CYAN}可用 vGPU 类型：${NC}"
-    echo "$types" | awk -v base="$base_sysfs" '{
-        type=$0;
-        n=split(type,a,"/");
-        id=a[n];
-        name_file=type"/name";
-        avail_file=type"/available_instances";
-        name="";
-        avail="";
-        if ((getline l < name_file) > 0) name=l;
-        close(name_file);
-        if ((getline k < avail_file) > 0) avail=k;
-        close(avail_file);
-        printf "  [%d] %s | %s | available=%s\n", NR, id, name, avail
-    }'
-    echo -e "${UI_DIVIDER}"
-
-    local pick
-    read -p "$(nvidia_t INPUT_PICK) (0 返回): " pick
-    pick="${pick:-0}"
-    if [[ "$pick" == "0" ]]; then
-        return 0
-    fi
-    if [[ ! "$pick" =~ ^[0-9]+$ ]]; then
-        display_error "序号必须是数字"
-        return 1
-    fi
-
-    local type_path
-    type_path="$(echo "$types" | awk -v n="$pick" 'NR==n{print $0}')"
-    if [[ -z "$type_path" ]]; then
-        display_error "无效选择"
-        return 1
-    fi
-
-    local avail
-    avail="$(cat "${type_path}/available_instances" 2>/dev/null || echo 0)"
-    if [[ ! "$avail" =~ ^[0-9]+$ || "$avail" -le 0 ]]; then
-        display_error "该类型无可用实例" "请释放已有 vGPU 实例，或选择其他类型。"
-        return 1
-    fi
-
-    local uuid
-    uuid="$(cat /proc/sys/kernel/random/uuid 2>/dev/null || true)"
-    if [[ -z "$uuid" ]]; then
-        display_error "无法生成 UUID"
-        return 1
-    fi
-
-    if ! confirm_action "创建 vGPU 实例并分配给 VM $vmid？"; then
-        return 0
-    fi
-
-    if ! echo "$uuid" > "${type_path}/create" 2>/dev/null; then
-        display_error "vGPU 实例创建失败" "请检查驱动/权限，并确认该类型可用。"
-        return 1
-    fi
-
-    local idx
-    idx="$(qm_find_free_hostpci_index "$vmid" 2>/dev/null)" || {
-        display_error "已创建 vGPU 实例，但未找到可用 hostpci 插槽" "请手工将 mdev=$uuid 添加到 VM。"
-        return 1
-    }
-
-    local value="${gpu_bdf},mdev=${uuid}"
-    if qm_is_q35_machine "$vmid"; then
-        value="${value},pcie=1"
-    fi
-
-    local conf_path
-    conf_path="$(get_qm_conf_path "$vmid")"
-    if [[ -f "$conf_path" ]]; then
-        backup_file "$conf_path" >/dev/null 2>&1 || true
-    fi
-
-    if ! qm set "$vmid" "-hostpci${idx}" "$value" >/dev/null 2>&1; then
-        display_error "qm set 写入失败" "请手工添加 hostpci${idx}: ${value}"
-        return 1
-    fi
-
-    display_success "$(nvidia_t OK_DONE)" "已创建并绑定 mdev=${uuid}，如 VM 运行中请重启 VM。"
-    return 0
-}
-
-nvidia_vgpu_menu() {
-    while true; do
-        clear
-        show_menu_header "$(nvidia_t OPT_VGPU)"
-        show_menu_option "1" "vGPU 类型选择与分配"
-        show_menu_option "2" "vGPU 许可证状态"
-        show_menu_option "3" "更新 vGPU 许可证配置"
-        show_menu_option "0" "$(nvidia_t OPT_BACK)"
-        show_menu_footer
-        read -p "$(nvidia_t INPUT_CHOICE) [0-3]: " choice
-        case "$choice" in
-            1) nvidia_vgpu_assign_to_vm ;;
-            2) clear; show_menu_header "$(nvidia_t OPT_VGPU)"; nvidia_vgpu_show_license ;;
-            3) nvidia_vgpu_update_license ;;
-            0) return ;;
-            *) log_error "无效选择" ;;
-        esac
-        pause_function
-    done
-}
-
 nvidia_driver_info() {
     clear
     show_menu_header "$(nvidia_t OPT_DRV_INFO)"
@@ -7185,6 +7305,149 @@ nvidia_driver_switch_menu() {
     done
 }
 
+nvidia_host_prepare_for_passthrough() {
+    echo -e "${YELLOW}将执行以下操作：${NC}"
+    echo "  1) 写入 GRUB IOMMU 参数"
+    echo "  2) 写入 /etc/modules 的 VFIO 模块配置块"
+    echo "  3) 写入 /etc/modprobe.d/pve-blacklist.conf 的 NVIDIA 黑名单配置块"
+    echo "  4) 执行 update-grub 与 update-initramfs"
+    echo
+
+    if ! confirm_action "确认执行宿主机预配置？"; then
+        return 0
+    fi
+
+    local cpu_vendor
+    cpu_vendor="$(grep -m1 'vendor_id' /proc/cpuinfo 2>/dev/null | awk '{print $3}')"
+
+    if [[ "$cpu_vendor" == "GenuineIntel" ]]; then
+        grub_add_param "intel_iommu=on"
+    elif [[ "$cpu_vendor" == "AuthenticAMD" ]]; then
+        grub_add_param "amd_iommu=on"
+    else
+        log_warn "未识别 CPU 厂商，跳过厂商特定 IOMMU 参数"
+    fi
+    grub_add_param "iommu=pt"
+    grub_add_param "pcie_acs_override=downstream,multifunction"
+
+    local modules_content
+    modules_content=$(cat <<'EOF'
+vfio
+vfio_iommu_type1
+vfio_pci
+vfio_virqfd
+EOF
+)
+    apply_block "/etc/modules" "NVIDIA_VFIO_MODULES" "$modules_content"
+
+    local blacklist_content
+    blacklist_content=$(cat <<'EOF'
+blacklist nouveau
+blacklist nvidia
+blacklist nvidiafb
+options vfio_iommu_type1 allow_unsafe_interrupts=1
+EOF
+)
+    apply_block "/etc/modprobe.d/pve-blacklist.conf" "NVIDIA_BLACKLIST" "$blacklist_content"
+
+    if command -v update-grub >/dev/null 2>&1; then
+        update-grub || log_warn "update-grub 执行失败，请手工检查"
+    elif command -v grub-mkconfig >/dev/null 2>&1; then
+        grub-mkconfig -o /boot/grub/grub.cfg || log_warn "grub-mkconfig 执行失败，请手工检查"
+    else
+        log_warn "未找到 update-grub/grub-mkconfig，请手工更新 GRUB"
+    fi
+
+    update-initramfs -u -k all || log_warn "update-initramfs 执行失败，请手工检查"
+    display_success "宿主机预配置已完成" "建议重启宿主机后再执行直通或 vGPU 操作。"
+
+    if confirm_action "是否现在重启宿主机？"; then
+        reboot
+    fi
+    return 0
+}
+
+nvidia_setup_vgpu_unlock() {
+    clear
+    show_menu_header "vGPU Unlock 高风险提示"
+    echo -e "${RED}  请先阅读文档后再操作。${NC}"
+    echo "  本功能会修改 NVIDIA vGPU 服务启动参数并加载外部 .so 文件。"
+    echo "  驱动/内核/补丁版本不匹配可能导致服务异常、宿主机告警或 VM 无法使用 vGPU。"
+    echo
+    echo -e "${CYAN}推荐先阅读 Wiki：${NC}"
+    echo "  对应文章: https://pve.u3u.icu/advanced/nvidia-vgpu-driver-notes"
+    echo "${UI_DIVIDER}"
+    read -p "请输入 '确认' 或 'Sure' 继续: " response
+    response=$(echo "$response" | xargs)
+    if [[ "$response" != "确认" && "$response" != "Sure" && "${response,,}" != "sure" ]]; then
+        echo "取消"
+        return 0
+    fi
+
+    local default_url="$NVIDIA_VGPU_UNLOCK_SO_URL"
+    local so_url
+    read -p "请输入 libvgpu_unlock_rs.so 下载地址 [$default_url]: " so_url
+    so_url="${so_url:-$default_url}"
+
+    if [[ -z "$so_url" ]]; then
+        display_error "下载地址不能为空"
+        return 1
+    fi
+
+    echo -e "${YELLOW}将创建并写入：${NC}"
+    echo "  /etc/vgpu_unlock/profile_override.toml"
+    echo "  /etc/systemd/system/nvidia-vgpud.service.d/vgpu_unlock.conf"
+    echo "  /etc/systemd/system/nvidia-vgpu-mgr.service.d/vgpu_unlock.conf"
+    echo "  /opt/vgpu_unlock-rs/target/release/libvgpu_unlock_rs.so"
+    echo
+
+    if ! confirm_action "确认部署 vGPU Unlock（外部库）？"; then
+        return 0
+    fi
+
+    mkdir -p /etc/vgpu_unlock
+    touch /etc/vgpu_unlock/profile_override.toml
+    mkdir -p /etc/systemd/system/nvidia-vgpud.service.d
+    mkdir -p /etc/systemd/system/nvidia-vgpu-mgr.service.d
+    mkdir -p /opt/vgpu_unlock-rs/target/release
+
+    local unlock_conf
+    unlock_conf=$(cat <<'EOF'
+[Service]
+Environment=LD_PRELOAD=/opt/vgpu_unlock-rs/target/release/libvgpu_unlock_rs.so
+EOF
+)
+    apply_block "/etc/systemd/system/nvidia-vgpud.service.d/vgpu_unlock.conf" "NVIDIA_VGPU_UNLOCK" "$unlock_conf"
+    apply_block "/etc/systemd/system/nvidia-vgpu-mgr.service.d/vgpu_unlock.conf" "NVIDIA_VGPU_UNLOCK" "$unlock_conf"
+
+    local so_out="/opt/vgpu_unlock-rs/target/release/libvgpu_unlock_rs.so"
+    if command -v curl >/dev/null 2>&1; then
+        if ! curl -fsSL --connect-timeout 15 --max-time 300 -o "$so_out" "$so_url"; then
+            display_error "下载失败" "请检查 URL 与网络连接。"
+            return 1
+        fi
+    elif command -v wget >/dev/null 2>&1; then
+        if ! wget -q -O "$so_out" "$so_url"; then
+            display_error "下载失败" "请检查 URL 与网络连接。"
+            return 1
+        fi
+    else
+        display_error "未检测到 curl 或 wget" "无法下载外部库文件。"
+        return 1
+    fi
+
+    if [[ ! -s "$so_out" ]]; then
+        display_error "下载结果为空" "请检查 URL 是否可访问。"
+        return 1
+    fi
+
+    systemctl daemon-reload >/dev/null 2>&1 || true
+    systemctl restart nvidia-vgpud.service >/dev/null 2>&1 || true
+    systemctl restart nvidia-vgpu-mgr.service >/dev/null 2>&1 || true
+    display_success "vGPU Unlock 已部署" "可执行 systemctl status nvidia-vgpud nvidia-vgpu-mgr 验证状态。"
+    return 0
+}
+
 nvidia_gpu_management_menu() {
     while true; do
         clear
@@ -7192,17 +7455,19 @@ nvidia_gpu_management_menu() {
         echo -e "${CYAN}$(nvidia_t MENU_DESC)${NC}"
         echo -e "${UI_DIVIDER}"
         show_menu_option "1" "$(nvidia_t OPT_PT)"
-        show_menu_option "2" "$(nvidia_t OPT_VGPU)"
-        show_menu_option "3" "$(nvidia_t OPT_DRV_INFO)"
-        show_menu_option "4" "$(nvidia_t OPT_DRV_SWITCH)"
+        show_menu_option "2" "$(nvidia_t OPT_DRV_INFO)"
+        show_menu_option "3" "$(nvidia_t OPT_DRV_SWITCH)"
+        show_menu_option "4" "$(nvidia_t OPT_HOST_PREP)"
+        show_menu_option "5" "$(nvidia_t OPT_UNLOCK)"
         show_menu_option "0" "$(nvidia_t OPT_BACK)"
         show_menu_footer
-        read -p "$(nvidia_t INPUT_CHOICE) [0-4]: " choice
+        read -p "$(nvidia_t INPUT_CHOICE) [0-5]: " choice
         case "$choice" in
             1) nvidia_gpu_passthrough_vm ;;
-            2) nvidia_vgpu_menu ;;
-            3) nvidia_driver_info_menu ;;
-            4) nvidia_driver_switch_menu ;;
+            2) nvidia_driver_info_menu ;;
+            3) nvidia_driver_switch_menu ;;
+            4) nvidia_host_prepare_for_passthrough ;;
+            5) nvidia_setup_vgpu_unlock ;;
             0) return ;;
             *) log_error "无效选择" ;;
         esac
@@ -7216,12 +7481,14 @@ main() {
     ensure_legal_acceptance
     check_debug_mode "$@"
     check_pve_version
-    
-    # 检查更新
-    check_update
-    
-    # 选择镜像源
-    select_mirror
+    network_offline_guard
+
+    if [[ "$IS_OFFLINE_MODE" -eq 1 ]]; then
+        log_warn "离线模式下将跳过更新检查与镜像自动策略。"
+    else
+        check_update
+        select_mirror
+    fi
     
     while true; do
 

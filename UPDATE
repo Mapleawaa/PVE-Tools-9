@@ -1,4 +1,5 @@
-fix: 修复温控概览布局与恢复逻辑，增强磁盘 SMART 展示
-- 移除温控功能对节点概览右侧 `minHeight` 的强制拉伸，修复硬盘较多时 CPU / Memory 折线图被异常拉高的问题
-- 温控恢复与 Web UI 恢复改为通过 `apt-get install --reinstall pve-manager proxmox-widget-toolkit` 恢复官方文件，避免多次补丁后 `.bak` 文件不再纯净
-- 为 CPU / NVMe / SATA 温度增加颜色显示，新增 NVMe `异常断电` 指标，并为 SATA SMART 属性 `174/192` 提供异常断电兜底显示
+feat: 第三方市场、离线守卫与 NVIDIA 文档引导增强
+- 新增 Modules 第三方软件市场，支持元信息识别与风险确认执行
+- NVIDIA 移除 vGPU 自动配置，vGPU Unlock 改为先全屏警告并引导 Wiki
+- 新增离线模式网络诊断（IP/路由/DNS）与离线确认流程，离线时跳过在线更新
+- 温度监控新增 UPS 服务管理；不启用 UPS 显示时自动 stop/disable apcupsd
