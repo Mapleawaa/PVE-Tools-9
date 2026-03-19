@@ -2,30 +2,30 @@
 import { ref, onMounted } from 'vue'
 
 const dismissed = ref(true) // 默认隐藏，防止闪烁
+const STORAGE_KEY = 'pve-tools-plugin-submit-banner-dismissed'
 
 onMounted(() => {
-  const isDismissed = localStorage.getItem('pve-tools-announcement-dismissed')
+  const isDismissed = localStorage.getItem(STORAGE_KEY)
   if (!isDismissed) {
-    // 延迟显示，模拟 Windows 通知弹出感
     setTimeout(() => {
       dismissed.value = false
-    }, 1000)
+    }, 600)
   }
 })
 
 const dismiss = () => {
-  localStorage.setItem('pve-tools-announcement-dismissed', 'true')
+  localStorage.setItem(STORAGE_KEY, 'true')
   dismissed.value = true
 }
 </script>
 
 <template>
   <Transition name="toast">
-    <div v-if="!dismissed" class="announcement-toast">
+    <div v-if="!dismissed" class="announcement-banner">
       <div class="toast-header">
         <div class="title-group">
-          <span class="icon">⚠️</span>
-          <span class="title">系统公告</span>
+          <span class="icon">🧩</span>
+          <span class="title">插件提交通道已开启！可以提交自己写的插件啦！</span>
         </div>
         <button class="close-btn" @click="dismiss" title="关闭">
           <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
@@ -33,22 +33,21 @@ const dismiss = () => {
       </div>
       <div class="toast-body">
         <p class="message">
-          由于域名 u3u.icu 托管在 Cloudflare 且为新注册，部分地区访问可能较慢。
+          懂 Git 的用户可直接提 PR，不熟悉 Git 的用户可用 Issue 模板提交插件需求或脚本内容。
         </p>
-        <p class="highlight">
-          我们正在优化中，备案站点预计未来上线，敬请期待！
-        </p>
+        <a class="banner-link" href="/submit-plugin">点这里查看提交流程细节 →</a>
       </div>
     </div>
   </Transition>
 </template>
 
 <style scoped>
-.announcement-toast {
+.announcement-banner {
   position: fixed;
-  bottom: 24px;
-  right: 24px;
-  width: 320px;
+  top: 76px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: min(92vw, 860px);
   background: rgba(var(--vp-c-bg-rgb), 0.85);
   backdrop-filter: blur(12px) saturate(180%);
   -webkit-backdrop-filter: blur(12px) saturate(180%);
@@ -60,7 +59,7 @@ const dismiss = () => {
   overflow: hidden;
 }
 
-.dark .announcement-toast {
+.dark .announcement-banner {
   background: rgba(30, 30, 32, 0.85);
   box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
 }
@@ -112,9 +111,14 @@ const dismiss = () => {
   margin-bottom: 8px;
 }
 
-.highlight {
+.banner-link {
   color: var(--vp-c-brand-1);
-  font-weight: 500;
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.banner-link:hover {
+  text-decoration: underline;
 }
 
 /* Windows 11 弹出动画效果 */
@@ -127,21 +131,19 @@ const dismiss = () => {
 }
 
 .toast-enter-from {
-  transform: translateX(100%) scale(0.9);
+  transform: translate(-50%, -12px) scale(0.98);
   opacity: 0;
 }
 
 .toast-leave-to {
-  transform: translateX(100%);
+  transform: translate(-50%, -12px);
   opacity: 0;
 }
 
 @media (max-width: 640px) {
-  .announcement-toast {
-    bottom: 16px;
-    right: 16px;
-    left: 16px;
-    width: auto;
+  .announcement-banner {
+    top: 68px;
+    width: calc(100vw - 20px);
   }
 }
 </style>

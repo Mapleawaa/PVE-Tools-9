@@ -42,7 +42,8 @@ bash <(curl -sSL https://raw.githubusercontent.com/Mapleawaa/PVE-Tools-9/main/PV
 [官网已上线！点我查看！](https://pve.u3u.icu)|
 [更新日志点我查看！](https://pve.u3u.icu/update)|
 [疑难解答点我查看！](https://pve.u3u.icu/faq)|
-[赞助喵！](https://pve.u3u.icu/sponsor)
+[赞助喵！](https://pve.u3u.icu/sponsor)|
+[插件提交通道](https://pve.u3u.icu/submit-plugin)
 
 
 ### 📖 项目简介
