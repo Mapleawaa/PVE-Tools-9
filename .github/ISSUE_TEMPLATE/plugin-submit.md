@@ -1,4 +1,4 @@
-***
+---
 
 name: 插件提交
 about: 提交 Modules 插件脚本（不熟悉 Git 的用户推荐）
@@ -6,7 +6,7 @@ title: '\[Plugin] '
 labels: plugin-submission
 assignees: ''
 
-***
+---
 
 **例行检查**
 
