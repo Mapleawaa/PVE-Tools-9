@@ -23,6 +23,7 @@ export default defineConfig({
       { text: '首页', link: '/' },
       { text: '公告', link: '/faq#为什么-u3u-icu-域名访问缓慢或失败' },
       { text: '使用指南', link: '/guide' },
+      { text: '提交插件', link: '/submit-plugin' },
       { text: '高级教程', link: '/advanced/' },
       { text: '更新日志', link: '/update' },
       { text: '开发计划', link: '/todo' },
@@ -36,6 +37,7 @@ export default defineConfig({
         items: [
           { text: '简介', link: '/guide' },
           { text: '功能特性', link: '/features' },
+          { text: '提交插件', link: '/submit-plugin' },
           { text: '更新日志', link: '/update' },
           { text: '开发计划', link: '/todo' },
           { text: '服务条款（TOS）', link: '/tos' },

@@ -13,6 +13,9 @@ hero:
     - theme: brand
       text: 立即开始
       link: /guide
+    - theme: alt
+      text: 提交插件
+      link: /submit-plugin
     - theme: brand
       text: 更新日志
       link: /update
@@ -31,7 +34,7 @@ my_features:
     details: 支持硬盘直通、LVM 管理、分区挂载等，操作简单直观。
     iconClass: icon-harddrive
   - title: 显卡管理
-    details: 包含 Intel 核显直通、SR-IOV 虚拟化及 NVIDIA vGPU 自动化配置。
+    details: 包含 Intel 核显直通、SR-IOV 虚拟化及 NVIDIA 风险引导配置。
     iconClass: icon-gpu
   - title: 定时开关机
     details: 支持 VM 和容器的定时任务管理，基于 cron.d 幂等配置，安全可靠。
