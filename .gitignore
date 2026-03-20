@@ -1,0 +1,49 @@
+# Ignore dependencies
+node_modules/
+**/node_modules/
+bun.lockb
+
+# Ignore build outputs
+dist/
+**/dist/
+build/
+out/
+.temp/
+.vitepress/dist/
+.vitepress/cache/
+**/.vitepress/dist/
+**/.vitepress/cache/
+
+# Ignore system files
+.DS_Store
+Thumbs.db
+*.tmp
+*.swp
+
+# Ignore log files
+*.log
+report.[0-9]*.[0-9]*.[0-9]*.[0-9]*.json
+
+# Ignore IDE specific files
+.vscode/
+.idea/
+*.tsbuildinfo
+.eslintcache
+
+# Ignore environment files
+.env
+.env.*.local
+
+# Project specific ignores
+.codebuddy/
+.cache/
+.spec-workflow/
+.claude/
+Proxmox-Helper-Script/
+QWEN.md
+CLAUDE.md
+AGENTS.md
+
+# Python
+__pycache__/
+*.pyc

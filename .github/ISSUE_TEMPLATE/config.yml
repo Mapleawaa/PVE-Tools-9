@@ -1,0 +1,8 @@
+blank_issues_enabled: false  # 禁用空白issue
+contact_links:
+  - name: "插件提交入口（Issue 模板）"
+    url:  https://github.com/Mapleawaa/PVE-Tools-9/issues/new?template=plugin-submit.md
+    about: "不熟悉 Git 的用户可通过该模板提交插件脚本"
+  - name: "直接与作者沟通"
+    url:  https://t.me/Omphalos2_bot
+    about: "欢迎参与讨论"

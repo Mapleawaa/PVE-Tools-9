@@ -1,0 +1,5 @@
+feat: 第三方市场、离线守卫与 NVIDIA 文档引导增强
+- 新增 Modules 第三方软件市场，支持元信息识别与风险确认执行
+- NVIDIA 移除 vGPU 自动配置，vGPU Unlock 改为先全屏警告并引导 Wiki
+- 新增离线模式网络诊断（IP/路由/DNS）与离线确认流程，离线时跳过在线更新
+- 温度监控新增 UPS 服务管理；不启用 UPS 显示时自动 stop/disable apcupsd

@@ -1,0 +1,47 @@
+name: Release to Beta
+on:
+  push:
+    tags:
+      - 'v*.*.*-beta*'
+      - '*.*.*-beta*'
+      - 'v*.*.*-alpha*'
+      - '*.*.*-alpha*'
+
+permissions:
+  contents: write
+
+jobs:
+  beta-release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          
+      - name: Get version from tag
+        id: get_version
+        run: |
+          TAG=${GITHUB_REF#refs/tags/}
+          VERSION=${TAG#v}
+          echo "TAG=$TAG" >> $GITHUB_OUTPUT
+          echo "VERSION=$VERSION" >> $GITHUB_OUTPUT
+          
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.get_version.outputs.TAG }}
+          name: Beta Release ${{ steps.get_version.outputs.TAG }}
+          body: |
+            ## Beta 版本 ${{ steps.get_version.outputs.VERSION }}
+            
+            ⚠️ 这是测试版本，可能存在不稳定因素，请勿在生产环境使用
+            
+            ## 安装方式
+            
+            ```bash
+            bash <(curl -sSL https://github.com/Mapleawaa/PVE-Tools-9/blob/beta/PVE-Tools.sh)
+            ```
+          draft: false
+          prerelease: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
