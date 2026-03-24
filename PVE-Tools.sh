@@ -3014,7 +3014,7 @@ EOF
         cat >> $tmpf << EOF
 
         \$res->{raid$raidi} = \`
-            smartctl $device $device_args -a -j 2>/dev/null
+            timeout 10 smartctl $device $device_args -a -j 2>/dev/null || echo '{}'
         \`;
 EOF
         echo "检测到 RAID 存储设备: $device $device_args (raid$raidi)"
@@ -3424,7 +3424,6 @@ EOF
           renderer:function(value){
               try{
                   let v = JSON.parse(value);
-                  console.log(v);
 
                   // 场景 1：空 JSON（硬盘不存在或已移除）
                   if (Object.keys(v).length === 0) {
@@ -3480,8 +3479,6 @@ EOF
                   return parts.join(' | ');
 
               }catch(e){
-                  console.error('阵列卡硬盘${i}渲染错误:', e);
-                  console.error('原始值:', value);
                   return '<span style="color: #888;">无法获取阵列卡硬盘信息（可能使用 HBA 直通）</span>';
               };
            }
