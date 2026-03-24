@@ -3014,7 +3014,7 @@ EOF
         cat >> $tmpf << EOF
 
         \$res->{raid$raidi} = \`
-            timeout 10 smartctl $device $device_args -a -j 2>/dev/null || echo '{}'
+            timeout 1 smartctl $device $device_args -a -j 2>/dev/null || echo '{}'
         \`;
 EOF
         echo "检测到 RAID 存储设备: $device $device_args (raid$raidi)"
