@@ -2973,6 +2973,54 @@ EOF
     done
     echo "已添加 $sdi 块 SATA 固态和机械硬盘"
 
+    # RAID 卡下的存储设备 (通过 smartctl --scan 检测)
+    log_info "检测系统中的 RAID 卡存储设备"
+    raidi=0
+    # 使用 smartctl --scan 检测所有存储设备，包括 RAID 卡下的设备
+    while read -r line; do
+        # 解析 smartctl --scan 的输出，格式如：/dev/sda -d scsi # /dev/sda, SCSI device
+        # 提取设备路径和设备类型参数
+        device=$(echo "$line" | awk '{print $1}')
+        # 提取所有以 - 开头的参数及其值，直到遇到 # 或行尾
+        # 格式: /dev/bus/0 -d megaraid,0 # /dev/bus/0 [megaraid_disk_00], SCSI device
+        device_args=$(echo "$line" | awk '{
+            for(i=2; i<=NF; i++) {
+                if($i ~ /^#/) break;
+                if($i ~ /^-/) {
+                    printf "%s", $i;
+                    # 检查下一个字段是否是参数值（不是以 - 开头且不是 #）
+                    if(i+1 <= NF && $(i+1) !~ /^-/ && $(i+1) !~ /^#/) {
+                        printf " %s", $(i+1);
+                        i++;
+                    }
+                    printf " ";
+                }
+            }
+        }')
+        
+        # 跳过空设备或无效设备
+        [ -z "$device" ] && continue
+
+        # 跳过普通 SATA/SAS/NVMe 直通设备（已通过 /dev/sd* 和 /dev/nvme* 检测）
+        if [[ "$device" =~ ^/dev/sd || "$device" =~ ^/dev/nvme ]]; then
+            continue
+        fi
+
+        chmod +s /usr/sbin/smartctl 2>/dev/null
+
+        # 为 RAID 卡设备生成监控代码
+        # 注意：smartctl 命令格式为 smartctl <device> <args> -a -j
+        # RAID 设备的路径可能不是标准块设备，直接执行 smartctl
+        cat >> $tmpf << EOF
+
+        \$res->{raid$raidi} = \`
+            smartctl $device $device_args -a -j 2>/dev/null
+        \`;
+EOF
+        echo "检测到 RAID 存储设备: $device $device_args (raid$raidi)"
+        let raidi++
+    done < <(smartctl --scan 2>/dev/null)
+    echo "已添加 $raidi 块 RAID 卡存储设备"
 
     ###################  修改node.pm   ##########################
     log_info "修改node.pm："
@@ -3363,6 +3411,77 @@ EOF
 EOF
     done
 
+    # 动态为每个 RAID 卡硬盘添加 JavaScript 代码
+    for i in $(seq 0 $((raidi - 1))); do
+        cat >> $tmpf << EOF
+
+    {
+          itemId: 'raid${i}0',
+          colspan: 2,
+          printBar: false,
+          title: gettext('阵列卡硬盘${i}'),
+          textField: 'raid${i}',
+          renderer:function(value){
+              try{
+                  let v = JSON.parse(value);
+                  console.log(v);
+
+                  // 场景 1：空 JSON（硬盘不存在或已移除）
+                  if (Object.keys(v).length === 0) {
+                      return '<span style="color: #888;">未检测到阵列卡硬盘（可能已移除）</span>';
+                  }
+
+                  // 检查 ATA 设备型号
+                  let model = v.model_name;
+                  // 或者 SCSI 设备型号
+                  if (!model && v.scsi_model_name) {
+                      model = (v.scsi_vendor ? v.scsi_vendor + ' ' : '') + v.scsi_model_name;
+                  }
+                  if (!model) {
+                      return '<span style="color: #f39c12;">阵列卡硬盘信息不完整（建议检查连接状态）</span>';
+                  }
+
+                  // 场景 2：构建正常显示内容
+                  let parts = [model];
+
+                  // 温度
+                  if (v.temperature?.current !== undefined && v.temperature.current > 0) {
+                      let tempNum = Number(v.temperature.current);
+                      let tempColor = tempNum < 40 ? '#27ae60' : (tempNum < 50 ? '#f39c12' : '#e74c3c');
+                      parts.push('温度: <span style="color: ' + tempColor + '; font-weight: 600;">' + tempNum + '°C</span>');
+                  }
+
+                  // 通电时间（ATA 设备）
+                  if (v.power_on_time?.hours !== undefined) {
+                      parts.push('通电: ' + v.power_on_time.hours + '时');
+                  }
+
+                  // SMART 状态（优先使用 smart_status.passed，然后使用 self_test.status.passed）
+                  let smartPassed = v.smart_status?.passed;
+                  if (smartPassed === undefined) {
+                      smartPassed = v.ata_smart_data?.self_test?.status?.passed;
+                  }
+                  if (smartPassed !== undefined) {
+                      parts.push('SMART: ' + (smartPassed ? '<span style="color: #27ae60;">正常</span>' : '<span style="color: #e74c3c;">警告!</span>'));
+                  }
+
+                  // SCSI 设备不支持 SMART 检查
+                  if (v.smart_support?.available === false) {
+                      parts.push('SMART: <span style="color: #888;">不支持</span>');
+                  }
+
+                  return parts.join(' | ');
+
+              }catch(e){
+                  console.error('阵列卡硬盘${i}渲染错误:', e);
+                  console.error('原始值:', value);
+                  return '<span style="color: #888;">无法获取阵列卡硬盘信息（可能使用 HBA 直通）</span>';
+              };
+           }
+    },
+EOF
+    done
+
     if [ "$enable_ups" = true ]; then
         cat >> $tmpf << 'EOF'
 
@@ -3454,18 +3573,18 @@ EOF
     # sed -n '/pveversion/,+30p' $pvemanagerlib
 
     log_info "修改页面高度"
-    # 统计添加了几条内容（2个基础项 + NVME + SATA + UPS）
+    # 统计添加了几条内容（2个基础项 + NVME + SATA + RAID + UPS）
     if [ "$enable_ups" = true ]; then
-        addRs=$((2 + nvi + sdi + 1))
+        addRs=$((2 + nvi + sdi + raidi + 1))
         ups_info="+ 1 个UPS"
     else
-        addRs=$((2 + nvi + sdi))
+        addRs=$((2 + nvi + sdi + raidi))
         ups_info=""
     fi
 
     echo
     echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-    echo "检测到添加了 $addRs 条监控项 (2个基础项 + $nvi 个NVME + $sdi 个SATA $ups_info)"
+    echo "检测到添加了 $addRs 条监控项 (2个基础项 + $nvi 个NVME + $sdi 个SATA + $raidi 个阵列卡 $ups_info)"
     echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
     echo "请选择高度调整方式："
     echo "  1. 自动计算 (推荐，参考 PVE 8 算法：28px/项)"
