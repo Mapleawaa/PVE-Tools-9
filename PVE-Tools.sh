@@ -3431,11 +3431,19 @@ EOF
                       return '<span style="color: #888;">未检测到阵列卡硬盘（可能已移除）</span>';
                   }
 
+                  // HTML 转义函数
+                  function htmlEscape(s) {
+                      if (!s) return '';
+                      return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+                  }
+
                   // 检查 ATA 设备型号
-                  let model = v.model_name;
+                  let model = htmlEscape(v.model_name);
                   // 或者 SCSI 设备型号
                   if (!model && v.scsi_model_name) {
-                      model = (v.scsi_vendor ? v.scsi_vendor + ' ' : '') + v.scsi_model_name;
+                      let vendor = htmlEscape(v.scsi_vendor || '');
+                      let scsiModel = htmlEscape(v.scsi_model_name);
+                      model = (vendor ? vendor + ' ' : '') + scsiModel;
                   }
                   if (!model) {
                       return '<span style="color: #f39c12;">阵列卡硬盘信息不完整（建议检查连接状态）</span>';
@@ -3456,18 +3464,17 @@ EOF
                       parts.push('通电: ' + v.power_on_time.hours + '时');
                   }
 
-                  // SMART 状态（优先使用 smart_status.passed，然后使用 self_test.status.passed）
-                  let smartPassed = v.smart_status?.passed;
-                  if (smartPassed === undefined) {
-                      smartPassed = v.ata_smart_data?.self_test?.status?.passed;
-                  }
-                  if (smartPassed !== undefined) {
-                      parts.push('SMART: ' + (smartPassed ? '<span style="color: #27ae60;">正常</span>' : '<span style="color: #e74c3c;">警告!</span>'));
-                  }
-
-                  // SCSI 设备不支持 SMART 检查
+                  // SMART 状态（先检查是否支持）
                   if (v.smart_support?.available === false) {
                       parts.push('SMART: <span style="color: #888;">不支持</span>');
+                  } else {
+                      let smartPassed = v.smart_status?.passed;
+                      if (smartPassed === undefined) {
+                          smartPassed = v.ata_smart_data?.self_test?.status?.passed;
+                      }
+                      if (smartPassed !== undefined) {
+                          parts.push('SMART: ' + (smartPassed ? '<span style="color: #27ae60;">正常</span>' : '<span style="color: #e74c3c;">警告!</span>'));
+                      }
                   }
 
                   return parts.join(' | ');
