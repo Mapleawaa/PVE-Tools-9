@@ -2788,6 +2788,264 @@ cpupower_del() {
 }
 #--------------设置CPU电源模式----------------
 
+#--------------异步缓存服务管理----------------
+# 部署 SMART 异步缓存服务
+deploy_smart_cache_service() {
+    log_step "部署异步缓存服务..."
+    
+    # 创建采集脚本
+    cat > /usr/local/bin/smart-cache-collect.py << 'SMARTCACHEEOF'
+#!/usr/bin/env python3
+"""SMART 数据异步采集脚本"""
+import json
+import subprocess
+import os
+import glob
+from concurrent.futures import ThreadPoolExecutor, as_completed
+
+def run_smartctl(device, args=""):
+    """执行 smartctl 命令并返回 JSON"""
+    cmd = f"timeout 2 smartctl {device} {args} -a -j 2>/dev/null"
+    try:
+        result = subprocess.run(cmd, shell=True, capture_output=True, text=True, timeout=3)
+        if result.returncode == 0 or result.stdout:
+            return json.loads(result.stdout)
+    except:
+        pass
+    return None
+
+def extract_sata_data(data, key):
+    """从 SATA 设备数据中提取字段"""
+    if not data:
+        return {key: {}}
+    
+    result = {key: {}}
+    
+    # model_name (SATA 用 model_name, SAS 用 scsi_model_name)
+    model = data.get("model_name", "")
+    if not model:
+        model = data.get("scsi_model_name", "")
+    result[key]["model_name"] = model
+    
+    # temperature
+    temp = data.get("temperature", {}).get("current", 0)
+    result[key]["temperature"] = {"current": temp}
+    
+    # power_on_time
+    hours = 0
+    power_on = data.get("power_on_time", {})
+    if "hours" in power_on:
+        hours = power_on["hours"]
+    elif "raw" in power_on and "value" in power_on["raw"]:
+        hours = power_on["raw"]["value"]
+    result[key]["power_on_time"] = {"hours": hours}
+    
+    # power_cycle_count
+    cycles = data.get("power_cycle_count", 0)
+    result[key]["power_cycle_count"] = cycles
+    
+    # smart_status
+    passed = data.get("smart_status", {}).get("passed", True)
+    result[key]["smart_status"] = {"passed": passed}
+    
+    return result
+
+def extract_raid_data(data, key):
+    """从 RAID 设备数据中提取字段"""
+    if not data:
+        return {key: {}}
+    
+    result = {key: {}}
+    
+    model = data.get("model_name", "")
+    if not model:
+        model = data.get("scsi_model_name", "")
+    result[key]["model_name"] = model
+    
+    temp = data.get("temperature", {}).get("current", 0)
+    result[key]["temperature"] = {"current": temp}
+    
+    hours = 0
+    power_on = data.get("power_on_time", {})
+    if "hours" in power_on:
+        hours = power_on["hours"]
+    elif "raw" in power_on and "value" in power_on["raw"]:
+        hours = power_on["raw"]["value"]
+    result[key]["power_on_time"] = {"hours": hours}
+    
+    passed = data.get("smart_status", {}).get("passed", True)
+    result[key]["smart_status"] = {"passed": passed}
+    
+    return result
+
+def main():
+    cache_file = "/run/smart-cache.json"
+    cache_tmp = f"{cache_file}.tmp"
+    
+    results = {}
+    tasks = []
+    
+    # 收集 SATA 设备（包括物理硬盘和 RAID 控制器虚拟磁盘）
+    sdi = 0
+    raid_controller_key = None  # 用于存储 RAID 控制器信息
+    for dev in sorted(glob.glob("/dev/sd[a-z]")):
+        if os.path.exists(dev):
+            # 检查是否为 SCSI 设备（阵列卡虚拟磁盘）
+            cmd = f"smartctl {dev} -d scsi -i -j 2>/dev/null"
+            try:
+                result = subprocess.run(cmd, shell=True, capture_output=True, text=True, timeout=2)
+                if result.stdout:
+                    data = json.loads(result.stdout)
+                    # 检查是否为阵列卡虚拟磁盘：
+                    # 1. SMART 不支持（阵列卡虚拟磁盘通常不支持 SMART）
+                    # 2. scsi_product 包含 RAID 相关字样（MR/MegaRAID/PERC/RAID/ADAPTEC/AVAGO/HPSA）
+                    smart_avail = data.get("smart_support", {}).get("available", True)
+                    scsi_product = data.get("scsi_product", "").upper()
+                    scsi_vendor = data.get("scsi_vendor", "").upper()
+                    scsi_model = data.get("scsi_model_name", "")
+                    # 常见阵列卡标识：LSI MegaRAID(MR)、DELL PERC、HP HPSA、Adaptec、AVAGO、Broadcom
+                    raid_keywords = ["MR", "MEGARAID", "PERC", "HPSA", "RAID", "ADAPTEC", "AVAGO", "BROADCOM"]
+                    is_raid_disk = not smart_avail or any(x in scsi_product for x in raid_keywords) or any(x in scsi_vendor for x in ["LSI", "DELL", "HP", "HPE", "ADAPTEC"])
+                    if is_raid_disk:
+                        # 记录 RAID 控制器信息，但不作为 SATA 设备处理
+                        if scsi_model:
+                            raid_controller_key = f"controller_{scsi_vendor}_{scsi_product}"
+                            results[raid_controller_key] = {
+                                "model_name": scsi_model,
+                                "device_type": "raid_controller",
+                                "temperature": {"current": 0},
+                                "power_on_time": {"hours": 0},
+                                "smart_status": {"passed": True}
+                            }
+                        print(f"Skipping {dev}: RAID virtual disk (vendor={scsi_vendor}, product={scsi_product})")
+                        continue
+            except:
+                pass
+            tasks.append(("sata", dev, "", f"sd{sdi}"))
+            sdi += 1
+    
+    # 收集 RAID 设备（物理硬盘）
+    try:
+        scan_result = subprocess.run("smartctl --scan", shell=True, capture_output=True, text=True)
+        raidi = 0
+        for line in scan_result.stdout.split("\n"):
+            if not line or line.startswith("#"):
+                continue
+            parts = line.split()
+            if len(parts) >= 2:
+                device = parts[0]
+                # 修复：正确提取 -d 参数及其值（如 -d scsi 或 -d megaraid,0）
+                args_parts = []
+                j = 1
+                while j < len(parts):
+                    if parts[j].startswith("-"):
+                        args_parts.append(parts[j])
+                        # 如果下一个值不是以 - 开头，则是参数值
+                        if j + 1 < len(parts) and not parts[j + 1].startswith("-"):
+                            args_parts.append(parts[j + 1])
+                            j += 1
+                    j += 1
+                args = " ".join(args_parts)
+                # 跳过 /dev/sd* 设备（已在上面处理或已排除）
+                if device.startswith("/dev/sd"):
+                    continue
+                tasks.append(("raid", device, args, f"raid{raidi}"))
+                raidi += 1
+    except Exception as e:
+        print(f"Error scanning RAID: {e}")
+    
+    # 并行执行
+    with ThreadPoolExecutor(max_workers=10) as executor:
+        future_to_task = {}
+        for task in tasks:
+            dtype, device, args, key = task
+            future = executor.submit(run_smartctl, device, args)
+            future_to_task[future] = (dtype, key)
+        
+        for future in as_completed(future_to_task):
+            dtype, key = future_to_task[future]
+            try:
+                data = future.result()
+                if dtype == "sata":
+                    results.update(extract_sata_data(data, key))
+                else:
+                    results.update(extract_raid_data(data, key))
+            except:
+                results[key] = {}
+    
+    # 写入缓存
+    with open(cache_tmp, "w") as f:
+        json.dump(results, f)
+    os.rename(cache_tmp, cache_file)
+
+if __name__ == "__main__":
+    main()
+SMARTCACHEEOF
+    chmod +x /usr/local/bin/smart-cache-collect.py
+    log_success "采集脚本已部署"
+    
+    # 创建 systemd service
+    cat > /etc/systemd/system/smart-cache.service << 'EOF'
+[Unit]
+Description=SMART Data Cache Collector
+After=local-fs.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/bin/smart-cache-collect.py
+EOF
+    log_success "Systemd 服务已创建"
+    
+    # 创建 systemd timer
+    cat > /etc/systemd/system/smart-cache.timer << 'EOF'
+[Unit]
+Description=Run SMART cache collector every 30 seconds
+
+[Timer]
+OnBootSec=10
+OnUnitActiveSec=30s
+AccuracySec=1s
+
+[Install]
+WantedBy=timers.target
+EOF
+    log_success "Systemd 定时器已创建"
+    
+    # 重载并启动
+    systemctl daemon-reload
+    systemctl enable smart-cache.timer
+    systemctl start smart-cache.timer
+    
+    # 立即执行一次采集
+    /usr/local/bin/smart-cache-collect.py
+    
+    log_success "异步缓存服务已启动"
+}
+
+# 撤销 SMART 异步缓存服务
+remove_smart_cache_service() {
+    log_step "撤销异步缓存服务..."
+    
+    # 停止并禁用定时器
+    systemctl stop smart-cache.timer 2>/dev/null || true
+    systemctl disable smart-cache.timer 2>/dev/null || true
+    
+    # 停止服务
+    systemctl stop smart-cache.service 2>/dev/null || true
+    
+    # 删除文件
+    rm -f /etc/systemd/system/smart-cache.timer
+    rm -f /etc/systemd/system/smart-cache.service
+    rm -f /usr/local/bin/smart-cache-collect.py
+    rm -f /run/smart-cache.json
+    rm -f /run/smart-cache.json.tmp
+    
+    # 重载 systemd
+    systemctl daemon-reload
+    
+    log_success "异步缓存服务已撤销"
+}
+
 #--------------CPU、主板、硬盘温度显示----------------
 # 安装工具
 cpu_add() {
@@ -2834,6 +3092,9 @@ cpu_add() {
 
     # 启用 MSR 模块
     modprobe msr && echo msr > /etc/modules-load.d/turbostat-msr.conf
+
+    # 部署异步缓存服务
+    deploy_smart_cache_service
 
     # 软件包安装完成
     if [ "$install" == "ok" ]; then
@@ -2923,14 +3184,64 @@ EOF
     for nvme in $(ls /dev/nvme[0-9] 2> /dev/null); do
         chmod +s /usr/sbin/smartctl 2>/dev/null
 
+        # 使用 -a 获取完整信息（-i 可能无法获取 nvme_smart_health_information_log）
         cat >> $tmpf << EOF
 
-        \$res->{nvme$nvi} = \`smartctl $nvme -a -j\`;
+        {
+            my \$nvme_full = \`timeout 2 smartctl $nvme -a -j 2>/dev/null\`;
+            my \$nvme_data = '{}';
+            if (\$nvme_full =~ /^\s*\{/) {
+                # 提取必要字段，精简 JSON 数据
+                my \$model = (\$nvme_full =~ /"model_name"\s*:\s*"([^"]+)"/) ? \$1 : '';
+                my \$temp = (\$nvme_full =~ /"temperature"\s*:\s*\{[^}]*"current"\s*:\s*(\d+)/) ? \$1 : 0;
+                my \$hours = (\$nvme_full =~ /"power_on_time"\s*:\s*\{[^}]*"hours"\s*:\s*(\d+)/) ? \$1 : 0;
+                my \$cycles = (\$nvme_full =~ /"power_cycle_count"\s*:\s*(\d+)/) ? \$1 : 0;
+                my \$smart_passed = (\$nvme_full =~ /"smart_status"\s*:\s*\{[^}]*"passed"\s*:\s*(true|false)/) ? \$1 : 'true';
+                # NVMe 健康信息日志
+                my \$pct_used = (\$nvme_full =~ /"percentage_used"\s*:\s*(\d+)/) ? \$1 : '';
+                my \$media_err = (\$nvme_full =~ /"media_errors"\s*:\s*(\d+)/) ? \$1 : 0;
+                my \$unsafe_shutdown = (\$nvme_full =~ /"unsafe_shutdowns"\s*:\s*(\d+)/) ? \$1 : 0;
+                my \$data_read = (\$nvme_full =~ /"data_units_read"\s*:\s*(\d+)/) ? \$1 : 0;
+                my \$data_written = (\$nvme_full =~ /"data_units_written"\s*:\s*(\d+)/) ? \$1 : 0;
+                # 构建精简 JSON
+                \$nvme_data = "{\n";
+                \$nvme_data .= "  \\"model_name\\": \\"\$model\\",\n";
+                \$nvme_data .= "  \\"temperature\\": {\\"current\\": \$temp},\n";
+                \$nvme_data .= "  \\"power_on_time\\": {\\"hours\\": \$hours},\n";
+                \$nvme_data .= "  \\"power_cycle_count\\": \$cycles,\n";
+                \$nvme_data .= "  \\"smart_status\\": {\\"passed\\": \$smart_passed}";
+                if (\$pct_used ne '') {
+                    \$nvme_data .= ",\n  \\"nvme_smart_health_information_log\\": {\n";
+                    \$nvme_data .= "    \\"percentage_used\\": \$pct_used,\n";
+                    \$nvme_data .= "    \\"media_errors\\": \$media_err,\n";
+                    \$nvme_data .= "    \\"unsafe_shutdowns\\": \$unsafe_shutdown,\n";
+                    \$nvme_data .= "    \\"data_units_read\\": \$data_read,\n";
+                    \$nvme_data .= "    \\"data_units_written\\": \$data_written\n";
+                    \$nvme_data .= "  }";
+                }
+                \$nvme_data .= "\n}";
+            }
+            \$res->{nvme$nvi} = \$nvme_data;
+        }
 EOF
         echo "检测到 NVME 硬盘: $nvme (nvme$nvi)"
         let nvi++
     done
     echo "已添加 $nvi 块 NVME 硬盘"
+
+    # 将所有 NVMe 数据合并为一个 JSON 数组，方便前端渲染
+    cat >> $tmpf << 'EOF'
+
+        # 合并所有 NVMe 数据为 JSON 数组
+        my @nvme_list;
+        for my $key (sort grep { /^nvme\d+$/ } keys %$res) {
+            my $data = $res->{$key};
+            if ($data && $data =~ /^\s*\{/) {
+                push @nvme_list, $data;
+            }
+        }
+        $res->{nvme_all} = '[' . join(',', @nvme_list) . ']';
+EOF
 
     # SATA 硬盘变量 (动态检测，参考 PVE 8 实现)
     log_info "检测系统中的 SATA 固态和机械硬盘"
@@ -2945,34 +3256,169 @@ EOF
         [ -f $sdcr ] || continue
 
         if [ "$(cat $sdcr)" = "0" ]; then
-            hddisk=false
+            hddisk=0
             sdtype="固态硬盘"
         else
-            hddisk=true
+            hddisk=1
             sdtype="机械硬盘"
         fi
 
-        # 硬盘输出信息逻辑，如果硬盘不存在就输出空 JSON
+        # 从缓存读取 SMART 数据（异步采集）
         cat >> $tmpf << EOF
 
-        \$res->{sd$sdi} = \`
-            if [ -b $sd ]; then
-                # 增加 SAS 盘检测，SAS 盘不使用 hdparm 检测休眠，防止误报
-                if $hddisk && ! smartctl -i $sd | grep -q "Transport protocol:.*SAS" && hdparm -C $sd 2>/dev/null | grep -iq 'standby'; then
-                    echo '{"standy": true}'
-                else
-                    smartctl $sd -a -j
-                fi
-            else
-                echo '{}'
-            fi
-        \`;
+        {
+            my \$sd_data = '{}';
+            # 从缓存读取 SMART 数据
+            my \$cache_file = '/run/smart-cache.json';
+            my \$cache_data = '{}';
+            if (-f \$cache_file && -r \$cache_file) {
+                open(my \$cfh, '<', \$cache_file) or goto FALLBACK_sd$sdi;
+                local \$/;
+                \$cache_data = <\$cfh>;
+                close(\$cfh);
+                \$cache_data = '{}' if !\$cache_data || \$cache_data !~ /^\s*\{/;
+            }
+            if (\$cache_data =~ /^\s*\{/) {
+                # 从缓存提取当前设备数据 sd$sdi
+                if (\$cache_data =~ /"sd$sdi"\s*:\s*(\{[^{}]*(?:\{[^{}]*\}[^{}]*)*\})/) {
+                    \$sd_data = \$1;
+                }
+            }
+            FALLBACK_sd$sdi:
+            \$res->{sd$sdi} = \$sd_data;
+        }
 EOF
         echo "检测到 $sdtype: $sd (sd$sdi)"
         let sdi++
     done
     echo "已添加 $sdi 块 SATA 固态和机械硬盘"
 
+    # 将所有 SATA 数据合并为一个 JSON 数组，方便前端渲染
+    cat >> $tmpf << 'EOF'
+
+        # 合并所有 SATA 数据为 JSON 数组
+        my @sata_list;
+        for my $key (sort grep { /^sd\d+$/ } keys %$res) {
+            my $data = $res->{$key};
+            if ($data && $data =~ /^\s*\{/) {
+                push @sata_list, $data;
+            }
+        }
+        $res->{sata_all} = '[' . join(',', @sata_list) . ']';
+EOF
+
+    # RAID 卡下的存储设备 (通过 smartctl --scan 检测)
+    log_info "检测系统中的 RAID 卡存储设备"
+    raidi=0
+    # 使用 smartctl --scan 检测所有存储设备，包括 RAID 卡下的设备
+    while read -r line; do
+        # 解析 smartctl --scan 的输出，格式如：/dev/sda -d scsi # /dev/sda, SCSI device
+        # 提取设备路径和设备类型参数
+        device=$(echo "$line" | awk '{print $1}')
+        # 提取所有以 - 开头的参数及其值，直到遇到 # 或行尾
+        # 格式: /dev/bus/0 -d megaraid,0 # /dev/bus/0 [megaraid_disk_00], SCSI device
+        device_args=$(echo "$line" | awk '{
+            for(i=2; i<=NF; i++) {
+                if($i ~ /^#/) break;
+                if($i ~ /^-/) {
+                    printf "%s", $i;
+                    # 检查下一个字段是否是参数值（不是以 - 开头且不是 #）
+                    if(i+1 <= NF && $(i+1) !~ /^-/ && $(i+1) !~ /^#/) {
+                        printf " %s", $(i+1);
+                        i++;
+                    }
+                    printf " ";
+                }
+            }
+        }')
+        
+        # 跳过空设备或无效设备
+        [ -z "$device" ] && continue
+
+        # 跳过普通 SATA/SAS/NVMe 直通设备（已通过 /dev/sd* 和 /dev/nvme* 检测）
+        if [[ "$device" =~ ^/dev/sd || "$device" =~ ^/dev/nvme ]]; then
+            continue
+        fi
+
+        chmod +s /usr/sbin/smartctl 2>/dev/null
+
+        # 为 RAID 卡设备生成监控代码（从缓存读取）
+        cat >> $tmpf << EOF
+
+        {   # 块作用域，避免变量重复声明
+            my \$raid_data = '{}';
+            # 从缓存读取 RAID 数据
+            my \$cache_file = '/run/smart-cache.json';
+            my \$cache_data = '{}';
+            if (-f \$cache_file && -r \$cache_file) {
+                open(my \$cfh, '<', \$cache_file) or goto FALLBACK_raid$raidi;
+                local \$/;
+                \$cache_data = <\$cfh>;
+                close(\$cfh);
+                \$cache_data = '{}' if !\$cache_data || \$cache_data !~ /^\s*\{/;
+            }
+            if (\$cache_data =~ /^\s*\{/) {
+                # 从缓存提取当前 RAID 设备数据 raid$raidi
+                if (\$cache_data =~ /"raid$raidi"\s*:\s*(\{[^{}]*(?:\{[^{}]*\}[^{}]*)*\})/) {
+                    \$raid_data = \$1;
+                }
+            }
+            FALLBACK_raid$raidi:
+            \$res->{raid$raidi} = \$raid_data;
+        }
+EOF
+        echo "检测到 RAID 存储设备: $device $device_args (raid$raidi)"
+        let raidi++
+    done < <(smartctl --scan 2>/dev/null)
+    echo "已添加 $raidi 块 RAID 卡存储设备"
+
+    # 从缓存提取 RAID 控制器信息
+    cat >> $tmpf << 'EOF'
+
+        {   # 块作用域，提取 RAID 控制器信息
+            my $controller_data = '{}';
+            my $cache_file = '/run/smart-cache.json';
+            my $cache_data = '{}';
+            if (-f $cache_file && -r $cache_file) {
+                open(my $cfh, '<', $cache_file) or goto FALLBACK_controller;
+                local $/;
+                $cache_data = <$cfh>;
+                close($cfh);
+                $cache_data = '{}' if !$cache_data || $cache_data !~ /^\s*\{/;
+            }
+            if ($cache_data =~ /^\s*\{/) {
+                # 从缓存提取控制器信息
+                if ($cache_data =~ /"(controller_[^"]+)"\s*:\s*(\{[^{}]*(?:\{[^{}]*\}[^{}]*)*\})/) {
+                    my $key = $1;
+                    $controller_data = $2;
+                    $res->{$key} = $controller_data;
+                }
+            }
+            FALLBACK_controller:
+        }
+EOF
+
+    # 将所有 RAID 数据合并为一个 JSON 数组，方便前端渲染
+    cat >> $tmpf << 'EOF'
+
+        # 合并所有 RAID 数据为 JSON 数组
+        my @raid_list;
+        # 首先添加 RAID 控制器信息（如果存在）
+        for my $key (sort grep { /^controller_/ } keys %$res) {
+            my $data = $res->{$key};
+            if ($data && $data =~ /^\s*\{/) {
+                push @raid_list, $data;
+            }
+        }
+        # 然后添加物理硬盘信息
+        for my $key (sort grep { /^raid\d+$/ } keys %$res) {
+            my $data = $res->{$key};
+            if ($data && $data =~ /^\s*\{/) {
+                push @raid_list, $data;
+            }
+        }
+        $res->{raid_all} = '[' . join(',', @raid_list) . ']';
+EOF
 
     ###################  修改node.pm   ##########################
     log_info "修改node.pm："
@@ -3133,235 +3579,288 @@ EOF
     },
 EOF
 
-    # 动态为每个 NVME 硬盘添加 JavaScript 代码
-    for i in $(seq 0 $((nvi - 1))); do
-        cat >> $tmpf << EOF
+    # 动态 NVMe 显示：解析 nvme_all JSON 数组
+    cat >> $tmpf << 'EOF'
 
     {
-          itemId: 'nvme${i}0',
+          itemId: 'nvme-all',
           colspan: 2,
           printBar: false,
-	          title: gettext('NVME${i}'),
-	          textField: 'nvme${i}',
-	          renderer:function(value){
-	              function colorizeTemp(temp) {
-	                  let tempNum = Number(temp);
-	                  if (Number.isNaN(tempNum)) {
-	                      return temp + '°C';
-	                  }
-	                  if (tempNum < 50) {
-	                      return '<span style="color: #27ae60; font-weight: 600;">' + tempNum + '°C</span>';
-	                  }
-	                  if (tempNum < 70) {
-	                      return '<span style="color: #f39c12; font-weight: 600;">' + tempNum + '°C</span>';
-	                  }
-	                  return '<span style="color: #e74c3c; font-weight: 600;">' + tempNum + '°C</span>';
-	              }
+          title: gettext('NVME硬盘'),
+          textField: 'nvme_all',
+          cellWrap: true,
+          renderer: function(value) {
+              if (!value || value === '[]') {
+                  return '<span style="color: #888;">未检测到 NVME 硬盘</span>';
+              }
 
-	              function colorizeHealth(percent) {
-	                  let healthNum = Number(percent);
-	                  if (Number.isNaN(healthNum)) {
-	                      return percent + '%';
-	                  }
-	                  if (healthNum >= 80) {
-	                      return '<span style="color: #27ae60; font-weight: 600;">' + healthNum + '%</span>';
-	                  }
-	                  if (healthNum >= 50) {
-	                      return '<span style="color: #f39c12; font-weight: 600;">' + healthNum + '%</span>';
-	                  }
-	                  return '<span style="color: #e74c3c; font-weight: 600;">' + healthNum + '%</span>';
-	              }
+              function colorizeTemp(temp) {
+                  let tempNum = Number(temp);
+                  if (Number.isNaN(tempNum)) return temp + '°C';
+                  if (tempNum < 50) return '<span style="color: #27ae60; font-weight: 600;">' + tempNum + '°C</span>';
+                  if (tempNum < 70) return '<span style="color: #f39c12; font-weight: 600;">' + tempNum + '°C</span>';
+                  return '<span style="color: #e74c3c; font-weight: 600;">' + tempNum + '°C</span>';
+              }
 
-	              try{
-	                  let  v = JSON.parse(value);
+              function colorizeHealth(percent) {
+                  let healthNum = Number(percent);
+                  if (Number.isNaN(healthNum)) return percent + '%';
+                  if (healthNum >= 80) return '<span style="color: #27ae60; font-weight: 600;">' + healthNum + '%</span>';
+                  if (healthNum >= 50) return '<span style="color: #f39c12; font-weight: 600;">' + healthNum + '%</span>';
+                  return '<span style="color: #e74c3c; font-weight: 600;">' + healthNum + '%</span>';
+              }
 
-                  // 检查是否为空 JSON（硬盘不存在或已直通）
-                  if (Object.keys(v).length === 0) {
-                      return '<span style="color: #888;">未检测到 NVME（可能已直通或移除）</span>';
+              try {
+                  let nvmeArray = JSON.parse(value);
+                  if (!Array.isArray(nvmeArray) || nvmeArray.length === 0) {
+                      return '<span style="color: #888;">未检测到 NVME 硬盘</span>';
                   }
 
-                  // 检查型号
-                  let model = v.model_name;
-                  if (!model) {
-                      return '<span style="color: #f39c12;">NVME 信息不完整（建议检查连接状态）</span>';
-                  }
+                  let lines = [];
+                  for (let i = 0; i < nvmeArray.length; i++) {
+                      let v = nvmeArray[i];
+                      if (!v || Object.keys(v).length === 0) continue;
 
-                  // 构建显示内容
-                  let parts = [model];
-                  let hasData = false;
+                      let model = v.model_name;
+                      if (!model) continue;
 
-	                  // 温度
-	                  if (v.temperature?.current !== undefined) {
-	                      parts.push('温度: ' + colorizeTemp(v.temperature.current));
-	                      hasData = true;
-	                  }
+                      let parts = ['<b>' + (i + 1) + '.</b> ' + model];
+                      let hasData = false;
 
-                  // 健康度和读写
-                  let log = v.nvme_smart_health_information_log;
-	                  if (log) {
-	                      // 健康度
-	                      if (log.percentage_used !== undefined) {
-	                          let healthRemain = 100 - log.percentage_used;
-	                          let health = '健康: ' + colorizeHealth(healthRemain);
-	                          if (log.media_errors !== undefined && log.media_errors > 0) {
-	                              health += ' <span style="color: #e74c3c;">(0E: ' + log.media_errors + ')</span>';
-	                          }
-	                          parts.push(health);
-	                          hasData = true;
-	                      }
-
-	                      if (log.unsafe_shutdowns !== undefined) {
-	                          let shutdownColor = Number(log.unsafe_shutdowns) > 0 ? '#e74c3c' : '#27ae60';
-	                          parts.push('异常断电: <span style="color: ' + shutdownColor + '; font-weight: 600;">' + log.unsafe_shutdowns + '</span>');
-	                          hasData = true;
-	                      }
-
-	                      // 读写
-                      if (log.data_units_read && log.data_units_written) {
-                          let read = (log.data_units_read / 1956882).toFixed(1);
-                          let write = (log.data_units_written / 1956882).toFixed(1);
-                          parts.push('读写: ' + read + 'T / ' + write + 'T');
+                      if (v.temperature?.current !== undefined) {
+                          parts.push('温度: ' + colorizeTemp(v.temperature.current));
                           hasData = true;
                       }
-                  }
 
-                  // 通电时间
-                  if (v.power_on_time?.hours !== undefined) {
-                      let pot = '通电: ' + v.power_on_time.hours + '时';
-                      if (v.power_cycle_count) {
-                          pot += ' (次: ' + v.power_cycle_count + ')';
+                      let log = v.nvme_smart_health_information_log;
+                      if (log) {
+                          if (log.percentage_used !== undefined) {
+                              let healthRemain = 100 - log.percentage_used;
+                              let health = '健康: ' + colorizeHealth(healthRemain);
+                              if (log.media_errors !== undefined && log.media_errors > 0) {
+                                  health += ' <span style="color: #e74c3c;">(0E: ' + log.media_errors + ')</span>';
+                              }
+                              parts.push(health);
+                              hasData = true;
+                          }
+
+                          if (log.unsafe_shutdowns !== undefined) {
+                              let shutdownColor = Number(log.unsafe_shutdowns) > 0 ? '#e74c3c' : '#27ae60';
+                              parts.push('异常断电: <span style="color: ' + shutdownColor + '; font-weight: 600;">' + log.unsafe_shutdowns + '</span>');
+                              hasData = true;
+                          }
+
+                          if (log.data_units_read && log.data_units_written) {
+                              let read = (log.data_units_read / 1956882).toFixed(1);
+                              let write = (log.data_units_written / 1956882).toFixed(1);
+                              parts.push('读写: ' + read + 'T / ' + write + 'T');
+                              hasData = true;
+                          }
                       }
-                      parts.push(pot);
-                      hasData = true;
+
+                      if (v.power_on_time?.hours !== undefined) {
+                          let pot = '通电: ' + v.power_on_time.hours + '时';
+                          if (v.power_cycle_count) pot += ' (次: ' + v.power_cycle_count + ')';
+                          parts.push(pot);
+                          hasData = true;
+                      }
+
+                      if (v.smart_status?.passed !== undefined) {
+                          parts.push('SMART: ' + (v.smart_status.passed ? '<span style="color: #27ae60;">正常</span>' : '<span style="color: #e74c3c;">警告!</span>'));
+                          hasData = true;
+                      }
+
+                      if (!hasData) {
+                          parts.push('<span style="color: #888;">无法获取详细信息</span>');
+                      }
+
+                      lines.push(parts.join(' | '));
                   }
 
-                  // SMART 状态
-                  if (v.smart_status?.passed !== undefined) {
-                      parts.push('SMART: ' + (v.smart_status.passed ? '<span style="color: #27ae60;">正常</span>' : '<span style="color: #e74c3c;">警告!</span>'));
-                      hasData = true;
-                  }
-
-                  // 如果只有型号，没有其他数据，说明可能是权限或驱动问题
-                  if (!hasData) {
-                      return model + ' <span style="color: #888;">| 无法获取详细信息（检查 smartctl 权限或驱动）</span>';
-                  }
-
-                  return parts.join(' | ');
-
-              }catch(e){
-                  return '<span style="color: #888;">无法解析 NVME 信息（可能使用控制器直通）</span>';
-              };
-
-           }
+                  return lines.length > 0 ? lines.join('<br/>') : '<span style="color: #888;">未检测到 NVME 硬盘</span>';
+              } catch(e) {
+                  return '<span style="color: #888;">NVME 数据解析错误</span>';
+              }
+          }
     },
 EOF
-    done
 
-    # 动态为每个 SATA 硬盘添加 JavaScript 代码
-    for i in $(seq 0 $((sdi - 1))); do
-        # 获取硬盘类型（固态/机械）
-        sd="/dev/sd$(echo {a..z} | cut -d' ' -f$((i+1)))"
-        sdsn=$(basename $sd 2>/dev/null)
-        sdcr=/sys/block/$sdsn/queue/rotational
-        if [ -f $sdcr ] && [ "$(cat $sdcr)" = "0" ]; then
-            sdtype="固态硬盘$i"
-        else
-            sdtype="机械硬盘$i"
-        fi
-
-        cat >> $tmpf << EOF
+    # 动态 SATA 显示：解析 sata_all JSON 数组
+    cat >> $tmpf << 'EOF'
 
     {
-          itemId: 'sd${i}0',
+          itemId: 'sata-all',
           colspan: 2,
           printBar: false,
-	          title: gettext('${sdtype}'),
-	          textField: 'sd${i}',
-	          renderer:function(value){
-	              function colorizeTemp(temp) {
-	                  let tempNum = Number(temp);
-	                  if (Number.isNaN(tempNum)) {
-	                      return temp + '°C';
-	                  }
-	                  if (tempNum < 40) {
-	                      return '<span style="color: #27ae60; font-weight: 600;">' + tempNum + '°C</span>';
-	                  }
-	                  if (tempNum < 50) {
-	                      return '<span style="color: #f39c12; font-weight: 600;">' + tempNum + '°C</span>';
-	                  }
-	                  return '<span style="color: #e74c3c; font-weight: 600;">' + tempNum + '°C</span>';
-	              }
+          title: gettext('SATA硬盘'),
+          textField: 'sata_all',
+          cellWrap: true,
+          renderer: function(value) {
+              if (!value || value === '[]') {
+                  return '<span style="color: #888;">未检测到 SATA 硬盘</span>';
+              }
 
-	              function findAtaSmartRawValue(table, ids) {
-	                  if (!Array.isArray(table)) {
-	                      return null;
-	                  }
-	                  let found = table.find(item => ids.includes(item?.id));
-	                  if (!found || !found.raw) {
-	                      return null;
-	                  }
-	                  return found.raw.string ?? found.raw.value ?? null;
-	              }
+              function colorizeTemp(temp) {
+                  let tempNum = Number(temp);
+                  if (Number.isNaN(tempNum)) return temp + '°C';
+                  if (tempNum < 40) return '<span style="color: #27ae60; font-weight: 600;">' + tempNum + '°C</span>';
+                  if (tempNum < 50) return '<span style="color: #f39c12; font-weight: 600;">' + tempNum + '°C</span>';
+                  return '<span style="color: #e74c3c; font-weight: 600;">' + tempNum + '°C</span>';
+              }
 
-	              try{
-	                  let  v = JSON.parse(value);
-	                  console.log(v)
+              function findAtaSmartRawValue(table, ids) {
+                  if (!Array.isArray(table)) return null;
+                  let found = table.find(item => ids.includes(item?.id));
+                  if (!found || !found.raw) return null;
+                  return found.raw.string ?? found.raw.value ?? null;
+              }
 
-                  // 场景 1：硬盘休眠（节能模式）
-                  if (v.standy === true) {
-                      return '<span style="color: #27ae60;">硬盘休眠中（省电模式）</span>'
+              try {
+                  let sataArray = JSON.parse(value);
+                  if (!Array.isArray(sataArray) || sataArray.length === 0) {
+                      return '<span style="color: #888;">未检测到 SATA 硬盘</span>';
                   }
 
-                  // 场景 2：空 JSON（硬盘不存在或已直通）
-                  if (Object.keys(v).length === 0) {
-                      return '<span style="color: #888;">未检测到硬盘（可能已直通或移除）</span>';
-                  }
+                  let lines = [];
+                  for (let i = 0; i < sataArray.length; i++) {
+                      let v = sataArray[i];
+                      if (!v) continue;
 
-                  // 场景 3：检查型号
-                  let model = v.model_name;
-                  if (!model) {
-                      return '<span style="color: #f39c12;">硬盘信息不完整（建议检查连接状态）</span>';
-                  }
-
-                  // 场景 4：构建正常显示内容
-                  let parts = [model];
-
-	                  // 温度
-	                  if (v.temperature?.current !== undefined) {
-	                      parts.push('温度: ' + colorizeTemp(v.temperature.current));
-	                  }
-
-                  // 通电时间
-                  if (v.power_on_time?.hours !== undefined) {
-                      let pot = '通电: ' + v.power_on_time.hours + '时';
-                      if (v.power_cycle_count) {
-                          pot += ',次: ' + v.power_cycle_count;
+                      if (v.standy === true) {
+                          lines.push('<b>' + (i + 1) + '.</b> <span style="color: #27ae60;">硬盘休眠中（省电模式）</span>');
+                          continue;
                       }
-                      parts.push(pot);
+
+                      if (Object.keys(v).length === 0) continue;
+
+                      let model = v.model_name;
+                      if (!model) {
+                          lines.push('<b>' + (i + 1) + '.</b> <span style="color: #f39c12;">硬盘信息不完整</span>');
+                          continue;
+                      }
+
+                      let parts = ['<b>' + (i + 1) + '.</b> ' + model];
+
+                      if (v.temperature?.current !== undefined) {
+                          parts.push('温度: ' + colorizeTemp(v.temperature.current));
+                      }
+
+                      if (v.power_on_time?.hours !== undefined) {
+                          let pot = '通电: ' + v.power_on_time.hours + '时';
+                          if (v.power_cycle_count) pot += ',次: ' + v.power_cycle_count;
+                          parts.push(pot);
+                      }
+
+                      if (v.smart_status?.passed !== undefined) {
+                          parts.push('SMART: ' + (v.smart_status.passed ? '<span style="color: #27ae60;">正常</span>' : '<span style="color: #e74c3c;">警告!</span>'));
+                      }
+
+                      let unsafeShutdowns = findAtaSmartRawValue(v.ata_smart_attributes?.table, [174, 192]);
+                      if (unsafeShutdowns !== null && unsafeShutdowns !== undefined && unsafeShutdowns !== '') {
+                          let shutdownCount = String(unsafeShutdowns).trim();
+                          let shutdownColor = Number(shutdownCount) > 0 ? '#e74c3c' : '#27ae60';
+                          parts.push('异常断电: <span style="color: ' + shutdownColor + '; font-weight: 600;">' + shutdownCount + '</span>');
+                      }
+
+                      lines.push(parts.join(' | '));
                   }
 
-	                  // SMART 状态
-	                  if (v.smart_status?.passed !== undefined) {
-	                      parts.push('SMART: ' + (v.smart_status.passed ? '<span style="color: #27ae60;">正常</span>' : '<span style="color: #e74c3c;">警告!</span>'));
-	                  }
-
-	                  let unsafeShutdowns = findAtaSmartRawValue(v.ata_smart_attributes?.table, [174, 192]);
-	                  if (unsafeShutdowns !== null && unsafeShutdowns !== undefined && unsafeShutdowns !== '') {
-	                      let shutdownCount = String(unsafeShutdowns).trim();
-	                      let shutdownColor = Number(shutdownCount) > 0 ? '#e74c3c' : '#27ae60';
-	                      parts.push('异常断电: <span style="color: ' + shutdownColor + '; font-weight: 600;">' + shutdownCount + '</span>');
-	                  }
-
-                  return parts.join(' | ');
-
-              }catch(e){
-                  // JSON 解析失败
-                  return '<span style="color: #888;">无法获取硬盘信息（可能使用 HBA 直通）</span>';
-              };
-           }
+                  return lines.length > 0 ? lines.join('<br/>') : '<span style="color: #888;">未检测到 SATA 硬盘</span>';
+              } catch(e) {
+                  return '<span style="color: #888;">SATA 数据解析错误</span>';
+              }
+          }
     },
 EOF
-    done
+
+    # 动态 RAID 显示：解析 raid_all JSON 数组
+    cat >> $tmpf << 'EOF'
+
+    {
+          itemId: 'raid-all',
+          colspan: 2,
+          printBar: false,
+          title: gettext('阵列卡硬盘'),
+          textField: 'raid_all',
+          cellWrap: true,
+          renderer: function(value) {
+              if (!value || value === '[]') {
+                  return '<span style="color: #888;">未检测到阵列卡硬盘</span>';
+              }
+
+              function htmlEscape(s) {
+                  if (!s) return '';
+                  return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+              }
+
+              try {
+                  let raidArray = JSON.parse(value);
+                  if (!Array.isArray(raidArray) || raidArray.length === 0) {
+                      return '<span style="color: #888;">未检测到阵列卡硬盘</span>';
+                  }
+
+                  let lines = [];
+                  let controllerInfo = null;
+                  let diskIndex = 0;
+                  
+                  for (let i = 0; i < raidArray.length; i++) {
+                      let v = raidArray[i];
+                      if (!v || Object.keys(v).length === 0) continue;
+
+                      // 检查是否为 RAID 控制器
+                      if (v.device_type === 'raid_controller') {
+                          controllerInfo = v.model_name;
+                          continue;
+                      }
+
+                      let model = htmlEscape(v.model_name);
+                      if (!model && v.scsi_model_name) {
+                          let vendor = htmlEscape(v.scsi_vendor || '');
+                          let scsiModel = htmlEscape(v.scsi_model_name);
+                          model = (vendor ? vendor + ' ' : '') + scsiModel;
+                      }
+                      if (!model) continue;
+
+                      diskIndex++;
+                      let parts = ['<b>' + diskIndex + '.</b> ' + model];
+
+                      if (v.temperature?.current !== undefined && v.temperature.current > 0) {
+                          let tempNum = Number(v.temperature.current);
+                          let tempColor = tempNum < 40 ? '#27ae60' : (tempNum < 50 ? '#f39c12' : '#e74c3c');
+                          parts.push('温度: <span style="color: ' + tempColor + '; font-weight: 600;">' + tempNum + '°C</span>');
+                      }
+
+                      if (v.power_on_time?.hours !== undefined) {
+                          parts.push('通电: ' + v.power_on_time.hours + '时');
+                      }
+
+                      if (v.smart_support?.available === false) {
+                          parts.push('SMART: <span style="color: #888;">不支持</span>');
+                      } else {
+                          let smartPassed = v.smart_status?.passed;
+                          if (smartPassed === undefined) {
+                              smartPassed = v.ata_smart_data?.self_test?.status?.passed;
+                          }
+                          if (smartPassed !== undefined) {
+                              parts.push('SMART: ' + (smartPassed ? '<span style="color: #27ae60;">正常</span>' : '<span style="color: #e74c3c;">警告!</span>'));
+                          }
+                      }
+
+                      lines.push(parts.join(' | '));
+                  }
+                  
+                  // 如果有 RAID 控制器信息，添加到第一行
+                  if (controllerInfo) {
+                      lines.unshift('<b>控制器:</b> <span style="color: #2196F3;">' + htmlEscape(controllerInfo) + '</span>');
+                  }
+
+                  return lines.length > 0 ? lines.join('<br/>') : '<span style="color: #888;">未检测到阵列卡硬盘</span>';
+              } catch(e) {
+                  return '<span style="color: #888;">阵列卡硬盘数据解析错误</span>';
+              }
+          }
+    },
+EOF
 
     if [ "$enable_ups" = true ]; then
         cat >> $tmpf << 'EOF'
@@ -3454,18 +3953,38 @@ EOF
     # sed -n '/pveversion/,+30p' $pvemanagerlib
 
     log_info "修改页面高度"
-    # 统计添加了几条内容（2个基础项 + NVME + SATA + UPS）
+    # 统计添加了几条内容（2个基础项 + NVME + SATA + RAID + UPS）
+    # UI 控件计数（每个类型只算 1 个控件）
+    raid_ui_count=0
+    if [ "$raidi" -gt 0 ]; then
+        raid_ui_count=1
+    fi
+    nvme_ui_count=0
+    if [ "$nvi" -gt 0 ]; then
+        nvme_ui_count=1
+    fi
+    sata_ui_count=0
+    if [ "$sdi" -gt 0 ]; then
+        sata_ui_count=1
+    fi
+    # 监控项数量（用于显示统计信息）
     if [ "$enable_ups" = true ]; then
-        addRs=$((2 + nvi + sdi + 1))
+        addRs=$((2 + nvme_ui_count + sata_ui_count + raid_ui_count + 1))
         ups_info="+ 1 个UPS"
     else
-        addRs=$((2 + nvi + sdi))
+        addRs=$((2 + nvme_ui_count + sata_ui_count + raid_ui_count))
         ups_info=""
+    fi
+    # 实际显示行数（用于高度计算）
+    # NVME/SATA/RAID 每块盘显示一行，所以用实际数量计算高度
+    display_rows=$((2 + nvi + sdi + raidi))
+    if [ "$enable_ups" = true ]; then
+        display_rows=$((display_rows + 1))
     fi
 
     echo
     echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-    echo "检测到添加了 $addRs 条监控项 (2个基础项 + $nvi 个NVME + $sdi 个SATA $ups_info)"
+    echo "检测到添加了 $addRs 条监控项 (2个基础项 + $nvi 个NVME(动态渲染) + $sdi 个SATA(动态渲染) + $raidi 个阵列卡(动态渲染) $ups_info)"
     echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
     echo "请选择高度调整方式："
     echo "  1. 自动计算 (推荐，参考 PVE 8 算法：28px/项)"
@@ -3475,9 +3994,9 @@ EOF
 
     case ${height_choice:-1} in
         1)
-            # 自动计算：每项 28px
-            addHei=$((28 * addRs))
-            log_info "使用自动计算：$addRs 项 × 28px = ${addHei}px"
+            # 自动计算：每行 28px（使用实际显示行数）
+            addHei=$((28 * display_rows))
+            log_info "使用自动计算：$display_rows 行 × 28px = ${addHei}px (UI控件: $addRs 个)"
             ;;
         2)
             # 手动设置
@@ -3488,22 +4007,22 @@ EOF
             echo "  - 如果 CPU 核心很多或想显示更多信息，可适当增大"
             echo "  - 如果界面出现遮挡，可适当减小此值"
             echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-            read -p "请输入每项的高度增量 (px) [默认: 28]: " height_per_item
+            read -p "请输入每行的高度增量 (px) [默认: 28]: " height_per_item
 
             # 验证输入是否为数字，如果不是或为空则使用默认值 28
             if [[ -z "$height_per_item" ]] || ! [[ "$height_per_item" =~ ^[0-9]+$ ]]; then
                 height_per_item=28
-                log_info "使用默认值: 28px/项"
+                log_info "使用默认值: 28px/行"
             else
-                log_info "使用自定义值: ${height_per_item}px/项"
+                log_info "使用自定义值: ${height_per_item}px/行"
             fi
 
-            addHei=$((height_per_item * addRs))
-            log_success "计算结果：$addRs 项 × ${height_per_item}px = ${addHei}px"
+            addHei=$((height_per_item * display_rows))
+            log_success "计算结果：$display_rows 行 × ${height_per_item}px = ${addHei}px (UI控件: $addRs 个)"
             ;;
         *)
             # 无效选项，使用自动计算
-            addHei=$((28 * addRs))
+            addHei=$((28 * display_rows))
             log_warn "无效选项，使用自动计算：${addHei}px"
             ;;
     esac
@@ -3557,6 +4076,8 @@ cpu_del() {
 
     if reinstall_pve_webui_packages; then
         rm -f "$nodes.$pvever.bak" "$pvemanagerlib.$pvever.bak" "$proxmoxlib.$pvever.bak"
+        # 撤销异步缓存服务
+        remove_smart_cache_service
         log_success "Official node overview files restored. Use Shift+F5 to refresh browser cache."
     fi
 }

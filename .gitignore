@@ -47,3 +47,4 @@ AGENTS.md
 # Python
 __pycache__/
 *.pyc
+code_rule.md
