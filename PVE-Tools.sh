@@ -2827,36 +2827,35 @@ def extract_sata_data(data, key):
         model = data.get("scsi_model_name", "")
     result[key]["model_name"] = model
 
-    # temperature
-    temp = data.get("temperature", {}).get("current", 0)
-    result[key]["temperature"] = {"current": temp}
+    # temperature - 只在存在时才输出
+    temp = data.get("temperature", {})
+    if "current" in temp:
+        result[key]["temperature"] = {"current": temp["current"]}
 
-    # power_on_time
-    hours = 0
+    # power_on_time - 只在存在时才输出
     power_on = data.get("power_on_time", {})
     if "hours" in power_on:
-        hours = power_on["hours"]
+        result[key]["power_on_time"] = {"hours": power_on["hours"]}
     elif "raw" in power_on and "value" in power_on["raw"]:
-        hours = power_on["raw"]["value"]
-    result[key]["power_on_time"] = {"hours": hours}
+        result[key]["power_on_time"] = {"hours": power_on["raw"]["value"]}
 
-    # power_cycle_count
-    cycles = data.get("power_cycle_count", 0)
-    result[key]["power_cycle_count"] = cycles
+    # power_cycle_count - 只在存在时才输出
+    if "power_cycle_count" in data:
+        result[key]["power_cycle_count"] = data["power_cycle_count"]
 
     # smart_status - 只在存在时才输出，不默认 true
     smart_status = data.get("smart_status", {})
     if "passed" in smart_status:
         result[key]["smart_status"] = {"passed": smart_status["passed"]}
 
-    # standby - 休眠状态
-    standby = data.get("standby", False)
-    result[key]["standby"] = standby
+    # standby - 只在存在时才输出
+    if "standby" in data:
+        result[key]["standby"] = data["standby"]
 
-    # ata_smart_attributes.table - ATA SMART 属性表
+    # ata_smart_attributes.table - 只在存在时才输出
     ata_attrs = data.get("ata_smart_attributes", {})
-    table = ata_attrs.get("table", [])
-    result[key]["ata_smart_attributes"] = {"table": table}
+    if "table" in ata_attrs:
+        result[key]["ata_smart_attributes"] = {"table": ata_attrs["table"]}
 
     return result
 
@@ -2872,42 +2871,40 @@ def extract_raid_data(data, key):
         model = data.get("scsi_model_name", "")
     result[key]["model_name"] = model
 
-    temp = data.get("temperature", {}).get("current", 0)
-    result[key]["temperature"] = {"current": temp}
+    # temperature - 只在存在时才输出
+    temp = data.get("temperature", {})
+    if "current" in temp:
+        result[key]["temperature"] = {"current": temp["current"]}
 
-    hours = 0
+    # power_on_time - 只在存在时才输出
     power_on = data.get("power_on_time", {})
     if "hours" in power_on:
-        hours = power_on["hours"]
+        result[key]["power_on_time"] = {"hours": power_on["hours"]}
     elif "raw" in power_on and "value" in power_on["raw"]:
-        hours = power_on["raw"]["value"]
-    result[key]["power_on_time"] = {"hours": hours}
+        result[key]["power_on_time"] = {"hours": power_on["raw"]["value"]}
 
-    # power_cycle_count
-    cycles = data.get("power_cycle_count", 0)
-    result[key]["power_cycle_count"] = cycles
+    # power_cycle_count - 只在存在时才输出
+    if "power_cycle_count" in data:
+        result[key]["power_cycle_count"] = data["power_cycle_count"]
 
-    # smart_support - 保留原始可用性状态
+    # smart_support - 只在存在时才输出
     smart_support = data.get("smart_support", {})
-    result[key]["smart_support"] = {
-        "available": smart_support.get("available")
-    }
+    if "available" in smart_support:
+        result[key]["smart_support"] = {"available": smart_support["available"]}
 
-    # smart_status - 仅在存在时设置，不默认 true
+    # smart_status - 只在存在时才输出，不默认 true
     smart_status = data.get("smart_status", {})
     if "passed" in smart_status:
         result[key]["smart_status"] = {"passed": smart_status["passed"]}
 
-    # ata_smart_data.self_test.status.passed - 提取自测状态
+    # ata_smart_data.self_test.status.passed - 只在存在时才输出
     ata_smart = data.get("ata_smart_data", {})
     self_test = ata_smart.get("self_test", {})
     self_status = self_test.get("status", {})
     if "passed" in self_status:
         result[key]["ata_smart_data"] = {
             "self_test": {
-                "status": {
-                    "passed": self_status["passed"]
-                }
+                "status": {"passed": self_status["passed"]}
             }
         }
 
