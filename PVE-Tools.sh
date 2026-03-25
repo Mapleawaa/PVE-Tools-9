@@ -2818,19 +2818,19 @@ def extract_sata_data(data, key):
     """从 SATA 设备数据中提取字段"""
     if not data:
         return {key: {}}
-    
+
     result = {key: {}}
-    
+
     # model_name (SATA 用 model_name, SAS 用 scsi_model_name)
     model = data.get("model_name", "")
     if not model:
         model = data.get("scsi_model_name", "")
     result[key]["model_name"] = model
-    
+
     # temperature
     temp = data.get("temperature", {}).get("current", 0)
     result[key]["temperature"] = {"current": temp}
-    
+
     # power_on_time
     hours = 0
     power_on = data.get("power_on_time", {})
@@ -2839,32 +2839,41 @@ def extract_sata_data(data, key):
     elif "raw" in power_on and "value" in power_on["raw"]:
         hours = power_on["raw"]["value"]
     result[key]["power_on_time"] = {"hours": hours}
-    
+
     # power_cycle_count
     cycles = data.get("power_cycle_count", 0)
     result[key]["power_cycle_count"] = cycles
-    
+
     # smart_status
     passed = data.get("smart_status", {}).get("passed", True)
     result[key]["smart_status"] = {"passed": passed}
-    
+
+    # standby - 休眠状态
+    standby = data.get("standby", False)
+    result[key]["standby"] = standby
+
+    # ata_smart_attributes.table - ATA SMART 属性表
+    ata_attrs = data.get("ata_smart_attributes", {})
+    table = ata_attrs.get("table", [])
+    result[key]["ata_smart_attributes"] = {"table": table}
+
     return result
 
 def extract_raid_data(data, key):
     """从 RAID 设备数据中提取字段"""
     if not data:
         return {key: {}}
-    
+
     result = {key: {}}
-    
+
     model = data.get("model_name", "")
     if not model:
         model = data.get("scsi_model_name", "")
     result[key]["model_name"] = model
-    
+
     temp = data.get("temperature", {}).get("current", 0)
     result[key]["temperature"] = {"current": temp}
-    
+
     hours = 0
     power_on = data.get("power_on_time", {})
     if "hours" in power_on:
@@ -2872,10 +2881,35 @@ def extract_raid_data(data, key):
     elif "raw" in power_on and "value" in power_on["raw"]:
         hours = power_on["raw"]["value"]
     result[key]["power_on_time"] = {"hours": hours}
-    
-    passed = data.get("smart_status", {}).get("passed", True)
-    result[key]["smart_status"] = {"passed": passed}
-    
+
+    # power_cycle_count
+    cycles = data.get("power_cycle_count", 0)
+    result[key]["power_cycle_count"] = cycles
+
+    # smart_support - 保留原始可用性状态
+    smart_support = data.get("smart_support", {})
+    result[key]["smart_support"] = {
+        "available": smart_support.get("available")
+    }
+
+    # smart_status - 仅在存在时设置，不默认 true
+    smart_status = data.get("smart_status", {})
+    if "passed" in smart_status:
+        result[key]["smart_status"] = {"passed": smart_status["passed"]}
+
+    # ata_smart_data.self_test.status.passed - 提取自测状态
+    ata_smart = data.get("ata_smart_data", {})
+    self_test = ata_smart.get("self_test", {})
+    self_status = self_test.get("status", {})
+    if "passed" in self_status:
+        result[key]["ata_smart_data"] = {
+            "self_test": {
+                "status": {
+                    "passed": self_status["passed"]
+                }
+            }
+        }
+
     return result
 
 def main():
@@ -3236,7 +3270,8 @@ EOF
         my @nvme_list;
         for my $key (sort grep { /^nvme\d+$/ } keys %$res) {
             my $data = $res->{$key};
-            if ($data && $data =~ /^\s*\{/) {
+            # 排除空对象 '{}' 或 '{ }'，只保留有实际内容的对象
+            if ($data && $data =~ /^\s*\{/ && $data !~ /^\s*\{\s*\}\s*$/) {
                 push @nvme_list, $data;
             }
         }
@@ -3300,7 +3335,8 @@ EOF
         my @sata_list;
         for my $key (sort grep { /^sd\d+$/ } keys %$res) {
             my $data = $res->{$key};
-            if ($data && $data =~ /^\s*\{/) {
+            # 排除空对象 '{}' 或 '{ }'，只保留有实际内容的对象
+            if ($data && $data =~ /^\s*\{/ && $data !~ /^\s*\{\s*\}\s*$/) {
                 push @sata_list, $data;
             }
         }
@@ -3406,14 +3442,16 @@ EOF
         # 首先添加 RAID 控制器信息（如果存在）
         for my $key (sort grep { /^controller_/ } keys %$res) {
             my $data = $res->{$key};
-            if ($data && $data =~ /^\s*\{/) {
+            # 排除空对象 '{}' 或 '{ }'，只保留有实际内容的对象
+            if ($data && $data =~ /^\s*\{/ && $data !~ /^\s*\{\s*\}\s*$/) {
                 push @raid_list, $data;
             }
         }
         # 然后添加物理硬盘信息
         for my $key (sort grep { /^raid\d+$/ } keys %$res) {
             my $data = $res->{$key};
-            if ($data && $data =~ /^\s*\{/) {
+            # 排除空对象 '{}' 或 '{ }'，只保留有实际内容的对象
+            if ($data && $data =~ /^\s*\{/ && $data !~ /^\s*\{\s*\}\s*$/) {
                 push @raid_list, $data;
             }
         }
@@ -3610,6 +3648,16 @@ EOF
                   return '<span style="color: #e74c3c; font-weight: 600;">' + healthNum + '%</span>';
               }
 
+              function escapeHtml(text) {
+                  if (text === null || text === undefined) return '';
+                  return String(text)
+                      .replace(/&/g, '&amp;')
+                      .replace(/</g, '&lt;')
+                      .replace(/>/g, '&gt;')
+                      .replace(/"/g, '&quot;')
+                      .replace(/'/g, '&#039;');
+              }
+
               try {
                   let nvmeArray = JSON.parse(value);
                   if (!Array.isArray(nvmeArray) || nvmeArray.length === 0) {
@@ -3621,7 +3669,7 @@ EOF
                       let v = nvmeArray[i];
                       if (!v || Object.keys(v).length === 0) continue;
 
-                      let model = v.model_name;
+                      let model = escapeHtml(v.model_name);
                       if (!model) continue;
 
                       let parts = ['<b>' + (i + 1) + '.</b> ' + model];
@@ -3733,7 +3781,7 @@ EOF
 
                       if (Object.keys(v).length === 0) continue;
 
-                      let model = v.model_name;
+                      let model = escapeHtml(v.model_name);
                       if (!model) {
                           lines.push('<b>' + (i + 1) + '.</b> <span style="color: #f39c12;">硬盘信息不完整</span>');
                           continue;
