@@ -2932,15 +2932,17 @@ def main():
                 if result.stdout:
                     data = json.loads(result.stdout)
                     # 检查是否为阵列卡虚拟磁盘：
-                    # 1. SMART 不支持（阵列卡虚拟磁盘通常不支持 SMART）
-                    # 2. scsi_product 包含 RAID 相关字样（MR/MegaRAID/PERC/RAID/ADAPTEC/AVAGO/HPSA）
+                    # 必须同时满足：1. SMART 不支持  2. 有 RAID 相关标识
+                    # 避免误判 HBA 直通模式下的普通硬盘
                     smart_avail = data.get("smart_support", {}).get("available", True)
                     scsi_product = data.get("scsi_product", "").upper()
                     scsi_vendor = data.get("scsi_vendor", "").upper()
                     scsi_model = data.get("scsi_model_name", "")
                     # 常见阵列卡标识：LSI MegaRAID(MR)、DELL PERC、HP HPSA、Adaptec、AVAGO、Broadcom
                     raid_keywords = ["MR", "MEGARAID", "PERC", "HPSA", "RAID", "ADAPTEC", "AVAGO", "BROADCOM"]
-                    is_raid_disk = not smart_avail or any(x in scsi_product for x in raid_keywords) or any(x in scsi_vendor for x in ["LSI", "DELL", "HP", "HPE", "ADAPTEC"])
+                    has_raid_identifier = any(x in scsi_product for x in raid_keywords) or any(x in scsi_vendor for x in ["LSI", "DELL", "HP", "HPE", "ADAPTEC", "BROADCOM", "AVAGO"])
+                    # 同时满足：SMART 不支持 + 有 RAID 标识
+                    is_raid_disk = (not smart_avail) and has_raid_identifier
                     if is_raid_disk:
                         # 记录 RAID 控制器信息，但不作为 SATA 设备处理
                         if scsi_model:
