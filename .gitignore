@@ -47,3 +47,9 @@ AGENTS.md
 # Python
 __pycache__/
 *.pyc
+
+# BMad Method V6
+_bmad/
+_bmad-output/
+
+test.txt

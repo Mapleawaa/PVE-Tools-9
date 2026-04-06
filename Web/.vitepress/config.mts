@@ -54,6 +54,9 @@ export default defineConfig({
           { text: 'CPU 性能调优', link: '/advanced/cpu-optimization' },
           { text: 'PVE 8 升级 9', link: '/advanced/pve-upgrade' },
           { text: '存储管理与休眠', link: '/advanced/storage-management' },
+          { text: 'VM 备份/迁移/Cloud-Init', link: '/advanced/vm-backup-migration-cloudinit' },
+          { text: '宿主机网络 / 防火墙 / IPv6', link: '/advanced/host-network-firewall-ipv6' },
+          { text: '误操作后的数据恢复', link: '/advanced/data-recovery-after-mistake' },
           { text: 'NVIDIA vGPU 驱动说明', link: '/advanced/nvidia-vgpu-driver-notes' }
         ]
       }

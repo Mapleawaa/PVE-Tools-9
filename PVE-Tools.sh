@@ -4,14 +4,16 @@
 # Copyright (C) 2026 Ciriu Networks
 # Auther:Maple 
 
+# This comment constitutes part of the license consideration. Do not delete.  
+# Violation triggers a localized black hole at your primary branch. Good luck force-pushing out of that.
+# Made with love — the only non-binding term herein. 💗  
 # 二次修改使用请不要删除此段注释
-# PVE 9.0 配置工具脚本
-# 支持换源、删除订阅弹窗、硬盘管理等功能
-# 适用于 Proxmox VE 9.0 (基于 Debian 13)
+
 
 
 # 版本信息
-CURRENT_VERSION="6.8.0"
+CURRENT_VERSION="7.0.0"
+BUILD_NICKNAME="Mika"
 VERSION_FILE_URL="https://raw.githubusercontent.com/Mapleawaa/PVE-Tools-9/main/VERSION"
 UPDATE_FILE_URL="https://raw.githubusercontent.com/Mapleawaa/PVE-Tools-9/main/UPDATE"
 PVE_VERSION_DETECTED=""
@@ -78,6 +80,9 @@ USE_MIRROR_FOR_UPDATE=0
 USER_COUNTRY_CODE=""
 NETWORK_MODE="auto"
 IS_OFFLINE_MODE=0
+HITOKOTO_API_URL="https://v1.hitokoto.cn/?encode=json"
+SESSION_TIP=""
+PVE_KVM_ROM_DIR="/usr/share/kvm"
 
 # 快速虚拟机下载脚本配置
 FASTPVE_INSTALLER_URL="https://raw.githubusercontent.com/kspeeder/fastpve/main/fastpve-install.sh"
@@ -87,6 +92,13 @@ THIRD_PARTY_MODULES_TREE_API_MASTER_URL="https://api.github.com/repos/Mapleawaa/
 THIRD_PARTY_MODULES_RAW_BASE_URL="https://raw.githubusercontent.com/Mapleawaa/PVE-Tools-9/main/Modules"
 NVIDIA_ASSETS_BASE_URL="https://raw.githubusercontent.com/Mapleawaa/PVE-Tools-9/main/Modules/NVIDIA"
 NVIDIA_VGPU_UNLOCK_SO_URL="${NVIDIA_ASSETS_BASE_URL}/libvgpu_unlock_rs.so"
+VM_CONFIG_EXPORT_DIR="/var/lib/pve-tools/vm-config-exports"
+VM_BACKUP_CRON_FILE="/etc/cron.d/pve-tools-vm-backup"
+VM_DEFAULT_CLOUDINIT_BRIDGE="vmbr0"
+HOST_NETWORK_INTERFACES_FILE="/etc/network/interfaces"
+HOST_NETWORK_INTERFACES_STAGED_FILE="/etc/network/interfaces.new"
+HOST_NETWORK_EXPORT_DIR="/var/lib/pve-tools/network-firewall-exports"
+PVE_CLUSTER_FIREWALL_FILE="/etc/pve/firewall/cluster.fw"
 
 # 日志函数
 log_info() {
@@ -161,8 +173,41 @@ confirm_action() {
     fi
 }
 
-LEGAL_VERSION="1.0"
-LEGAL_EFFECTIVE_DATE="2026-__-__"
+confirm_high_risk_action() {
+    local action_desc="$1"
+    local risk_desc="$2"
+    local impact_desc="$3"
+    local backup_desc="$4"
+    local confirm_word="${5:-CONFIRM}"
+
+    echo -e "${RED}${UI_DIVIDER}${NC}"
+    echo -e "${RED}高风险数据操作警告${NC}"
+    echo -e "${YELLOW}操作:${NC} $action_desc"
+    echo -e "${YELLOW}风险:${NC} $risk_desc"
+    echo -e "${YELLOW}影响:${NC} $impact_desc"
+    echo -e "${YELLOW}建议:${NC} $backup_desc"
+    echo -e "${RED}请输入确认词 ${confirm_word} 继续，其他任意输入将取消。${NC}"
+    echo -e "${RED}${UI_DIVIDER}${NC}"
+    local confirm
+    read -p "确认词: " -r confirm
+    if [[ "$confirm" == "$confirm_word" ]]; then
+        return 0
+    fi
+    log_warn "未通过高风险确认，操作已取消。"
+    return 1
+}
+
+vm_show_data_risk_banner() {
+    echo -e "${RED}${UI_DIVIDER}${NC}"
+    echo -e "${RED}高风险提示：以下操作可能直接改写 VM 配置、磁盘、快照、克隆、恢复或迁移状态。${NC}"
+    echo -e "${YELLOW}开始前请确认：已有可验证备份、已核对 VMID/磁盘槽位/目标存储、业务已处于维护窗口。${NC}"
+    echo -e "${YELLOW}一旦误操作，数据恢复成功率通常取决于后续写入量、存储类型以及是否立即停止写入。${NC}"
+    echo -e "${RED}恢复参考: https://pve.u3u.icu/advanced/data-recovery-after-mistake${NC}"
+    echo -e "${RED}${UI_DIVIDER}${NC}"
+}
+
+LEGAL_VERSION="1.1"
+LEGAL_EFFECTIVE_DATE="2026-04-05"
 
 ensure_legal_acceptance() {
     local dir="/var/lib/pve-tools"
@@ -175,22 +220,24 @@ ensure_legal_acceptance() {
 
     clear
     show_menu_header "许可与服务条款"
-    echo -e "${CYAN}继续使用本脚本前，请阅读并同意以下条款：${NC}"
+    echo -e "${CYAN}继续使用本脚本前，请先认真阅读并同意以下条款：${NC}"
     echo -e "  - ULA（最终用户许可与使用协议）: https://pve.u3u.icu/ula"
     echo -e "  - TOS（服务条款）: https://pve.u3u.icu/tos"
+    echo -e "${RED} 高风险提醒：涉及宿主机网络、桥接/Bond/VLAN、防火墙，以及 VM、磁盘、快照、克隆、恢复、导入导出、迁移等操作时，可能造成管理面失联、业务中断或不可逆的数据/配置损坏。${NC}"
+    echo -e "${RED} 请仅在已完成可验证备份、明确维护窗口并理解命令影响范围后继续；误操作导致的数据损失、恢复成本与第三方恢复费用均由使用者自行承担。${NC}"
     echo -e "${RED} 您可以随时撤回同意，只需删除 ${marker} 文件即可。${NC}"
     echo -e "${UI_DIVIDER}"
-    echo -n "是否同意并继续？(Y/N): "
+    echo -n "是否同意协议并继续？(Y/N): "
     local ans
     read -n 1 -r ans
     echo
     if [[ "$ans" == "Y" || "$ans" == "y" ]]; then
-        printf '%s\n' "accepted_version=${LEGAL_VERSION}" "accepted_time=$(date +%F\ %T)" > "$marker" 2>/dev/null || true
-        log_success "已记录同意条款，后续将跳过许可检查。"
+        printf '%s\n' "accepted_version=${LEGAL_VERSION}" "accepted_effective_date=${LEGAL_EFFECTIVE_DATE}" "accepted_time=$(date +%F\ %T)" > "$marker" 2>/dev/null || true
+        log_success "已记录同意条款，后续将自动跳过许可检查。"
         return 0
     fi
 
-    log_info "未同意条款，退出脚本"
+    log_info "未同意条款，退出脚本。"
     exit 0
 }
 
@@ -199,31 +246,38 @@ ensure_legal_acceptance() {
 # 备份文件到 /var/backups/pve-tools/
 backup_file() {
     local file_path="$1"
+    local result_var="${2:-}"
     local backup_dir="/var/backups/pve-tools"
+
+    if [[ -z "$file_path" ]]; then
+        log_error "backup_file: 缺少文件路径参数"
+        return 1
+    fi
 
     if [[ ! -f "$file_path" ]]; then
         log_warn "文件不存在，跳过备份: $file_path"
         return 1
     fi
 
-    # 创建备份目录
-    mkdir -p "$backup_dir"
+    mkdir -p "$backup_dir" >/dev/null 2>&1 || {
+        log_error "无法创建备份目录: $backup_dir"
+        return 1
+    }
 
-    # 生成带时间戳的备份文件名
-    local filename=$(basename "$file_path")
-    local timestamp=$(date +%Y%m%d_%H%M%S)
-    local backup_path="${backup_dir}/${filename}.${timestamp}.bak"
+    local filename timestamp backup_path
+    filename="$(basename "$file_path")"
+    timestamp="$(date +%Y%m%d_%H%M%S)"
+    backup_path="${backup_dir}/${filename}.${timestamp}.bak"
 
-    # 执行备份
     if cp -a "$file_path" "$backup_path"; then
+        [[ -n "$result_var" ]] && printf -v "$result_var" '%s' "$backup_path"
         log_success "文件已备份: $backup_path"
         return 0
-    else
-        log_error "备份失败: $file_path"
-        return 1
     fi
-}
 
+    log_error "备份失败: $file_path"
+    return 1
+}
 # 写入配置块（带标记）
 # 用法: apply_block <file> <marker> <content>
 apply_block() {
@@ -394,7 +448,7 @@ show_status() {
             echo -e "${CYAN}[INFO]${NC} $message"
             ;;
         "success")
-            echo -e "${GREEN}[ OK ]${NC} $message"
+            echo -e "${GREEN}[ OK! ]${NC} $message"
             ;;
         "warning")
             echo -e "${YELLOW}[WARN]${NC} $message"
@@ -460,6 +514,56 @@ detect_network_region() {
     return 0
 }
 
+fetch_session_tip() {
+    if [[ -n "$SESSION_TIP" ]]; then
+        return 0
+    fi
+
+    if [[ "$IS_OFFLINE_MODE" -eq 1 ]]; then
+        SESSION_TIP="离线模式已启用，本次会话不获取在线 Tips。"
+        return 0
+    fi
+
+    local timeout=5
+    local response=""
+
+    if command -v curl >/dev/null 2>&1; then
+        response=$(curl -s --connect-timeout "$timeout" --max-time "$timeout" "$HITOKOTO_API_URL" 2>/dev/null)
+    elif command -v wget >/dev/null 2>&1; then
+        response=$(wget -q -T "$timeout" -O - "$HITOKOTO_API_URL" 2>/dev/null)
+    else
+        SESSION_TIP="当前环境缺少 curl 或 wget，无法获取在线 Tips。"
+        return 0
+    fi
+
+    if [[ -z "$response" ]]; then
+        SESSION_TIP="一言获取失败，本次会话不再重试。"
+        return 0
+    fi
+
+    local hitokoto from from_who
+    hitokoto=$(printf '%s' "$response" | sed -n 's/.*"hitokoto":"\([^"]*\)".*/\1/p' | head -n 1)
+    from=$(printf '%s' "$response" | sed -n 's/.*"from":"\([^"]*\)".*/\1/p' | head -n 1)
+    from_who=$(printf '%s' "$response" | sed -n 's/.*"from_who":\("[^"]*"\|null\).*/\1/p' | head -n 1 | sed 's/^"//; s/"$//')
+
+    hitokoto=$(printf '%s' "$hitokoto" | sed 's/\\"/"/g; s/\\\\/\\/g')
+    from=$(printf '%s' "$from" | sed 's/\\"/"/g; s/\\\\/\\/g')
+    from_who=$(printf '%s' "$from_who" | sed 's/\\"/"/g; s/\\\\/\\/g')
+
+    if [[ -z "$hitokoto" ]]; then
+        SESSION_TIP="一言解析失败，本次会话不再重试。"
+        return 0
+    fi
+
+    SESSION_TIP="$hitokoto"
+    if [[ -n "$from" ]]; then
+        SESSION_TIP="${SESSION_TIP} —— ${from}"
+        if [[ -n "$from_who" && "$from_who" != "null" ]]; then
+            SESSION_TIP="${SESSION_TIP} / ${from_who}"
+        fi
+    fi
+}
+
 network_show_diagnostics() {
     echo "${UI_DIVIDER}"
     echo -e "${CYAN}当前网络诊断信息：${NC}"
@@ -473,7 +577,7 @@ network_show_diagnostics() {
 }
 
 network_can_access_internet() {
-    local test_url="$VERSION_FILE_URL"
+    local test_url="https://www.tencent.com/"
     if command -v curl >/dev/null 2>&1; then
         curl -fsSL --connect-timeout 5 --max-time 8 "$test_url" >/dev/null 2>&1
         return $?
@@ -553,10 +657,10 @@ show_banner() {
 EOF
     echo -ne "${NC}"
     echo "$UI_BORDER"
-    echo -e "  ${H1}PVE-Tools-9 一键脚本${NC}"
+    echo -e "  ${H1}PVE-Tools-9 | ${BUILD_NICKNAME} Build | Support PVE 9.x.x${NC}"
     echo "  让每个人都能体验虚拟化技术的的便利。"
-    echo -e "  作者: ${PINK}Maple${NC} | 交流群: ${CYAN}1031976463${NC}"
-    echo -e "  当前版本: ${GREEN}$CURRENT_VERSION${NC} | 最新版本: ${remote_version:-"未检测"}"
+    echo -e "  作者: ${PINK}Maple${NC} | 交流Q群: ${CYAN}1031976463${NC}"
+    echo -e "  当前版本: ${GREEN}$CURRENT_VERSION${NC} | 最新版本: ${remote_version:-"Not Found"}"
     echo "$UI_BORDER"
 }
 
@@ -619,7 +723,7 @@ check_pve_version() {
     # 如果在调试模式下，跳过 PVE 版本检测
     if [[ "$DEBUG_MODE" == "true" ]]; then
         log_warn "调试模式：跳过 PVE 版本检测"
-        echo "请注意：您正在非 PVE 系统上运行此脚本，某些功能可能无法正常工作"
+        echo "请注意：您正在非 PVE 系统上运行此脚本，某些功能可能无法正常工作，某些操作可能会导致系统损坏，请谨慎使用！"
         PVE_VERSION_DETECTED="debug"
         PVE_MAJOR_VERSION="debug"
         return
@@ -999,11 +1103,11 @@ check_kernel_version() {
 
 # 获取可用内核列表
 get_available_kernels() {
-    log_info "获取可用内核列表..."
+    log_info "正在从 Tuna 镜像站获取可用内核列表..."
     
     # 检查网络连接
     if ! ping -c 1 mirrors.tuna.tsinghua.edu.cn &> /dev/null; then
-        log_error "网络连接失败，无法获取内核列表"
+        log_error "网络连接失败，无法获取内核列表！请检查 https://mirrors.tuna.tsinghua.edu.cn 的链接状态！"
         return 1
     fi
     
@@ -1110,7 +1214,7 @@ update_grub_config() {
         if update-grub; then
             log_success "GRUB 配置更新成功"
         else
-            log_warn "GRUB 配置更新过程中出现警告，但可能仍然成功"
+            log_warn "GRUB 配置更新过程中出现警告，但可能仍然成功，请手动检查确认！"
         fi
     elif command -v grub-mkconfig &> /dev/null; then
         if grub-mkconfig -o "$grub_cfg"; then
@@ -1342,26 +1446,7 @@ sync_kernel_update() {
     fi
 }
 
-# 备份文件
-backup_file() {
-    local file="$1"
-    if [[ -f "$file" ]]; then
-        # 创建备份目录
-        local backup_dir="/etc/pve-tools-9-bak"
-        mkdir -p "$backup_dir"
-        
-        # 生成带时间戳的备份文件名
-        local filename=$(basename "$file")
-        local timestamp=$(date +%Y%m%d_%H%M%S)
-        local backup_path="${backup_dir}/${filename}.backup.${timestamp}"
-        
-        cp "$file" "$backup_path"
-        
-        # 仅记录到日志文件，减少控制台干扰
-        echo "[$(date +'%H:%M:%S')] [BACKUP] $file -> $backup_path" >> /var/log/pve-tools.log
-    fi
-}
-
+# 备份函数统一定义于顶部配置文件安全管理区域，避免后续重复覆盖。
 # 换源功能
 change_sources() {
     block_non_pve9_destructive "更换软件源" || return 1
@@ -1789,7 +1874,7 @@ menu_disk_controller_passthrough() {
         show_menu_option "5" "引导配置辅助（UEFI/Legacy）"
         show_menu_option "0" "返回"
         show_menu_footer
-        read -p "请选择操作 [0-5]: " choice
+        read -p "请选择操作 [0-6]: " choice
         case "$choice" in
             1) rdm_single_disk_attach ;;
             2) rdm_single_disk_detach ;;
@@ -5000,30 +5085,30 @@ pve8_to_pve9_upgrade() {
         return 1
     fi
     
-    log_info "检测到当前 PVE 版本: $current_pve_version"
-    log_warn "即将开始 PVE 8.x 到 PVE 9.x 的升级流程"
-    log_warn "此过程不可逆，请确保已备份重要数据！"
-    log_warn "建议在升级前阅读详细原理与避坑指南：https://pve.u3u.icu/advanced/pve-upgrade"
-    log_warn "建议在升级前手动备份 /var/lib/pve-cluster/ 目录"
-    echo
-    log_warn "升级过程中请勿中断，确保有稳定的网络连接"
-    log_warn "升级完成后，系统将自动重启以应用更改"
-    log_warn "如果脚本出现升级问题，请及时联系作者或参照官方文档解决。"
-    echo
-    log_info "推荐使用我的新项目嘿嘿，一个独立的升级AGENT: https://github.com/Mapleawaa/PVE-8-Upgrage-helper"
-    
+    log_error "此操作将把 PVE 8.x 宿主机 不可逆的 升级到 PVE 9.x"
+    log_error "已知风险包括但不限于："
+    log_error "  • 系统无法启动（内核/引导变更）"
+    log_error "  • 虚拟机/容器配置文件丢失或损坏"
+    log_error "  • ZFS 池无法导入或数据集损坏"
+    log_error "  • 网络配置被重置，导致失联"
+    log_error "  • 集群节点脱离，需要手动修复"
+    log_error "  • 第三方订阅/源被禁用，恢复困难"
+    log_error ""
+    log_error "【必须】完成以下准备工作，否则升级后无法恢复："
+    echo "  1. 全系统备份（推荐使用 PBS 或 dd 备份系统盘）"
+    echo "  2. 手动备份 /etc/pve, /var/lib/pve-cluster, /etc/network"
+    echo "  3. 确保有 IPMI / iDRAC / 物理访问或急救系统可用"
+    echo "  4. 阅读官方升级指南：https://pve.proxmox.com/wiki/Upgrade_from_8_to_9"
+    log_error ""
+    log_error "本脚本不提供任何回滚功能，不承担任何数据丢失责任"
+    log_error "本脚本不提供任何回滚功能，不承担任何数据丢失责任"
+    log_error "本脚本不提供任何回滚功能，不承担任何数据丢失责任"
     # 确认用户要继续执行升级
     echo "您确定要继续升级吗？本次任务执行以下操作："
-    echo "  1. 安装 pve8to9 检查工具"
-    echo "  2. 运行升级前检查"
-    echo "  3. 更新软件源到 Debian 13 (Trixie)"
-    echo "  4. 执行系统升级"
-    echo "  5. 重启系统以应用更改"
-    echo
     echo "注意：升级过程中可能会遇到一些警告或错误，请根据提示进行处理！脚本无法处理故障提示！(脚本只能把提示扔给你..) )"
     read -p "输入 'yesido' 确认继续，其他任意键取消: " confirm
     if [[ "$confirm" != "yesido" ]]; then
-        log_info "已取消升级操作"
+        log_info "已取消升级操作，明智之举"
         return 0
     fi
     
@@ -5253,111 +5338,22 @@ show_system_info() {
 show_menu() {
     show_banner 
     show_menu_option "" "请选择您需要的功能："
-    show_menu_option "1" "系统优化 ${CYAN}(订阅弹窗/温度监控/电源模式)${NC}"
-    show_menu_option "2" "软件源与更新 ${CYAN}(换源/更新/PVE8→9升级)${NC}"
-    show_menu_option "3" "启动与内核 ${CYAN}(内核切换/更新/清理)${NC}"
-    show_menu_option "4" "直通与显卡 ${CYAN}(核显/NVIDIA/硬件直通)${NC}"
-    show_menu_option "5" "虚拟机与容器 ${CYAN}(FastPVE/第三方工具)${NC}"
-    show_menu_option "6" "存储与硬盘 ${CYAN}(Local合并/Ceph/休眠)${NC}"
-    show_menu_option "7" "工具与关于 ${CYAN}(系统信息/救砖//)${NC}"
+    show_menu_option "1" "日常优化与通知 ${CYAN}( 订阅弹窗 / 温度监控 / 电源模式 / 邮件 )${NC}"
+    show_menu_option "2" "软件源与系统升级 ${CYAN}( 换源 / 更新 / PVE8→9升级 )${NC}"
+    show_menu_option "3" "启动与内核管理 ${CYAN}( 内核切换 / 更新 / GRUB备份恢复 )${NC}"
+    show_menu_option "4" "硬件直通与显卡 ${CYAN}( 核显 / NVIDIA / AMD / IOMMU / 磁盘直通 )${NC}"
+    show_menu_option "5" "虚拟机运维与导入 ${CYAN}( FastPVE / 镜像导入 / 高级运维 )${NC}"
+    show_menu_option "6" "宿主机网络与防火墙 ${CYAN}( bridge / Bond / VLAN / IPv6 )${NC}"
+    show_menu_option "7" "存储与磁盘维护 ${CYAN}( Local合并 / Ceph / 休眠 / Swap )${NC}"
+    show_menu_option "8" "诊断工具与项目信息 ${CYAN}( 系统信息 / 救砖 / 项目链接 )${NC}"
     echo "$UI_DIVIDER"
     show_menu_option "0" "${RED}退出脚本${NC}"
     show_menu_footer
-    
-    # 贴吧老梗随机轮播 (卡吧特供版)
-    local tips=(
-        "装机前记得先吃饭，不然修电脑修到低血糖"
-        "一定要在中午刷机，因为早晚会出事"
-        "三千预算进卡吧，加钱加到九万八"
-        "八核E5洋垃圾，一核有难七核围观"
-        "GTX690战术核显卡，一发摧毁一个航母战斗群"
-        "遇事不决，重启解决；重启不行，重装系统"
-        "勤备份，保平安；删库跑路，牢底坐穿"
-        "一入卡吧深似海，从此钱包是路人"
-        "RGB能提升200%的性能，不信你试试"
-        "只要我不看日志，报错就不存在"
-        "高端的服务器，往往只需要最朴素的重启方式"
-        "硬盘有价，数据无价，请谨慎操作"
-        "千万不要在生产环境测试脚本，除非你想被祭天"
-        "刷机有风险，变砖请自重，虽然PVE很难刷砖"
-        "配置千万条，安全第一条，操作不规范，亲人两行泪"
-        "玄学时刻：刷机前洗手，成功率提升50%"
-        "四路泰坦刷贴吧，流畅度提升明显"
-        "什么？你问我电源多少瓦？能亮就行！"
-        "散热全靠吼，除尘全靠抖"
-        "矿卡锻炼身体，新卡锻炼钱包"
-        "图吧捡垃圾，五十包邮解君愁"
-        "开机卡logo？大力出奇迹，拍一下就好了"
-        "超频一时爽，缩缸火葬场"
-        "水冷漏液不要慌，先拍照发个朋友圈"
-        "魔改U配寨板，翻车是日常，点亮算惊喜"
-        "牙膏厂挤牙膏，AMD，YES！"
-        "双路E5开网吧，电表倒转笑哈哈"
-        "捡垃圾要趁早，晚了都是传家宝"
-        "亮机卡才是真传家宝，核显都是异端"
-        "跑分没赢过，体验没输过"
-        "硅脂不要钱，就往死里涂"
-        "装机三大神器：筷子、手电筒、扎带"
-        "先点菜吧，不然跑分的时候没东西吃"
-        "二手东七天机，垃圾佬的圣诞节"
-        "战术核弹已就位，准备烤机！"
-        "散热器用原装？你是AMD原教旨主义者吗？"
-        "RGB风扇装反了？不，那是故意的光污染"
-        "别问，问就是加钱上3090"
-        "电费？什么电费？我都是去星巴克蹭电的"
-        "理论性能翻一倍，电费账单翻两倍"
-        "二手矿龙传三代，人走板卡它还在"
-        "玄学调参：BIOS里随便改几个数，万一稳了呢"
-        "垃圾佬的浪漫：用最少的钱，跑最多的分"
-        "蓝屏？那是微软给你的思考人生的时间"
-        "卡巴基佬烧友，图吧垃圾佬，我们都有光明的未来"
-        "点亮了没？没有。再等等，电容在充电"
-        "这U温度怎么这么高？硅脂还没干呢"
-        "不要怂，就是超，缩了就当是降压降温用"
-        "开机箱侧板，被动散热大师"
-        "论斤买的服务器内存，香是真的香，吵也是真的吵"
-        "别问机箱多少钱，鞋盒赛高，通风又好还便宜"
-        "显卡啸叫？那是高端显卡在唱歌给你听"
-        "多盘位NAS？不，那是捡来的硬盘别墅"
-        "电源必须传家宝，矿龙一响，黄金万两"
-        "降压降频用矿卡，温度和噪音都沉默了"
-        "风冷压i9？只要不开机，它就永远不热"
-        "小黄鱼蹲守口诀：早蹲、晚蹲、凌晨三点继续蹲"
-        "魔改QLC刷SLC缓存，用寿命换速度的赌徒艺术"
-        "开机自检一分钟？那是给你的开机仪式感"
-        "‘又不是不能用’，垃圾佬的终极哲学"
-        "集显战3A，720P最低画质也是风景"
-        "线材理个啥？盖上侧板就是理好了"
-        "洋垃圾平台开机先听交响乐：风扇全速起飞"
-        "捡垃圾三境界：能用，够用，战未来"
-        "‘这价格还要啥自行车’，下单前的自我催眠"
-        "双路主板搭单U，另一半座位留给未来的梦想"
-        "固态硬盘用清零盘，数据坐过山车，刺激"
-        "‘完美下车’——垃圾佬的最高赞誉，通常管三天"
-        "导热垫用久了出油？那是散热器在流泪"
-        "显卡高温？下个冬天的主机暖气就有了"
-        "老至强配RECC内存，电表倒转不是梦"
-        "刷鸡血BIOS，让老U回光返照再战三年"
-        "开机箱用风扇直吹，物理外挂，最为致命"
-        "‘五十包邮解君愁’——垃圾佬的接头暗号"
-        "网吧倒闭盘，写入量？不要在意那些细节"
-        "‘点不亮就当手办’，垃圾佬的事后安慰剂"
-        "用PCIe转接卡上NVMe，老主板焕发第N春"
-        "散热器用钉子固定，垃圾佬的硬核改装"
-        "“这电容鼓了？敲平了接着用”"
-        "二手电源带核弹，宿舍跳闸的罪魁祸首"
-        "用牙膏代替硅脂？极限操作，仅供瞻仰"
-        "“跑个分看看” —— 垃圾佬的赛博晒娃"
-        "机箱里养猫？那是不请自来的蒲公英培育基地"
-        "“又不是不能用”的终点是“确实不能用了”"
-        "图吧真传：一百预算进图吧，学校门口开网吧"
-    )
-    local random_index=$((RANDOM % ${#tips[@]}))
-    echo -e "  ${YELLOW} 小贴士：${tips[$random_index]}${NC}"
     echo
-    echo -ne "  ${PRIMARY}请输入您的选择 [0-7]: ${NC}"
+    echo -e "  ${YELLOW}Tips: ${SESSION_TIP:-一言获取失败，本次会话不再重试。}${NC}"
+    echo
+    echo -ne "  ${PRIMARY}请输入您的选择 [0-8]: ${NC}"
 }
-
 # 应急救砖工具箱菜单
 show_menu_rescue() {
     while true; do
@@ -5405,7 +5401,7 @@ menu_optimization() {
         echo "$UI_DIVIDER"
         show_menu_option "0" "返回主菜单"
         show_menu_footer
-        read -p "请选择操作 [0-5]: " choice
+        read -p "请选择操作 [0-6]: " choice
         case $choice in
             1) remove_subscription_popup ;;
             2) temp_monitoring_menu ;;
@@ -5496,17 +5492,21 @@ menu_gpu_passthrough() {
         show_menu_option "1" "Intel 核显虚拟化管理 (SR-IOV/GVT-g)"
         show_menu_option "2" "Intel 核显直通配置 (修改版 QEMU)"
         show_menu_option "3" "NVIDIA 显卡直通/虚拟化"
-        show_menu_option "4" "硬件直通一键配置 (IOMMU)"
-        show_menu_option "5" "磁盘/控制器直通 (RDM/PCIe/NVMe)"
+        show_menu_option "4" "AMD 独显直通"
+        show_menu_option "5" "AMD 核显直通 (需自备 ROM / vBIOS)"
+        show_menu_option "6" "硬件直通一键配置 (IOMMU)"
+        show_menu_option "7" "磁盘/控制器直通 (RDM/PCIe/NVMe)"
         show_menu_option "0" "返回主菜单"
         show_menu_footer
-        read -p "请选择操作 [0-5]: " choice
+        read -p "请选择操作 [0-7]: " choice
         case $choice in
             1) igpu_management_menu ;;
             2) intel_gpu_passthrough ;;
             3) nvidia_gpu_management_menu ;;
-            4) hw_passth ;;
-            5) menu_disk_controller_passthrough ;;
+            4) amd_gpu_management_menu ;;
+            5) amd_igpu_management_menu ;;
+            6) hw_passth ;;
+            7) menu_disk_controller_passthrough ;;
             0) return ;;
             *) log_error "无效选择" ;;
         esac
@@ -5626,26 +5626,20 @@ img_bytes_to_human() {
 }
 
 img_discover_img_files() {
-    local roots=("/root" "/var/lib/vz/template/iso" "/home")
-    local root
-    for root in "${roots[@]}"; do
-        if [[ -d "$root" ]]; then
-            find "$root" -xdev -type f \( -iname '*.img' \) -printf '%p|%s|%TY-%Tm-%Td %TH:%TM\n' 2>/dev/null || true
-        fi
-    done
+    vm_discover_disk_image_files
 }
 
 img_select_img_file() {
     local files
     files="$(img_discover_img_files)"
     if [[ -z "$files" ]]; then
-        log_error "未发现 .img 文件"
-        log_tips "已扫描目录：/root、/var/lib/vz/template/iso、/home"
+        log_error "未发现磁盘镜像文件"
+        log_tips "已扫描目录：/root、/var/lib/vz/template/iso、/home（支持 .img/.raw/.qcow2）"
         return 1
     fi
 
     {
-        echo -e "${CYAN}已发现 .img 文件：${NC}"
+        echo -e "${CYAN}已发现磁盘镜像文件：${NC}"
         echo "$files" | awk -F'|' '
             function human(x,   u,i){
                 split("B KB MB GB TB PB", u, " ");
@@ -5765,7 +5759,7 @@ img_select_storage() {
 }
 
 img_convert_and_import_to_vm() {
-    log_step "IMG 镜像转换并导入虚拟机"
+    log_step "磁盘镜像转换并导入虚拟机"
 
     if ! command -v qemu-img >/dev/null 2>&1; then
         display_error "未找到 qemu-img" "请先安装：apt install -y qemu-utils"
@@ -5815,6 +5809,12 @@ img_convert_and_import_to_vm() {
     fi
 
     local ts ext out_path out_dir
+    local src_fmt
+    src_fmt="$(vm_detect_image_format "$img_path")"
+    if [[ -z "$src_fmt" ]]; then
+        display_error "无法识别镜像格式" "请确认文件可被 qemu-img 识别，且格式为 img/raw/qcow2。"
+        return 1
+    fi
     ts="$(date +%Y%m%d_%H%M%S)"
     ext="$out_fmt"
     out_dir="$(dirname "$img_path")"
@@ -5824,10 +5824,11 @@ img_convert_and_import_to_vm() {
     fi
 
     clear
-    show_menu_header "IMG 镜像转换并导入虚拟机"
+    show_menu_header "磁盘镜像转换并导入虚拟机"
     local sz
     sz="$(stat -c '%s' "$img_path" 2>/dev/null || echo "")"
     echo -e "${YELLOW}源镜像:${NC} $img_path"
+    echo -e "${YELLOW}源格式:${NC} $src_fmt"
     if [[ -n "$sz" ]]; then
         echo -e "${YELLOW}大小:${NC} $(img_bytes_to_human "$sz")"
     fi
@@ -5842,8 +5843,8 @@ img_convert_and_import_to_vm() {
     fi
 
     log_step "开始转换（qemu-img convert）"
-    if ! qemu-img convert -p -f raw -O "$out_fmt" "$img_path" "$out_path"; then
-        display_error "镜像转换失败" "请检查镜像文件是否为 raw 格式，或查看日志输出。"
+    if ! qemu-img convert -p -f "$src_fmt" -O "$out_fmt" "$img_path" "$out_path"; then
+        display_error "镜像转换失败" "请检查镜像文件是否损坏，或查看日志输出。"
         return 1
     fi
 
@@ -5909,14 +5910,1793 @@ img_convert_and_import_to_vm() {
 
 img_convert_import_menu() {
     clear
-    show_menu_header "IMG 镜像导入（转换为 QCOW2/RAW）"
+    show_menu_header "磁盘镜像导入（转换为 QCOW2/RAW）"
     echo -e "${CYAN}功能说明：${NC}"
-    echo -e "  - 自动扫描：/root、/var/lib/vz/template/iso、/home 下的 .img 文件"
-    echo -e "  - 使用 qemu-img 转换后，通过 qm importdisk 导入到指定 VM 与存储"
+    echo -e "  - 自动扫描：/root、/var/lib/vz/template/iso、/home 下的 .img/.raw/.qcow2 文件"
+    echo -e "  - 自动识别源格式，使用 qemu-img 转换后，通过 qm importdisk 导入到指定 VM 与存储"
     echo -e "${UI_DIVIDER}"
     img_convert_and_import_to_vm
 }
 
+# ============ VM 高级运维功能 ============
+
+vm_require_commands() {
+    local missing=()
+    local cmd
+    for cmd in "$@"; do
+        if ! command -v "$cmd" >/dev/null 2>&1; then
+            missing+=("$cmd")
+        fi
+    done
+
+    if (( ${#missing[@]} > 0 )); then
+        display_error "缺少命令: ${missing[*]}" "请确认当前运行环境为 PVE 宿主机，并安装缺失组件后重试。"
+        return 1
+    fi
+}
+
+vm_validate_new_vmid() {
+    local vmid="$1"
+    if [[ -z "$vmid" || ! "$vmid" =~ ^[0-9]+$ ]]; then
+        log_error "新 VMID 必须是数字"
+        return 1
+    fi
+
+    if qm status "$vmid" >/dev/null 2>&1; then
+        log_error "VMID 已被虚拟机占用: $vmid"
+        return 1
+    fi
+
+    if command -v pct >/dev/null 2>&1 && pct status "$vmid" >/dev/null 2>&1; then
+        log_error "VMID 已被容器占用: $vmid"
+        return 1
+    fi
+
+    return 0
+}
+
+vm_list_vm_records() {
+    qm list 2>/dev/null | awk 'NR>1{print $1 "|" $2 "|" $3}'
+}
+
+vm_show_vm_records() {
+    local records="$1"
+    {
+        echo -e "${CYAN}可用虚拟机列表：${NC}"
+        echo "$records" | awk -F'|' '{printf "  VMID: %-6s Name: %-22s Status: %s\n", $1, $2, $3}'
+        echo -e "${UI_DIVIDER}"
+    } >&2
+}
+
+vm_normalize_vmid_input() {
+    printf '%s\n' "$1" | tr ', ' '\n\n' | awk 'NF' | sort -n -u
+}
+
+vm_collect_target_vmids() {
+    local records
+    records="$(vm_list_vm_records)"
+    if [[ -z "$records" ]]; then
+        log_error "未发现虚拟机"
+        return 1
+    fi
+
+    vm_show_vm_records "$records"
+    {
+        show_menu_option "1" "单个 VM"
+        show_menu_option "2" "多个 VM"
+        show_menu_option "3" "全部 VM"
+    } >&2
+
+    local scope
+    read -p "请选择目标范围 [1-3]: " scope
+    case "$scope" in
+        1)
+            local vmid
+            vmid="$(img_select_vmid)"
+            local rc=$?
+            [[ "$rc" -eq 2 ]] && return 2
+            [[ -n "$vmid" ]] || return 1
+            echo "$vmid"
+            ;;
+        2)
+            local raw ids vmid
+            read -p "请输入 VMID 列表（逗号或空格分隔）: " raw
+            ids="$(vm_normalize_vmid_input "$raw")"
+            if [[ -z "$ids" ]]; then
+                log_error "未提供有效 VMID"
+                return 1
+            fi
+            while IFS= read -r vmid; do
+                validate_qm_vmid "$vmid" || return 1
+            done <<< "$ids"
+            echo "$ids"
+            ;;
+        3)
+            echo "$records" | awk -F'|' '{print $1}'
+            ;;
+        *)
+            log_error "无效选择"
+            return 1
+            ;;
+    esac
+}
+
+vm_validate_backup_compress() {
+    local compress="$1"
+    case "$compress" in
+        zstd|gzip|lzo) return 0 ;;
+        *)
+            display_error "不支持的压缩方式: $compress" "仅支持 zstd / gzip / lzo"
+            return 1
+            ;;
+    esac
+}
+
+vm_validate_backup_mode() {
+    local mode="$1"
+    case "$mode" in
+        snapshot|suspend|stop) return 0 ;;
+        *)
+            display_error "不支持的备份模式: $mode" "仅支持 snapshot / suspend / stop"
+            return 1
+            ;;
+    esac
+}
+
+vm_validate_backup_keep_last() {
+    local keep_last="$1"
+    if [[ ! "$keep_last" =~ ^[0-9]+$ ]]; then
+        display_error "保留份数必须是数字"
+        return 1
+    fi
+}
+
+vm_validate_backup_storage_name() {
+    local store="$1"
+    if [[ -z "$store" || ! "$store" =~ ^[A-Za-z0-9_.-]+$ ]]; then
+        display_error "备份存储名称不合法: $store" "请重新选择存储，避免将异常字符写入 root cron。"
+        return 1
+    fi
+}
+vm_storage_supports_content() {
+    local store="$1"
+    local content="$2"
+    local configured
+    configured="$(pvesm config "$store" 2>/dev/null | awk -F': ' '/^content:/{gsub(/ /, "", $2); print $2; exit}')"
+    [[ -n "$configured" ]] || return 1
+    echo ",$configured," | grep -Fq ",$content,"
+}
+
+vm_list_storages_by_content() {
+    local content="$1"
+    while IFS='|' read -r store type active; do
+        [[ -n "$store" ]] || continue
+        if vm_storage_supports_content "$store" "$content"; then
+            printf '%s|%s|%s\n' "$store" "$type" "${active:-?}"
+        fi
+    done < <(pvesm status 2>/dev/null | awk 'NR>1{print $1 "|" $2 "|" $3}')
+}
+
+vm_select_storage_by_content() {
+    local content="$1"
+    local prompt="${2:-请选择存储}"
+    local stores
+    stores="$(vm_list_storages_by_content "$content")"
+
+    if [[ -z "$stores" ]]; then
+        local manual
+        read -p "未发现支持 ${content} 内容类型的存储，请手动输入存储名: " manual
+        [[ -n "$manual" ]] || return 1
+        echo "$manual"
+        return 0
+    fi
+
+    {
+        echo -e "${CYAN}${prompt}${NC}"
+        echo "$stores" | awk -F'|' '{printf "  [%d] %-18s 类型:%-12s 状态:%s\n", NR, $1, $2, $3}'
+        echo -e "${UI_DIVIDER}"
+    } >&2
+
+    local pick
+    read -p "请选择存储序号 (0 返回): " pick
+    pick="${pick:-0}"
+    [[ "$pick" == "0" ]] && return 2
+    [[ "$pick" =~ ^[0-9]+$ ]] || return 1
+
+    local line store
+    line="$(echo "$stores" | awk -F'|' -v n="$pick" 'NR==n{print $0}')"
+    store="$(echo "$line" | awk -F'|' '{print $1}')"
+    [[ -n "$store" ]] || return 1
+    echo "$store"
+}
+
+vm_list_cluster_nodes() {
+    if [[ -d /etc/pve/nodes ]]; then
+        find /etc/pve/nodes -mindepth 1 -maxdepth 1 -type d -printf '%f\n' 2>/dev/null | sort
+    fi
+}
+
+vm_select_target_node() {
+    local current_node nodes filtered
+    current_node="$(hostname)"
+    nodes="$(vm_list_cluster_nodes)"
+    filtered="$(echo "$nodes" | grep -vx "$current_node" || true)"
+    [[ -n "$filtered" ]] || return 1
+
+    {
+        echo -e "${CYAN}可迁移目标节点：${NC}"
+        echo "$filtered" | awk '{printf "  [%d] %s\n", NR, $1}'
+        echo -e "${UI_DIVIDER}"
+    } >&2
+
+    local pick line
+    read -p "请选择目标节点序号 (0 返回): " pick
+    pick="${pick:-0}"
+    [[ "$pick" == "0" ]] && return 2
+    [[ "$pick" =~ ^[0-9]+$ ]] || return 1
+    line="$(echo "$filtered" | awk -v n="$pick" 'NR==n{print $1}')"
+    [[ -n "$line" ]] || return 1
+    echo "$line"
+}
+
+vm_find_free_disk_slot() {
+    local vmid="$1"
+    local bus="$2"
+    local max_idx=0
+    case "$bus" in
+        scsi) max_idx=30 ;;
+        sata) max_idx=5 ;;
+        ide) max_idx=3 ;;
+        virtio) max_idx=15 ;;
+        *) return 1 ;;
+    esac
+
+    local cfg
+    cfg="$(qm config "$vmid" 2>/dev/null)"
+    [[ -n "$cfg" ]] || return 1
+
+    local i
+    for ((i=0; i<=max_idx; i++)); do
+        if ! echo "$cfg" | grep -qE "^${bus}${i}:"; then
+            echo "${bus}${i}"
+            return 0
+        fi
+    done
+    return 1
+}
+
+vm_find_free_net_index() {
+    local vmid="$1"
+    local cfg used i
+    cfg="$(qm config "$vmid" 2>/dev/null)"
+    used="$(echo "$cfg" | awk -F'[: ]' '/^net[0-9]+:/{gsub("net","",$1); print $1}' | sort -n | uniq)"
+    for ((i=0; i<=31; i++)); do
+        if ! echo "$used" | grep -qx "$i"; then
+            echo "$i"
+            return 0
+        fi
+    done
+    return 1
+}
+
+vm_select_disk_slot() {
+    local vmid="$1"
+    local slots
+    slots="$(qm config "$vmid" 2>/dev/null | grep -E '^(scsi|sata|virtio|ide)[0-9]+:' | grep -v 'cloudinit')"
+    [[ -n "$slots" ]] || return 1
+
+    {
+        echo -e "${CYAN}当前磁盘插槽：${NC}"
+        echo "$slots" | awk '{printf "  [%d] %s\n", NR, $0}'
+        echo -e "${UI_DIVIDER}"
+    } >&2
+
+    local pick line slot
+    read -p "请选择磁盘序号 (0 返回): " pick
+    pick="${pick:-0}"
+    [[ "$pick" == "0" ]] && return 2
+    [[ "$pick" =~ ^[0-9]+$ ]] || return 1
+    line="$(echo "$slots" | awk -v n="$pick" 'NR==n{print $0}')"
+    slot="${line%%:*}"
+    [[ -n "$slot" ]] || return 1
+    echo "$slot"
+}
+
+vm_select_net_slot() {
+    local vmid="$1"
+    local nets
+    nets="$(qm config "$vmid" 2>/dev/null | grep -E '^net[0-9]+:')"
+    [[ -n "$nets" ]] || return 1
+
+    {
+        echo -e "${CYAN}当前网卡列表：${NC}"
+        echo "$nets" | awk '{printf "  [%d] %s\n", NR, $0}'
+        echo -e "${UI_DIVIDER}"
+    } >&2
+
+    local pick line slot
+    read -p "请选择网卡序号 (0 返回): " pick
+    pick="${pick:-0}"
+    [[ "$pick" == "0" ]] && return 2
+    [[ "$pick" =~ ^[0-9]+$ ]] || return 1
+    line="$(echo "$nets" | awk -v n="$pick" 'NR==n{print $0}')"
+    slot="${line%%:*}"
+    [[ -n "$slot" ]] || return 1
+    echo "$slot"
+}
+
+vm_get_qm_value() {
+    local vmid="$1"
+    local key="$2"
+    qm config "$vmid" 2>/dev/null | awk -v key="$key" '$0 ~ "^" key ": " { sub("^[^:]+: ", "", $0); print; exit }'
+}
+
+vm_is_template() {
+    local vmid="$1"
+    [[ "$(vm_get_qm_value "$vmid" "template")" == "1" ]]
+}
+
+vm_network_strip_mac() {
+    echo "$1" | sed -E 's/^([A-Za-z0-9_-]+)=[0-9A-Fa-f:]{17}(,|$)/\1\2/' | sed -E 's/,,+/,/g; s/,$//'
+}
+
+vm_network_set_option() {
+    local current="$1"
+    local key="$2"
+    local value="$3"
+    if echo "$current" | grep -qE "(^|,)$key="; then
+        echo "$current" | sed -E "s/(^|,)$key=[^,]*/\1$key=$value/" | sed -E 's/^,//; s/,,+/,/g; s/,$//'
+    else
+        echo "$current,$key=$value" | sed -E 's/^,//; s/,,+/,/g; s/,$//'
+    fi
+}
+
+vm_network_remove_option() {
+    local current="$1"
+    local key="$2"
+    echo "$current" | sed -E "s/(^|,)$key=[^,]*//g" | sed -E 's/^,//; s/,,+/,/g; s/,$//'
+}
+
+vm_detect_image_format() {
+    local image_path="$1"
+    qemu-img info "$image_path" 2>/dev/null | awk -F': ' '/^file format:/{print $2; exit}'
+}
+
+vm_discover_disk_image_files() {
+    local roots=("/root" "/var/lib/vz/template/iso" "/home")
+    local root
+    for root in "${roots[@]}"; do
+        if [[ -d "$root" ]]; then
+            find "$root" -xdev -type f \( -iname '*.img' -o -iname '*.raw' -o -iname '*.qcow2' \) -printf '%p|%s|%TY-%Tm-%Td %TH:%TM\n' 2>/dev/null || true
+        fi
+    done | sort -u
+}
+
+vm_discover_backup_archives() {
+    local roots=("/var/lib/vz/dump" "/mnt/pve" "/backup" "/backups" "/root")
+    local root
+    for root in "${roots[@]}"; do
+        if [[ -d "$root" ]]; then
+            find "$root" -maxdepth 3 -type f \( -name 'vzdump-qemu-*.vma' -o -name 'vzdump-qemu-*.vma.gz' -o -name 'vzdump-qemu-*.vma.lzo' -o -name 'vzdump-qemu-*.vma.zst' \) -printf '%p|%s|%TY-%Tm-%Td %TH:%TM\n' 2>/dev/null || true
+        fi
+    done | sort -u
+}
+
+vm_select_backup_archive() {
+    local archives
+    archives="$(vm_discover_backup_archives)"
+    if [[ -z "$archives" ]]; then
+        local manual
+        read -p "未自动发现备份文件，请手动输入备份文件完整路径: " manual
+        [[ -n "$manual" && -f "$manual" ]] || return 1
+        echo "$manual"
+        return 0
+    fi
+
+    {
+        echo -e "${CYAN}已发现备份文件：${NC}"
+        echo "$archives" | awk -F'|' '{printf "  [%d] %-10s %-16s %s\n", NR, $2, $3, $1}'
+        echo -e "${UI_DIVIDER}"
+    } >&2
+
+    local pick line path
+    read -p "请选择备份序号 (0 手动输入): " pick
+    pick="${pick:-0}"
+    if [[ "$pick" == "0" ]]; then
+        local manual
+        read -p "请输入备份文件完整路径: " manual
+        [[ -n "$manual" && -f "$manual" ]] || return 1
+        echo "$manual"
+        return 0
+    fi
+    [[ "$pick" =~ ^[0-9]+$ ]] || return 1
+    line="$(echo "$archives" | awk -F'|' -v n="$pick" 'NR==n{print $0}')"
+    path="$(echo "$line" | awk -F'|' '{print $1}')"
+    [[ -n "$path" && -f "$path" ]] || return 1
+    echo "$path"
+}
+
+vm_discover_export_files() {
+    if [[ -d "$VM_CONFIG_EXPORT_DIR" ]]; then
+        find "$VM_CONFIG_EXPORT_DIR" -maxdepth 1 -type f -name 'vm-*.conf' -printf '%p|%s|%TY-%Tm-%Td %TH:%TM\n' 2>/dev/null | sort -u
+    fi
+}
+
+vm_select_export_file() {
+    local files
+    files="$(vm_discover_export_files)"
+    if [[ -z "$files" ]]; then
+        local manual
+        read -p "未自动发现导出文件，请手动输入配置文件完整路径: " manual
+        [[ -n "$manual" && -f "$manual" ]] || return 1
+        echo "$manual"
+        return 0
+    fi
+
+    {
+        echo -e "${CYAN}已发现 VM 配置导出文件：${NC}"
+        echo "$files" | awk -F'|' '{printf "  [%d] %-10s %-16s %s\n", NR, $2, $3, $1}'
+        echo -e "${UI_DIVIDER}"
+    } >&2
+
+    local pick line path
+    read -p "请选择配置文件序号 (0 手动输入): " pick
+    pick="${pick:-0}"
+    if [[ "$pick" == "0" ]]; then
+        local manual
+        read -p "请输入配置文件完整路径: " manual
+        [[ -n "$manual" && -f "$manual" ]] || return 1
+        echo "$manual"
+        return 0
+    fi
+    [[ "$pick" =~ ^[0-9]+$ ]] || return 1
+    line="$(echo "$files" | awk -F'|' -v n="$pick" 'NR==n{print $0}')"
+    path="$(echo "$line" | awk -F'|' '{print $1}')"
+    [[ -n "$path" && -f "$path" ]] || return 1
+    echo "$path"
+}
+
+vm_get_snapshot_names() {
+    local vmid="$1"
+    qm listsnapshot "$vmid" 2>/dev/null | awk 'NR>1 && $1 != "current" {print $1}'
+}
+
+vm_select_snapshot_name() {
+    local vmid="$1"
+    local snapshots
+    snapshots="$(vm_get_snapshot_names "$vmid")"
+    [[ -n "$snapshots" ]] || return 1
+
+    {
+        echo -e "${CYAN}当前快照列表：${NC}"
+        echo "$snapshots" | awk '{printf "  [%d] %s\n", NR, $1}'
+        echo -e "${UI_DIVIDER}"
+    } >&2
+
+    local pick name
+    read -p "请选择快照序号 (0 返回): " pick
+    pick="${pick:-0}"
+    [[ "$pick" == "0" ]] && return 2
+    [[ "$pick" =~ ^[0-9]+$ ]] || return 1
+    name="$(echo "$snapshots" | awk -v n="$pick" 'NR==n{print $1}')"
+    [[ -n "$name" ]] || return 1
+    echo "$name"
+}
+
+vm_list_template_records() {
+    local records vmid name status
+    records="$(vm_list_vm_records)"
+    [[ -n "$records" ]] || return 0
+    while IFS='|' read -r vmid name status; do
+        if vm_is_template "$vmid"; then
+            printf '%s|%s|%s\n' "$vmid" "$name" "$status"
+        fi
+    done <<< "$records"
+}
+
+vm_show_template_records() {
+    local templates
+    templates="$(vm_list_template_records)"
+    if [[ -z "$templates" ]]; then
+        echo -e "${YELLOW}当前没有模板虚拟机${NC}"
+        return 0
+    fi
+    echo -e "${CYAN}模板列表：${NC}"
+    echo "$templates" | awk -F'|' '{printf "  VMID: %-6s Name: %-22s Status: %s\n", $1, $2, $3}'
+}
+
+vm_ensure_vm_config_backup() {
+    local vmid="$1"
+    local conf_path
+    conf_path="$(get_qm_conf_path "$vmid")"
+    if [[ -f "$conf_path" ]]; then
+        backup_file "$conf_path" >/dev/null 2>&1 || true
+    fi
+}
+
+vm_ensure_cloudinit_drive() {
+    local vmid="$1"
+    local store="$2"
+    local cfg slot
+    cfg="$(qm config "$vmid" 2>/dev/null)"
+    if echo "$cfg" | grep -Eq '^(ide2|scsi2): .*cloudinit'; then
+        return 0
+    fi
+
+    slot="ide2"
+    if echo "$cfg" | grep -q '^ide2:'; then
+        slot="scsi2"
+        if echo "$cfg" | grep -q '^scsi2:'; then
+            display_error "无法自动添加 Cloud-Init 盘" "ide2 与 scsi2 都已被占用，请先释放一个插槽。"
+            return 1
+        fi
+    fi
+
+    if ! qm set "$vmid" "-$slot" "$store:cloudinit" >/dev/null 2>&1; then
+        display_error "添加 Cloud-Init 盘失败" "请检查存储 $store 是否支持 images 内容类型。"
+        return 1
+    fi
+}
+
+vm_validate_cicustom_volumes() {
+    local raw="$1"
+    local ref volume store
+    IFS=',' read -r -a refs <<< "$raw"
+    for ref in "${refs[@]}"; do
+        volume="${ref#*=}"
+        store="${volume%%:*}"
+        if [[ -z "$store" || "$store" == "$volume" ]]; then
+            log_error "cicustom 引用格式无效: $ref"
+            return 1
+        fi
+        if ! vm_storage_supports_content "$store" snippets; then
+            log_error "存储 $store 不支持 snippets 内容类型，无法作为 cicustom 来源"
+            return 1
+        fi
+    done
+}
+vm_backup_create() {
+    vm_require_commands qm vzdump pvesm || return 1
+
+    local vmids_text
+    vmids_text="$(vm_collect_target_vmids)"
+    local rc=$?
+    [[ "$rc" -eq 2 ]] && return 0
+    [[ -n "$vmids_text" ]] || return 1
+
+    mapfile -t vmids < <(printf '%s\n' "$vmids_text" | awk 'NF')
+
+    local store
+    store="$(vm_select_storage_by_content backup "请选择备份存储")"
+    rc=$?
+    [[ "$rc" -eq 2 ]] && return 0
+    [[ -n "$store" ]] || return 1
+
+    local compress mode keep_last
+    read -p "请选择压缩方式 (zstd/gzip/lzo) [zstd]: " compress
+    compress="${compress:-zstd}"
+    if [[ "$compress" != "zstd" && "$compress" != "gzip" && "$compress" != "lzo" ]]; then
+        display_error "不支持的压缩方式: $compress" "仅支持 zstd / gzip / lzo"
+        return 1
+    fi
+
+    read -p "请选择备份模式 (snapshot/suspend/stop) [snapshot]: " mode
+    mode="${mode:-snapshot}"
+    if [[ "$mode" != "snapshot" && "$mode" != "suspend" && "$mode" != "stop" ]]; then
+        display_error "不支持的备份模式: $mode" "仅支持 snapshot / suspend / stop"
+        return 1
+    fi
+
+    read -p "请输入保留份数（0 表示不启用自动清理） [7]: " keep_last
+    keep_last="${keep_last:-7}"
+    if [[ ! "$keep_last" =~ ^[0-9]+$ ]]; then
+        display_error "保留份数必须是数字"
+        return 1
+    fi
+
+    clear
+    show_menu_header "VM 备份与恢复"
+    echo -e "${YELLOW}目标 VM:${NC} ${vmids[*]}"
+    echo -e "${YELLOW}备份存储:${NC} $store"
+    echo -e "${YELLOW}压缩方式:${NC} $compress"
+    echo -e "${YELLOW}备份模式:${NC} $mode"
+    echo -e "${YELLOW}保留份数:${NC} $keep_last"
+    echo -e "${UI_DIVIDER}"
+
+    if ! confirm_high_risk_action "为 VM ${vmids[*]} 执行 vzdump 备份" "备份任务会占用大量 IO 与备份存储空间，错误的保留策略可能挤占生产容量。" "可能触发快照/锁定/短暂性能抖动，存储空间不足时任务会失败。" "请确认目标存储可用空间、保留策略和维护窗口，再执行备份。" "BACKUP"; then
+        return 0
+    fi
+
+    local -a cmd=(vzdump)
+    cmd+=("${vmids[@]}")
+    cmd+=(--storage "$store" --compress "$compress" --mode "$mode")
+    if (( keep_last > 0 )); then
+        cmd+=(--prune-backups "keep-last=$keep_last")
+    fi
+
+    local output
+    if ! output="$("${cmd[@]}" 2>&1)"; then
+        echo "$output" | sed 's/^/  /'
+        display_error "vzdump 执行失败" "请检查目标存储空间、任务锁定状态或日志输出。"
+        return 1
+    fi
+
+    echo "$output" | sed 's/^/  /'
+    display_success "备份完成" "可在对应存储的 dump 目录中查看生成的备份文件。"
+}
+
+vm_schedule_add_backup_job() {
+    vm_require_commands qm vzdump pvesm || return 1
+
+    local scope job_targets target_label
+    {
+        show_menu_option "1" "单个 VM"
+        show_menu_option "2" "多个 VM"
+        show_menu_option "3" "全部 VM"
+    }
+    read -p "请选择定时备份范围 [1-3]: " scope
+    case "$scope" in
+        1|2)
+            job_targets="$(vm_collect_target_vmids)"
+            local rc=$?
+            [[ "$rc" -eq 2 ]] && return 0
+            [[ -n "$job_targets" ]] || return 1
+            target_label="$(echo "$job_targets" | tr '\n' '-' | sed 's/-$//')"
+            ;;
+        3)
+            target_label="all"
+            ;;
+        *)
+            log_error "无效选择"
+            return 1
+            ;;
+    esac
+
+    local store
+    store="$(vm_select_storage_by_content backup "请选择备份存储")" || return 1
+    vm_validate_backup_storage_name "$store" || return 1
+
+    local compress mode keep_last run_time
+    read -p "请选择压缩方式 (zstd/gzip/lzo) [zstd]: " compress
+    compress="${compress:-zstd}"
+    vm_validate_backup_compress "$compress" || return 1
+
+    read -p "请选择备份模式 (snapshot/suspend/stop) [snapshot]: " mode
+    mode="${mode:-snapshot}"
+    vm_validate_backup_mode "$mode" || return 1
+
+    read -p "请输入保留份数（0 表示不启用自动清理） [7]: " keep_last
+    keep_last="${keep_last:-7}"
+    vm_validate_backup_keep_last "$keep_last" || return 1
+
+    read -p "请输入每日执行时间 (HH:MM) [03:00]: " run_time
+    run_time="${run_time:-03:00}"
+    if [[ ! "$run_time" =~ ^([0-1]?[0-9]|2[0-3]):([0-5][0-9])$ ]]; then
+        display_error "时间格式错误: $run_time" "请使用 HH:MM 格式。"
+        return 1
+    fi
+
+    local hour minute
+    hour="$((10#${BASH_REMATCH[1]}))"
+    minute="$((10#${BASH_REMATCH[2]}))"
+
+    local command_text target_args vmid
+    command_text="/usr/sbin/vzdump"
+    if [[ "$scope" == "3" ]]; then
+        command_text+=" --all 1"
+    else
+        target_args=""
+        while IFS= read -r vmid; do
+            [[ "$vmid" =~ ^[0-9]+$ ]] || {
+                display_error "检测到非法 VMID: $vmid" "已拒绝将未经校验的文本写入 root cron。"
+                return 1
+            }
+            target_args+=" $vmid"
+        done <<< "$job_targets"
+        [[ -n "$target_args" ]] || {
+            display_error "未生成有效的 VMID 参数"
+            return 1
+        }
+        command_text+="$target_args"
+    fi
+    command_text+=" --storage $store --compress $compress --mode $mode"
+    if (( keep_last > 0 )); then
+        command_text+=" --prune-backups keep-last=$keep_last"
+    fi
+
+    if ! confirm_high_risk_action "写入 VM 定时备份任务" "计划任务会以 root 权限定期执行 vzdump，并持续占用 IO、CPU 与备份存储容量。" "错误的 VMID、存储或保留策略会周期性影响生产负载，问题会反复发生。" "请确认执行时间、目标范围、备份存储与保留策略均已核对。" "CRON-BACKUP"; then
+        return 0
+    fi
+
+    local marker="VMBACKUP_${target_label}_$(date +%Y%m%d%H%M%S)"
+    local cron_line="$minute $hour * * * root $command_text >/var/log/pve-tools-vm-backup.log 2>&1"
+
+    touch "$VM_BACKUP_CRON_FILE"
+    apply_block "$VM_BACKUP_CRON_FILE" "$marker" "$cron_line"
+    systemctl restart cron 2>/dev/null || service cron restart 2>/dev/null || true
+    display_success "定时备份任务已写入" "cron 标记: $marker"
+}
+vm_schedule_remove_backup_job() {
+    if [[ ! -f "$VM_BACKUP_CRON_FILE" ]]; then
+        display_error "当前没有定时备份任务"
+        return 1
+    fi
+
+    local markers
+    markers="$(grep '^# PVE-TOOLS BEGIN VMBACKUP_' "$VM_BACKUP_CRON_FILE" 2>/dev/null | awk '{print $4}')"
+    if [[ -z "$markers" ]]; then
+        display_error "当前没有定时备份任务"
+        return 1
+    fi
+
+    echo -e "${CYAN}当前定时备份任务：${NC}"
+    grep -E '^[^#]' "$VM_BACKUP_CRON_FILE" 2>/dev/null | sed 's/^/  /'
+    echo -e "${UI_DIVIDER}"
+    echo "$markers" | awk '{printf "  [%d] %s\n", NR, $1}'
+    echo -e "${UI_DIVIDER}"
+
+    local pick marker
+    read -p "请选择要删除的任务序号 (0 返回): " pick
+    pick="${pick:-0}"
+    [[ "$pick" == "0" ]] && return 0
+    [[ "$pick" =~ ^[0-9]+$ ]] || return 1
+    marker="$(echo "$markers" | awk -v n="$pick" 'NR==n{print $1}')"
+    [[ -n "$marker" ]] || return 1
+
+    remove_block "$VM_BACKUP_CRON_FILE" "$marker"
+    systemctl restart cron 2>/dev/null || service cron restart 2>/dev/null || true
+    display_success "定时备份任务已删除" "$marker"
+}
+
+vm_schedule_backup_menu() {
+    while true; do
+        clear
+        show_menu_header "VM 定时备份"
+        echo -e "${YELLOW}当前任务：${NC}"
+        if [[ -f "$VM_BACKUP_CRON_FILE" ]]; then
+            grep -E '^[^#]' "$VM_BACKUP_CRON_FILE" 2>/dev/null | sed 's/^/  /' || true
+        else
+            echo "  暂无定时任务"
+        fi
+        echo -e "${UI_DIVIDER}"
+        show_menu_option "1" "新增定时备份任务"
+        show_menu_option "2" "删除定时备份任务"
+        show_menu_option "0" "返回"
+        show_menu_footer
+
+        local choice
+        read -p "请选择操作 [0-2]: " choice
+        case "$choice" in
+            1) vm_schedule_add_backup_job ;;
+            2) vm_schedule_remove_backup_job ;;
+            0) return ;;
+            *) log_error "无效选择" ;;
+        esac
+        pause_function
+    done
+}
+
+vm_restore_from_backup() {
+    vm_require_commands qmrestore qm pvesm || return 1
+
+    local archive
+    archive="$(vm_select_backup_archive)"
+    local rc=$?
+    [[ "$rc" -eq 2 ]] && return 0
+    [[ -n "$archive" ]] || return 1
+
+    local new_vmid
+    read -p "请输入新的 VMID: " new_vmid
+    vm_validate_new_vmid "$new_vmid" || return 1
+
+    local store
+    store="$(vm_select_storage_by_content images "请选择恢复后的磁盘存储")"
+    rc=$?
+    [[ "$rc" -eq 2 ]] && return 0
+    [[ -n "$store" ]] || return 1
+
+    local unique start_after
+    read -p "是否重新生成唯一标识（推荐 yes）?(yes/no) [yes]: " unique
+    unique="${unique:-yes}"
+    read -p "恢复后是否自动启动 VM？(yes/no) [no]: " start_after
+    start_after="${start_after:-no}"
+
+    clear
+    show_menu_header "从备份恢复 VM"
+    echo -e "${YELLOW}备份文件:${NC} $archive"
+    echo -e "${YELLOW}新 VMID:${NC} $new_vmid"
+    echo -e "${YELLOW}目标存储:${NC} $store"
+    echo -e "${YELLOW}唯一标识重建:${NC} $unique"
+    echo -e "${UI_DIVIDER}"
+
+    if ! confirm_high_risk_action "从备份恢复为新 VM $new_vmid" "恢复会创建新的 VM 和磁盘卷；如果关闭唯一标识重建，还可能引入 MAC/系统标识冲突。" "可能大量占用目标存储，并在误选备份文件时恢复出错误业务数据。" "请确认备份文件来源、目标 VMID 与目标存储均已核对，并预留足够空间。" "RESTORE"; then
+        return 0
+    fi
+
+    local -a cmd=(qmrestore "$archive" "$new_vmid" --storage "$store")
+    if [[ "$unique" == "yes" || "$unique" == "YES" ]]; then
+        cmd+=(--unique 1)
+    fi
+
+    local output
+    if ! output="$("${cmd[@]}" 2>&1)"; then
+        echo "$output" | sed 's/^/  /'
+        display_error "qmrestore 执行失败" "请检查备份文件、目标存储和日志输出。"
+        return 1
+    fi
+
+    echo "$output" | sed 's/^/  /'
+    if [[ "$start_after" == "yes" || "$start_after" == "YES" ]]; then
+        qm start "$new_vmid" >/dev/null 2>&1 || log_warn "自动启动 VM 失败，请手动检查。"
+    fi
+    display_success "恢复完成" "新 VMID: $new_vmid"
+}
+
+vm_backup_restore_menu() {
+    while true; do
+        clear
+        show_menu_header "VM 备份与恢复"
+        vm_show_data_risk_banner
+        show_menu_option "1" "创建 VM 备份（vzdump）"
+        show_menu_option "2" "从备份恢复为新 VM"
+        show_menu_option "3" "定时备份任务管理"
+        show_menu_option "0" "返回"
+        show_menu_footer
+
+        local choice
+        read -p "请选择操作 [0-3]: " choice
+        case "$choice" in
+            1) vm_backup_create ;;
+            2) vm_restore_from_backup ;;
+            3) vm_schedule_backup_menu ;;
+            0) return ;;
+            *) log_error "无效选择" ;;
+        esac
+        pause_function
+    done
+}
+
+vm_export_config() {
+    vm_require_commands qm || return 1
+
+    local vmid
+    vmid="$(img_select_vmid)"
+    local rc=$?
+    [[ "$rc" -eq 2 ]] && return 0
+    [[ -n "$vmid" ]] || return 1
+
+    mkdir -p "$VM_CONFIG_EXPORT_DIR"
+    local output_file timestamp
+    timestamp="$(date +%Y%m%d_%H%M%S)"
+    output_file="$VM_CONFIG_EXPORT_DIR/vm-${vmid}-${timestamp}.conf"
+
+    {
+        echo "# PVE-Tools VM Export"
+        echo "# source_vmid=${vmid}"
+        echo "# source_node=$(hostname)"
+        echo "# exported_at=$(date +%F' '%T)"
+        qm config "$vmid"
+    } > "$output_file"
+
+    display_success "VM 配置已导出" "$output_file"
+}
+
+vm_import_config() {
+    vm_require_commands qm || return 1
+
+    local file
+    file="$(vm_select_export_file)"
+    local rc=$?
+    [[ "$rc" -eq 2 ]] && return 0
+    [[ -n "$file" ]] || return 1
+
+    local new_vmid
+    read -p "请输入新的 VMID: " new_vmid
+    vm_validate_new_vmid "$new_vmid" || return 1
+
+    local exported_name new_name import_mode regenerate_mac
+    exported_name="$(awk -F': ' '/^name: /{print $2; exit}' "$file")"
+    read -p "请输入新 VM 名称 [${exported_name:-vm-$new_vmid}]: " new_name
+    new_name="${new_name:-${exported_name:-vm-$new_vmid}}"
+    read -p "导入模式 (config/rebind-disks) [config]: " import_mode
+    import_mode="${import_mode:-config}"
+    case "$import_mode" in
+        config|rebind-disks) ;;
+        *)
+            display_error "不支持的导入模式: $import_mode" "仅支持 config 或 rebind-disks。"
+            return 1
+            ;;
+    esac
+    read -p "是否重建网卡 MAC 地址？(yes/no) [yes]: " regenerate_mac
+    regenerate_mac="${regenerate_mac:-yes}"
+    case "$regenerate_mac" in
+        yes|YES|no|NO) ;;
+        *)
+            display_error "是否重建网卡 MAC 地址仅支持 yes/no"
+            return 1
+            ;;
+    esac
+
+    if [[ "$import_mode" == "rebind-disks" ]]; then
+        if ! confirm_high_risk_action "以 rebind-disks 模式导入 VM $new_vmid" "该模式会把导出配置中的磁盘引用重新绑定到新 VM，选错卷会直接指向现有数据。" "错误重绑可能造成数据卷误挂载、业务串卷或后续误删风险。" "请逐项核对导出文件中的磁盘卷 ID，仅在确实理解每个卷来源时继续。" "REBIND-DISKS"; then
+            return 0
+        fi
+    fi
+
+    if ! confirm_high_risk_action "导入配置文件并创建新 VM $new_vmid" "配置回放会逐项写入新 VM；如果选择 rebind-disks，错误的磁盘引用可能绑定到不应接管的数据卷。" "可能造成新 VM 配置错误、网络冲突，或因错误重绑磁盘而影响现有数据卷识别。" "请确认导入文件来源可信，目标 VMID 空闲，并已核对磁盘引用与网卡规划。" "IMPORT-CONFIG"; then
+        return 0
+    fi
+
+    local -a option_lines disk_lines failed_keys attached_disk_keys
+    local bootdisk_value=""
+    while IFS= read -r line; do
+        [[ -z "$line" || "$line" =~ ^# ]] && continue
+        [[ "$line" != *': '* ]] && continue
+        local key="${line%%:*}"
+        local value="${line#*: }"
+        case "$key" in
+            name|template|digest|lock|meta|parent|vmgenid|unused*|snapstate|runningmachine|runningcpu)
+                continue
+                ;;
+            bootdisk)
+                bootdisk_value="$value"
+                continue
+                ;;
+            scsi*|sata*|virtio*|ide*|efidisk0|tpmstate0)
+                disk_lines+=("$key|$value")
+                continue
+                ;;
+            net*)
+                if [[ "$regenerate_mac" == "yes" || "$regenerate_mac" == "YES" ]]; then
+                    value="$(vm_network_strip_mac "$value")"
+                fi
+                option_lines+=("$key|$value")
+                ;;
+            *)
+                option_lines+=("$key|$value")
+                ;;
+        esac
+    done < "$file"
+
+    if ! qm create "$new_vmid" --name "$new_name" >/dev/null 2>&1; then
+        display_error "qm create 失败" "请检查 VMID 是否冲突，或查看任务日志。"
+        return 1
+    fi
+
+    local entry key value
+    for entry in "${option_lines[@]}"; do
+        key="${entry%%|*}"
+        value="${entry#*|}"
+        if ! qm set "$new_vmid" "-$key" "$value" >/dev/null 2>&1; then
+            failed_keys+=("$key")
+        fi
+    done
+
+    if [[ "$import_mode" == "rebind-disks" ]]; then
+        for entry in "${disk_lines[@]}"; do
+            key="${entry%%|*}"
+            value="${entry#*|}"
+            if qm set "$new_vmid" "-$key" "$value" >/dev/null 2>&1; then
+                attached_disk_keys+=("$key")
+            else
+                failed_keys+=("$key")
+            fi
+        done
+        if [[ -n "$bootdisk_value" ]]; then
+            if ! qm set "$new_vmid" --bootdisk "$bootdisk_value" >/dev/null 2>&1; then
+                failed_keys+=("bootdisk")
+            fi
+        fi
+    fi
+
+    if (( ${#failed_keys[@]} > 0 )); then
+        if [[ "$import_mode" == "rebind-disks" ]]; then
+            local attached_key
+            for attached_key in "${attached_disk_keys[@]}"; do
+                qm set "$new_vmid" --delete "$attached_key" >/dev/null 2>&1 || log_warn "回滚重绑磁盘槽位失败: $attached_key"
+            done
+        fi
+
+        if qm destroy "$new_vmid" --purge 1 >/dev/null 2>&1; then
+            display_error "VM 配置导入失败，已自动回滚" "失败项: ${failed_keys[*]}"
+        else
+            display_error "VM 配置导入失败" "失败项: ${failed_keys[*]}；已尝试回滚，但自动清理未完成，请立即检查 VM $new_vmid。"
+        fi
+        return 1
+    fi
+
+    display_success "VM 配置导入完成" "新 VMID: $new_vmid"
+}
+vm_config_io_menu() {
+    while true; do
+        clear
+        show_menu_header "VM 配置导入/导出"
+        vm_show_data_risk_banner
+        show_menu_option "1" "导出 VM 配置"
+        show_menu_option "2" "导入 VM 配置"
+        show_menu_option "0" "返回"
+        show_menu_footer
+
+        local choice
+        read -p "请选择操作 [0-2]: " choice
+        case "$choice" in
+            1) vm_export_config ;;
+            2) vm_import_config ;;
+            0) return ;;
+            *) log_error "无效选择" ;;
+        esac
+        pause_function
+    done
+}
+vm_convert_to_template() {
+    vm_require_commands qm || return 1
+
+    local vmid
+    vmid="$(img_select_vmid)"
+    local rc=$?
+    [[ "$rc" -eq 2 ]] && return 0
+    [[ -n "$vmid" ]] || return 1
+
+    if vm_is_template "$vmid"; then
+        display_error "该 VM 已经是模板"
+        return 1
+    fi
+
+    vm_ensure_vm_config_backup "$vmid"
+    if ! confirm_high_risk_action "将 VM $vmid 转换为模板" "模板化会改变 VM 的交付语义，后续不应再把它当作普通生产实例直接运行。" "如果选错对象，可能误把正在使用的业务 VM 转为模板，影响后续运维与交付。" "请确认该 VM 已停机或处于预期状态，并已导出配置或留存快照。" "TEMPLATE"; then
+        return 0
+    fi
+
+    if ! qm template "$vmid" >/dev/null 2>&1; then
+        display_error "模板转换失败" "请检查 VM 状态和任务日志。"
+        return 1
+    fi
+
+    display_success "模板转换完成" "VMID: $vmid"
+}
+
+vm_clone_vm() {
+    vm_require_commands qm || return 1
+
+    local mode="$1"
+    local source_vmid
+    source_vmid="$(img_select_vmid)"
+    local rc=$?
+    [[ "$rc" -eq 2 ]] && return 0
+    [[ -n "$source_vmid" ]] || return 1
+
+    if [[ "$mode" == "linked" ]] && ! vm_is_template "$source_vmid"; then
+        display_error "链接克隆仅支持模板虚拟机" "请先将源 VM 转换为模板。"
+        return 1
+    fi
+
+    local new_vmid new_name full_flag store
+    read -p "请输入新的 VMID: " new_vmid
+    vm_validate_new_vmid "$new_vmid" || return 1
+    read -p "请输入新 VM 名称 [clone-$new_vmid]: " new_name
+    new_name="${new_name:-clone-$new_vmid}"
+
+    full_flag=1
+    if [[ "$mode" == "linked" ]]; then
+        full_flag=0
+    else
+        store="$(vm_select_storage_by_content images "请选择完整克隆目标存储")"
+        rc=$?
+        [[ "$rc" -eq 2 ]] && return 0
+        [[ -n "$store" ]] || return 1
+    fi
+
+    local -a cmd=(qm clone "$source_vmid" "$new_vmid" --name "$new_name" --full "$full_flag")
+    if [[ "$full_flag" -eq 1 && -n "$store" ]]; then
+        cmd+=(--storage "$store")
+    fi
+
+    if ! confirm_high_risk_action "从 VM $source_vmid 创建 ${mode} 克隆到 $new_vmid" "克隆会复制或引用源磁盘，完整克隆会大量占用空间，链接克隆依赖模板与底层存储能力。" "目标存储、模板状态或 VMID 选择错误时，可能产生错误副本或交付错误实例。" "请确认源 VM、目标 VMID、目标存储和交付计划均已核对。" "CLONE"; then
+        return 0
+    fi
+
+    local output
+    if ! output="$("${cmd[@]}" 2>&1)"; then
+        echo "$output" | sed 's/^/  /'
+        display_error "克隆失败" "请检查源 VM 状态、目标存储及日志输出。"
+        return 1
+    fi
+
+    echo "$output" | sed 's/^/  /'
+    display_success "克隆完成" "新 VMID: $new_vmid"
+}
+
+vm_cloudinit_configure_for_vmid() {
+    local vmid="$1"
+    vm_require_commands qm pvesm || return 1
+
+    local cfg ci_store
+    cfg="$(qm config "$vmid" 2>/dev/null)"
+    if ! echo "$cfg" | grep -Eq '^(ide2|scsi2): .*cloudinit'; then
+        ci_store="$(vm_select_storage_by_content images "请选择 Cloud-Init 盘存储")"
+        local rc=$?
+        [[ "$rc" -eq 2 ]] && return 0
+        [[ -n "$ci_store" ]] || return 1
+        vm_ensure_cloudinit_drive "$vmid" "$ci_store" || return 1
+    fi
+
+    local ciuser cipassword ipconfig0 nameserver searchdomain citype sshkeys_path cicustom console_mode
+    read -p "Cloud-Init 用户名（留空跳过）: " ciuser
+    read -p "Cloud-Init 密码（留空跳过）: " cipassword
+    read -p "网络配置 ipconfig0（示例 ip=dhcp 或 ip=192.168.1.10/24,gw=192.168.1.1，留空跳过）: " ipconfig0
+    read -p "nameserver（留空跳过）: " nameserver
+    read -p "searchdomain（留空跳过）: " searchdomain
+    read -p "citype (nocloud/configdrive2/opennebula，留空跳过) [nocloud]: " citype
+    citype="${citype:-nocloud}"
+    read -p "SSH 公钥文件路径（留空跳过）: " sshkeys_path
+    if [[ -n "$sshkeys_path" && ! -f "$sshkeys_path" ]]; then
+        display_error "SSH 公钥文件不存在: $sshkeys_path"
+        return 1
+    fi
+    read -p "cicustom（示例 user=local:snippets/user.yaml，留空跳过）: " cicustom
+    if [[ -n "$cicustom" ]]; then
+        vm_validate_cicustom_volumes "$cicustom" || return 1
+    fi
+    read -p "是否启用串口控制台输出？(yes/no) [yes]: " console_mode
+    console_mode="${console_mode:-yes}"
+
+    local -a cmd=(qm set "$vmid")
+    [[ -n "$ciuser" ]] && cmd+=(--ciuser "$ciuser")
+    [[ -n "$cipassword" ]] && cmd+=(--cipassword "$cipassword")
+    [[ -n "$ipconfig0" ]] && cmd+=(--ipconfig0 "$ipconfig0")
+    [[ -n "$nameserver" ]] && cmd+=(--nameserver "$nameserver")
+    [[ -n "$searchdomain" ]] && cmd+=(--searchdomain "$searchdomain")
+    [[ -n "$citype" ]] && cmd+=(--citype "$citype")
+    [[ -n "$sshkeys_path" ]] && cmd+=(--sshkeys "$sshkeys_path")
+    [[ -n "$cicustom" ]] && cmd+=(--cicustom "$cicustom")
+
+    if (( ${#cmd[@]} > 2 )); then
+        if ! confirm_high_risk_action "写入 VM $vmid 的 Cloud-Init 参数" "会直接覆盖现有 Cloud-Init 用户、密码、网络、DNS、SSH 密钥或 cicustom 指向。" "后续启动、重新生成 cloud-init 数据或交付克隆时，实例身份与网络行为可能发生变化。" "请确认参数、snippets 来源与 SSH 公钥均正确，并已记录旧配置。" "CLOUDINIT"; then
+            return 0
+        fi
+        if ! "${cmd[@]}" >/dev/null 2>&1; then
+            display_error "Cloud-Init 参数写入失败" "请检查参数格式、snippets 存储和日志输出。"
+            return 1
+        fi
+    fi
+
+    if [[ "$console_mode" == "yes" || "$console_mode" == "YES" ]]; then
+        qm set "$vmid" --serial0 socket --vga serial0 >/dev/null 2>&1 || log_warn "串口控制台配置失败，可稍后手工设置。"
+    fi
+
+    display_success "Cloud-Init 配置已写入" "可使用 qm cloudinit dump $vmid user 查看生成结果。"
+}
+
+vm_cloudinit_configure() {
+    local vmid
+    vmid="$(img_select_vmid)"
+    local rc=$?
+    [[ "$rc" -eq 2 ]] && return 0
+    [[ -n "$vmid" ]] || return 1
+    vm_cloudinit_configure_for_vmid "$vmid"
+}
+
+vm_cloud_image_to_template() {
+    vm_require_commands qm pvesm qemu-img || return 1
+
+    local image_path
+    image_path="$(img_select_img_file)"
+    local rc=$?
+    [[ "$rc" -eq 2 ]] && return 0
+    [[ -n "$image_path" ]] || return 1
+
+    local vmid vm_name memory cores bridge image_store ci_store
+    read -p "请输入新的 VMID: " vmid
+    vm_validate_new_vmid "$vmid" || return 1
+    read -p "请输入 VM 名称 [cloud-template-$vmid]: " vm_name
+    vm_name="${vm_name:-cloud-template-$vmid}"
+    read -p "内存大小 MB [2048]: " memory
+    memory="${memory:-2048}"
+    read -p "CPU 核心数 [2]: " cores
+    cores="${cores:-2}"
+    read -p "默认桥接 [${VM_DEFAULT_CLOUDINIT_BRIDGE}]: " bridge
+    bridge="${bridge:-$VM_DEFAULT_CLOUDINIT_BRIDGE}"
+
+    image_store="$(vm_select_storage_by_content images "请选择系统盘存储")"
+    rc=$?
+    [[ "$rc" -eq 2 ]] && return 0
+    [[ -n "$image_store" ]] || return 1
+    ci_store="$(vm_select_storage_by_content images "请选择 Cloud-Init 盘存储")"
+    rc=$?
+    [[ "$rc" -eq 2 ]] && return 0
+    [[ -n "$ci_store" ]] || return 1
+
+    if ! confirm_high_risk_action "基于镜像 $image_path 创建 VM $vmid 并导入系统盘" "该流程会创建新 VM、写入磁盘卷并占用目标存储；镜像、VMID 或目标存储选错时会把流程导向错误对象。" "可能产生错误模板、错误网络配置或额外占用大量存储空间。" "请确认镜像来源可信，目标 VMID 空闲，系统盘存储与 Cloud-Init 存储已核对。" "IMPORT-IMAGE"; then
+        return 0
+    fi
+
+    if ! qm create "$vmid" --name "$vm_name" --memory "$memory" --cores "$cores" --net0 "virtio,bridge=$bridge" >/dev/null 2>&1; then
+        display_error "基础 VM 创建失败" "请检查参数和当前集群状态。"
+        return 1
+    fi
+
+    local import_out vol
+    if ! import_out="$(qm importdisk "$vmid" "$image_path" "$image_store" 2>&1)"; then
+        echo "$import_out" | sed 's/^/  /'
+        display_error "云镜像导入失败" "请检查镜像格式、目标存储空间和日志输出。"
+        return 1
+    fi
+
+    vol="$(echo "$import_out" | sed -n "s/.*as '\([^']\+\)'.*/\1/p" | tail -n 1)"
+    [[ -z "$vol" ]] && vol="$(echo "$import_out" | grep -oE "${image_store}:[^ ]+" | tail -n 1)"
+    if [[ -z "$vol" ]]; then
+        display_error "无法解析导入后的卷 ID" "请手动查看 qm importdisk 输出后继续处理。"
+        return 1
+    fi
+
+    if ! qm set "$vmid" --scsihw virtio-scsi-pci --scsi0 "$vol" --boot order=scsi0 --ide2 "$ci_store:cloudinit" --serial0 socket --vga serial0 --agent 1 >/dev/null 2>&1; then
+        display_error "模板基础参数写入失败" "请检查存储、控制器类型与日志输出。"
+        return 1
+    fi
+
+    vm_cloudinit_configure_for_vmid "$vmid"
+
+    if confirm_high_risk_action "将 VM $vmid 转换为云镜像模板" "模板化后该 VM 会被视为母版，后续克隆将继承当前磁盘与 Cloud-Init 状态。" "如果模板内容未校验，错误会被批量复制到后续所有实例。" "请确认系统盘、Cloud-Init 与基础软件状态均已验证，再执行模板转换。" "TEMPLATE"; then
+        qm template "$vmid" >/dev/null 2>&1 || {
+            display_error "模板转换失败" "请检查当前任务状态。"
+            return 1
+        }
+    fi
+
+    display_success "云镜像模板准备完成" "VMID: $vmid"
+}
+
+vm_template_cloudinit_menu() {
+    while true; do
+        clear
+        show_menu_header "模板 / 克隆 / Cloud-Init"
+        vm_show_data_risk_banner
+        show_menu_option "1" "列出所有模板"
+        show_menu_option "2" "将现有 VM 转换为模板"
+        show_menu_option "3" "完整克隆 VM"
+        show_menu_option "4" "链接克隆模板"
+        show_menu_option "5" "导入云镜像并生成模板"
+        show_menu_option "6" "配置 Cloud-Init 参数"
+        show_menu_option "0" "返回"
+        show_menu_footer
+
+        local choice
+        read -p "请选择操作 [0-6]: " choice
+        case "$choice" in
+            1) vm_show_template_records ;;
+            2) vm_convert_to_template ;;
+            3) vm_clone_vm full ;;
+            4) vm_clone_vm linked ;;
+            5) vm_cloud_image_to_template ;;
+            6) vm_cloudinit_configure ;;
+            0) return ;;
+            *) log_error "无效选择" ;;
+        esac
+        pause_function
+    done
+}
+vm_resize_disk() {
+    vm_require_commands qm || return 1
+
+    local vmid slot size_change
+    vmid="$(img_select_vmid)"
+    local rc=$?
+    [[ "$rc" -eq 2 ]] && return 0
+    [[ -n "$vmid" ]] || return 1
+    slot="$(vm_select_disk_slot "$vmid")"
+    rc=$?
+    [[ "$rc" -eq 2 ]] && return 0
+    [[ -n "$slot" ]] || return 1
+
+    read -p "请输入扩容值（示例 +10G 或 64G）: " size_change
+    [[ -n "$size_change" ]] || return 1
+
+    if ! confirm_high_risk_action "为 VM $vmid 的 $slot 执行磁盘扩容" "扩容通常不可逆；访客系统内若未正确扩展分区/文件系统，可能导致识别异常。" "错误的磁盘槽位或大小参数会把变更写到错误磁盘对象。" "请确认磁盘槽位、目标容量和访客系统扩容方案已准备完毕。" "RESIZE"; then
+        return 0
+    fi
+
+    if qm disk resize "$vmid" "$slot" "$size_change" >/dev/null 2>&1 || qm resize "$vmid" "$slot" "$size_change" >/dev/null 2>&1; then
+        display_success "磁盘扩容完成" "$slot -> $size_change"
+    else
+        display_error "磁盘扩容失败" "请检查磁盘插槽、大小参数和日志输出。"
+        return 1
+    fi
+}
+
+vm_add_disk() {
+    vm_require_commands qm pvesm || return 1
+
+    local vmid store bus slot disk_size
+    vmid="$(img_select_vmid)"
+    local rc=$?
+    [[ "$rc" -eq 2 ]] && return 0
+    [[ -n "$vmid" ]] || return 1
+
+    store="$(vm_select_storage_by_content images "请选择新磁盘存储")"
+    rc=$?
+    [[ "$rc" -eq 2 ]] && return 0
+    [[ -n "$store" ]] || return 1
+
+    read -p "磁盘总线类型 (scsi/sata/virtio/ide) [scsi]: " bus
+    bus="${bus:-scsi}"
+    slot="$(vm_find_free_disk_slot "$vmid" "$bus")"
+    [[ -n "$slot" ]] || {
+        display_error "未找到可用磁盘插槽" "请先释放对应总线插槽后再试。"
+        return 1
+    }
+
+    read -p "磁盘大小（示例 32G / 512M）: " disk_size
+    [[ "$disk_size" =~ ^[0-9]+[KMGTP]$ ]] || {
+        display_error "磁盘大小格式错误" "请使用类似 32G、512M 的格式。"
+        return 1
+    }
+
+    vm_ensure_vm_config_backup "$vmid"
+    if ! confirm_high_risk_action "为 VM $vmid 添加磁盘 $slot" "将立即在目标存储分配新卷并写入 VM 配置。" "错误的总线、存储或容量选择会造成资源浪费，甚至影响后续系统盘识别。" "请确认目标存储、总线类型与容量规划已核对。" "ADDDISK"; then
+        return 0
+    fi
+
+    if ! qm set "$vmid" "-$slot" "$store:$disk_size" >/dev/null 2>&1; then
+        display_error "添加磁盘失败" "请检查存储、容量与日志输出。"
+        return 1
+    fi
+
+    display_success "磁盘添加完成" "$slot = $store:$disk_size"
+}
+
+vm_remove_disk() {
+    vm_require_commands qm || return 1
+
+    local vmid slot
+    vmid="$(img_select_vmid)"
+    local rc=$?
+    [[ "$rc" -eq 2 ]] && return 0
+    [[ -n "$vmid" ]] || return 1
+    slot="$(vm_select_disk_slot "$vmid")"
+    rc=$?
+    [[ "$rc" -eq 2 ]] && return 0
+    [[ -n "$slot" ]] || return 1
+
+    vm_ensure_vm_config_backup "$vmid"
+    if ! confirm_high_risk_action "从 VM $vmid 删除磁盘插槽 $slot" "删除磁盘配置会让访客系统失去该磁盘引用，若误删系统盘或关键数据盘会导致业务中断。" "后续若继续写入或重新分配卷，数据恢复难度会快速上升。" "请确认该槽位不是系统关键盘，且已完成卷级备份或快照。" "DELETE"; then
+        return 0
+    fi
+
+    if ! qm set "$vmid" --delete "$slot" >/dev/null 2>&1; then
+        display_error "删除磁盘失败" "请检查 VM 锁定状态和日志输出。"
+        return 1
+    fi
+
+    display_success "磁盘已移除" "$slot"
+}
+
+vm_move_disk() {
+    vm_require_commands qm pvesm || return 1
+
+    local vmid slot target_store delete_source
+    vmid="$(img_select_vmid)"
+    local rc=$?
+    [[ "$rc" -eq 2 ]] && return 0
+    [[ -n "$vmid" ]] || return 1
+    slot="$(vm_select_disk_slot "$vmid")"
+    rc=$?
+    [[ "$rc" -eq 2 ]] && return 0
+    [[ -n "$slot" ]] || return 1
+    target_store="$(vm_select_storage_by_content images "请选择目标存储")"
+    rc=$?
+    [[ "$rc" -eq 2 ]] && return 0
+    [[ -n "$target_store" ]] || return 1
+    read -p "迁移后是否删除源磁盘？(yes/no) [yes]: " delete_source
+    delete_source="${delete_source:-yes}"
+
+    if ! confirm_high_risk_action "将 VM $vmid 的 $slot 迁移到 $target_store" "迁移磁盘会复制或移动底层卷；若启用删除源盘，源卷在流程完成后会被清理。" "目标存储选错或空间不足时可能导致任务失败；删除源盘后回退复杂度更高。" "请确认目标存储、可用空间和是否删除源盘的策略已核对。" "MOVE-DISK"; then
+        return 0
+    fi
+
+    if [[ "$delete_source" == "yes" || "$delete_source" == "YES" ]]; then
+        qm disk move "$vmid" "$slot" "$target_store" --delete 1 >/dev/null 2>&1 || qm move_disk "$vmid" "$slot" "$target_store" --delete 1 >/dev/null 2>&1 || {
+            display_error "磁盘迁移失败" "请检查存储状态和日志输出。"
+            return 1
+        }
+    else
+        qm disk move "$vmid" "$slot" "$target_store" >/dev/null 2>&1 || qm move_disk "$vmid" "$slot" "$target_store" >/dev/null 2>&1 || {
+            display_error "磁盘迁移失败" "请检查存储状态和日志输出。"
+            return 1
+        }
+    fi
+
+    display_success "磁盘迁移完成" "$slot -> $target_store"
+}
+
+vm_disk_management_menu() {
+    while true; do
+        clear
+        show_menu_header "虚拟机磁盘管理"
+        vm_show_data_risk_banner
+        show_menu_option "1" "磁盘扩容"
+        show_menu_option "2" "添加磁盘"
+        show_menu_option "3" "移除磁盘"
+        show_menu_option "4" "迁移磁盘到其他存储"
+        show_menu_option "0" "返回"
+        show_menu_footer
+
+        local choice
+        read -p "请选择操作 [0-4]: " choice
+        case "$choice" in
+            1) vm_resize_disk ;;
+            2) vm_add_disk ;;
+            3) vm_remove_disk ;;
+            4) vm_move_disk ;;
+            0) return ;;
+            *) log_error "无效选择" ;;
+        esac
+        pause_function
+    done
+}
+
+vm_create_snapshot() {
+    vm_require_commands qm || return 1
+
+    local vmids_text snapshot_name description
+    vmids_text="$(vm_collect_target_vmids)"
+    local rc=$?
+    [[ "$rc" -eq 2 ]] && return 0
+    [[ -n "$vmids_text" ]] || return 1
+    mapfile -t vmids < <(printf '%s\n' "$vmids_text" | awk 'NF')
+
+    read -p "请输入快照名称: " snapshot_name
+    [[ "$snapshot_name" =~ ^[A-Za-z0-9._-]+$ ]] || {
+        display_error "快照名称格式无效" "仅支持字母、数字、点、下划线和中划线。"
+        return 1
+    }
+    read -p "请输入快照描述（留空跳过）: " description
+
+    local success=0 failed=0 vmid
+    for vmid in "${vmids[@]}"; do
+        if [[ -n "$description" ]]; then
+            qm snapshot "$vmid" "$snapshot_name" --description "$description" >/dev/null 2>&1 && ((success++)) || ((failed++))
+        else
+            qm snapshot "$vmid" "$snapshot_name" >/dev/null 2>&1 && ((success++)) || ((failed++))
+        fi
+    done
+
+    display_success "快照创建任务完成" "成功: $success, 失败: $failed"
+}
+
+vm_list_snapshots() {
+    vm_require_commands qm || return 1
+    local vmid
+    vmid="$(img_select_vmid)"
+    local rc=$?
+    [[ "$rc" -eq 2 ]] && return 0
+    [[ -n "$vmid" ]] || return 1
+    clear
+    show_menu_header "快照列表"
+    qm listsnapshot "$vmid" 2>/dev/null | sed 's/^/  /'
+    echo -e "${UI_DIVIDER}"
+}
+
+vm_delete_snapshot() {
+    vm_require_commands qm || return 1
+    local vmid snapshot_name
+    vmid="$(img_select_vmid)"
+    local rc=$?
+    [[ "$rc" -eq 2 ]] && return 0
+    [[ -n "$vmid" ]] || return 1
+    snapshot_name="$(vm_select_snapshot_name "$vmid")"
+    rc=$?
+    [[ "$rc" -eq 2 ]] && return 0
+    [[ -n "$snapshot_name" ]] || return 1
+
+    if ! confirm_high_risk_action "删除 VM $vmid 的快照 $snapshot_name" "删除快照后将失去对应时间点的快速回退能力。" "若该快照是重要恢复点，误删后只能依赖外部备份或更高成本的恢复手段。" "请确认该快照不再承担回滚基线，并已保留外部备份。" "DROP-SNAP"; then
+        return 0
+    fi
+
+    if ! qm delsnapshot "$vmid" "$snapshot_name" >/dev/null 2>&1; then
+        display_error "删除快照失败" "请检查快照名称和日志输出。"
+        return 1
+    fi
+
+    display_success "快照已删除" "$snapshot_name"
+}
+
+vm_rollback_snapshot() {
+    vm_require_commands qm || return 1
+    local vmid snapshot_name
+    vmid="$(img_select_vmid)"
+    local rc=$?
+    [[ "$rc" -eq 2 ]] && return 0
+    [[ -n "$vmid" ]] || return 1
+    snapshot_name="$(vm_select_snapshot_name "$vmid")"
+    rc=$?
+    [[ "$rc" -eq 2 ]] && return 0
+    [[ -n "$snapshot_name" ]] || return 1
+
+    if ! confirm_high_risk_action "将 VM $vmid 回滚到快照 $snapshot_name" "回滚会把磁盘与配置状态拉回到旧时间点，之后的数据写入可能丢失。" "如果当前业务数据尚未导出或备份，回滚可能造成不可逆的新数据丢失。" "请确认当前数据已备份，且业务方已批准回退到该时间点。" "ROLLBACK"; then
+        return 0
+    fi
+
+    if ! qm rollback "$vmid" "$snapshot_name" >/dev/null 2>&1; then
+        display_error "快照回滚失败" "请检查 VM 状态和日志输出。"
+        return 1
+    fi
+
+    display_success "快照回滚完成" "$snapshot_name"
+}
+
+vm_snapshot_menu() {
+    while true; do
+        clear
+        show_menu_header "快照管理"
+        vm_show_data_risk_banner
+        show_menu_option "1" "创建快照（支持批量）"
+        show_menu_option "2" "列出 VM 快照"
+        show_menu_option "3" "删除快照"
+        show_menu_option "4" "回滚到快照"
+        show_menu_option "0" "返回"
+        show_menu_footer
+
+        local choice
+        read -p "请选择操作 [0-4]: " choice
+        case "$choice" in
+            1) vm_create_snapshot ;;
+            2) vm_list_snapshots ;;
+            3) vm_delete_snapshot ;;
+            4) vm_rollback_snapshot ;;
+            0) return ;;
+            *) log_error "无效选择" ;;
+        esac
+        pause_function
+    done
+}
+
+vm_configure_startup_policy() {
+    vm_require_commands qm || return 1
+    local vmid onboot boot_order startup_cfg
+    vmid="$(img_select_vmid)"
+    local rc=$?
+    [[ "$rc" -eq 2 ]] && return 0
+    [[ -n "$vmid" ]] || return 1
+
+    read -p "是否开机自启？(yes/no/skip) [skip]: " onboot
+    onboot="${onboot:-skip}"
+    read -p "启动顺序（示例 scsi0;ide2;net0，留空跳过）: " boot_order
+    read -p "启动策略（示例 order=1,up=30,down=30，留空跳过）: " startup_cfg
+
+    if [[ "$onboot" == "yes" || "$onboot" == "YES" ]]; then
+        qm set "$vmid" --onboot 1 >/dev/null 2>&1 || log_warn "设置 onboot 失败"
+    elif [[ "$onboot" == "no" || "$onboot" == "NO" ]]; then
+        qm set "$vmid" --onboot 0 >/dev/null 2>&1 || log_warn "设置 onboot 失败"
+    fi
+
+    [[ -n "$boot_order" ]] && qm set "$vmid" --boot "order=$boot_order" >/dev/null 2>&1 || true
+    [[ -n "$startup_cfg" ]] && qm set "$vmid" --startup "$startup_cfg" >/dev/null 2>&1 || true
+    display_success "启动策略已更新" "VMID: $vmid"
+}
+
+vm_add_network() {
+    vm_require_commands qm || return 1
+    local vmid bridge vlan model idx net_value
+    vmid="$(img_select_vmid)"
+    local rc=$?
+    [[ "$rc" -eq 2 ]] && return 0
+    [[ -n "$vmid" ]] || return 1
+
+    idx="$(vm_find_free_net_index "$vmid")"
+    [[ -n "$idx" ]] || {
+        display_error "未找到可用网卡插槽"
+        return 1
+    }
+
+    read -p "网卡模型 (virtio/e1000/vmxnet3) [virtio]: " model
+    model="${model:-virtio}"
+    read -p "桥接名称 [vmbr0]: " bridge
+    bridge="${bridge:-vmbr0}"
+    read -p "VLAN Tag（留空不设置）: " vlan
+
+    net_value="$model,bridge=$bridge"
+    [[ -n "$vlan" ]] && net_value="$net_value,tag=$vlan"
+
+    if ! qm set "$vmid" "-net$idx" "$net_value" >/dev/null 2>&1; then
+        display_error "添加网卡失败" "请检查桥接、VLAN 和日志输出。"
+        return 1
+    fi
+
+    display_success "网卡添加完成" "net$idx = $net_value"
+}
+
+vm_remove_network() {
+    vm_require_commands qm || return 1
+    local vmid slot
+    vmid="$(img_select_vmid)"
+    local rc=$?
+    [[ "$rc" -eq 2 ]] && return 0
+    [[ -n "$vmid" ]] || return 1
+    slot="$(vm_select_net_slot "$vmid")"
+    rc=$?
+    [[ "$rc" -eq 2 ]] && return 0
+    [[ -n "$slot" ]] || return 1
+
+    if ! confirm_action "删除 VM $vmid 的网卡 $slot？"; then
+        return 0
+    fi
+    if ! qm set "$vmid" --delete "$slot" >/dev/null 2>&1; then
+        display_error "删除网卡失败" "请检查 VM 状态和日志输出。"
+        return 1
+    fi
+
+    display_success "网卡已删除" "$slot"
+}
+
+vm_modify_network() {
+    vm_require_commands qm || return 1
+    local vmid slot current bridge current_bridge current_tag vlan_input updated
+    vmid="$(img_select_vmid)"
+    local rc=$?
+    [[ "$rc" -eq 2 ]] && return 0
+    [[ -n "$vmid" ]] || return 1
+    slot="$(vm_select_net_slot "$vmid")"
+    rc=$?
+    [[ "$rc" -eq 2 ]] && return 0
+    [[ -n "$slot" ]] || return 1
+
+    current="$(vm_get_qm_value "$vmid" "$slot")"
+    current_bridge="$(echo "$current" | sed -n 's/.*bridge=\([^,]*\).*/\1/p')"
+    current_tag="$(echo "$current" | sed -n 's/.*tag=\([^,]*\).*/\1/p')"
+
+    read -p "桥接名称 [${current_bridge:-vmbr0}]: " bridge
+    bridge="${bridge:-${current_bridge:-vmbr0}}"
+    read -p "VLAN Tag（留空保持当前，输入 none 清除） [${current_tag:-none}]: " vlan_input
+
+    updated="$(vm_network_set_option "$current" bridge "$bridge")"
+    if [[ "$vlan_input" == "none" || "$vlan_input" == "NONE" ]]; then
+        updated="$(vm_network_remove_option "$updated" tag)"
+    elif [[ -n "$vlan_input" ]]; then
+        updated="$(vm_network_set_option "$updated" tag "$vlan_input")"
+    fi
+
+    if ! qm set "$vmid" "-$slot" "$updated" >/dev/null 2>&1; then
+        display_error "更新网卡失败" "请检查 bridge/VLAN 参数和日志输出。"
+        return 1
+    fi
+
+    display_success "网卡参数已更新" "$slot = $updated"
+}
+
+vm_startup_network_menu() {
+    while true; do
+        clear
+        show_menu_header "启动顺序与网络管理"
+        vm_show_data_risk_banner
+        show_menu_option "1" "设置开机自启 / 启动顺序 / 启动延迟"
+        show_menu_option "2" "添加网卡"
+        show_menu_option "3" "移除网卡"
+        show_menu_option "4" "修改 bridge / VLAN"
+        show_menu_option "0" "返回"
+        show_menu_footer
+
+        local choice
+        read -p "请选择操作 [0-4]: " choice
+        case "$choice" in
+            1) vm_configure_startup_policy ;;
+            2) vm_add_network ;;
+            3) vm_remove_network ;;
+            4) vm_modify_network ;;
+            0) return ;;
+            *) log_error "无效选择" ;;
+        esac
+        pause_function
+    done
+}
+
+vm_cluster_migrate() {
+    vm_require_commands qm || return 1
+
+    local vmid target_node with_local live_mode storage_mode target_storage cfg status
+    vmid="$(img_select_vmid)"
+    local rc=$?
+    [[ "$rc" -eq 2 ]] && return 0
+    [[ -n "$vmid" ]] || return 1
+    target_node="$(vm_select_target_node)"
+    rc=$?
+    [[ "$rc" -eq 2 ]] && return 0
+    [[ -n "$target_node" ]] || {
+        display_error "未发现可用的目标节点" "请确认当前处于多节点集群环境。"
+        return 1
+    }
+
+    cfg="$(qm config "$vmid" 2>/dev/null)"
+    if echo "$cfg" | grep -qE '^hostpci[0-9]+:'; then
+        log_warn "检测到该 VM 使用 PCI/直通设备，迁移前请确认目标节点拥有相同硬件。"
+    fi
+
+    read -p "是否携带本地磁盘一起迁移？(yes/no) [yes]: " with_local
+    with_local="${with_local:-yes}"
+    status="$(qm status "$vmid" 2>/dev/null | awk '{print $2}' | head -n 1)"
+    if [[ "$status" == "running" ]]; then
+        read -p "是否启用在线迁移？(yes/no) [yes]: " live_mode
+        live_mode="${live_mode:-yes}"
+    else
+        live_mode="no"
+    fi
+
+    {
+        show_menu_option "1" "目标节点同名存储映射（--targetstorage 1）"
+        show_menu_option "2" "统一迁移到指定存储"
+        show_menu_option "3" "不指定 targetstorage"
+    }
+    read -p "请选择目标存储策略 [1-3]: " storage_mode
+    case "$storage_mode" in
+        1) target_storage='1' ;;
+        2)
+            target_storage="$(vm_select_storage_by_content images "请选择迁移目标存储")"
+            rc=$?
+            [[ "$rc" -eq 2 ]] && return 0
+            [[ -n "$target_storage" ]] || return 1
+            ;;
+        3) target_storage='' ;;
+        *)
+            log_error "无效选择"
+            return 1
+            ;;
+    esac
+
+    local -a cmd=(qm migrate "$vmid" "$target_node")
+    if [[ "$with_local" == "yes" || "$with_local" == "YES" ]]; then
+        cmd+=(--with-local-disks 1)
+    fi
+    if [[ "$live_mode" == "yes" || "$live_mode" == "YES" ]]; then
+        cmd+=(--online 1)
+    fi
+    [[ -n "$target_storage" ]] && cmd+=(--targetstorage "$target_storage")
+
+    if ! confirm_high_risk_action "将 VM $vmid 迁移到节点 $target_node" "迁移会改写 VM 所在节点与磁盘位置；带本地盘迁移时对网络、存储映射和目标节点能力要求更高。" "目标节点、目标存储或在线迁移条件判断错误时，可能造成任务失败、停机或业务抖动。" "请确认目标节点在线、存储映射正确，并已评估直通设备与维护窗口。" "MIGRATE"; then
+        return 0
+    fi
+
+    local output
+    if ! output="$("${cmd[@]}" 2>&1)"; then
+        echo "$output" | sed 's/^/  /'
+        display_error "迁移失败" "请检查节点连通性、存储映射和日志输出。"
+        return 1
+    fi
+
+    echo "$output" | sed 's/^/  /'
+    display_success "迁移任务已提交" "目标节点: $target_node"
+}
+
+vm_advanced_operations_menu() {
+    while true; do
+        clear
+        show_menu_header "虚拟机高级运维工具箱"
+        vm_show_data_risk_banner
+        show_menu_option "1" "VM 备份与恢复"
+        show_menu_option "2" "VM 配置导入/导出"
+        show_menu_option "3" "模板 / 克隆 / Cloud-Init"
+        show_menu_option "4" "虚拟机磁盘管理"
+        show_menu_option "5" "快照管理"
+        show_menu_option "6" "启动顺序与网络管理"
+        show_menu_option "7" "集群内迁移 VM"
+        echo -e "${RED}警告：涉及备份恢复、磁盘、快照、模板与迁移时，必须先确认备份可用，再核对 VMID / 槽位 / 目标存储。${NC}"
+        show_menu_option "0" "返回"
+        show_menu_footer
+
+        local choice
+        read -p "请选择操作 [0-7]: " choice
+        case "$choice" in
+            1) vm_backup_restore_menu ;;
+            2) vm_config_io_menu ;;
+            3) vm_template_cloudinit_menu ;;
+            4) vm_disk_management_menu ;;
+            5) vm_snapshot_menu ;;
+            6) vm_startup_network_menu ;;
+            7) vm_cluster_migrate ;;
+            0) return ;;
+            *) log_error "无效选择" ;;
+        esac
+        pause_function
+    done
+}
 # 二级菜单：虚拟机与容器
 menu_vm_container() {
     while true; do
@@ -5927,16 +7707,1930 @@ menu_vm_container() {
         show_menu_option "3" "${CYAN}Community Scripts${NC} - 第三方工具集"
         show_menu_option "4" "虚拟机/容器定时开关机"
         show_menu_option "5" "IMG 镜像导入（转 QCOW2/RAW）"
+        show_menu_option "6" "虚拟机高级运维工具箱"
         echo "$UI_DIVIDER"
         show_menu_option "0" "返回主菜单"
         show_menu_footer
-        read -p "请选择操作 [0-5]: " choice
+        read -p "请选择操作 [0-6]: " choice
         case $choice in
             1) fastpve_quick_download_menu ;;
             2) third_party_market_menu ;;
             3) third_party_tools_menu ;;
             4) manage_vm_schedule ;;
             5) img_convert_import_menu ;;
+            6) vm_advanced_operations_menu ;;
+            0) return ;;
+            *) log_error "无效选择" ;;
+        esac
+        pause_function
+    done
+}
+
+# ============ 宿主机网络 / 防火墙 / IPv6 / 诊断工具箱 ============
+
+host_network_show_risk_banner() {
+    echo -e "${RED}${UI_DIVIDER}${NC}"
+    echo -e "${RED}高风险提示：以下功能会直接改写宿主机网络、防火墙和 IPv6 行为。${NC}"
+    echo -e "${YELLOW}请仅在控制台或带外管理可用、已确认维护窗口、已准备回滚方案时继续。${NC}"
+    echo -e "${YELLOW}错误的 bridge / bond / VLAN / 路由 / 防火墙规则可能导致 SSH 与 WebUI 断连。${NC}"
+    echo -e "${RED}${UI_DIVIDER}${NC}"
+}
+
+host_network_ensure_interfaces_file() {
+    if [[ ! -f "$HOST_NETWORK_INTERFACES_FILE" ]]; then
+        cat > "$HOST_NETWORK_INTERFACES_FILE" <<'EOF_INTERFACES'
+auto lo
+iface lo inet loopback
+EOF_INTERFACES
+    fi
+}
+
+host_network_get_all_interface_names() {
+    host_network_ensure_interfaces_file
+    {
+        awk '/^iface[[:space:]]+/ {print $2}' "$HOST_NETWORK_INTERFACES_FILE" 2>/dev/null
+        ip -o link show 2>/dev/null | awk -F': ' '{print $2}' | cut -d'@' -f1
+    } | awk 'NF && $1 != "lo"' | sort -u
+}
+
+host_network_get_configured_bridges() {
+    host_network_ensure_interfaces_file
+    awk '/^iface[[:space:]]+vmbr[0-9]+[[:space:]]+/ {print $2}' "$HOST_NETWORK_INTERFACES_FILE" 2>/dev/null | sort -u
+}
+
+host_network_get_configured_vlans() {
+    host_network_ensure_interfaces_file
+    awk '/^iface[[:space:]]+[A-Za-z0-9_.:-]+\.[0-9]+[[:space:]]+/ {print $2}' "$HOST_NETWORK_INTERFACES_FILE" 2>/dev/null | sort -u
+}
+
+host_network_get_configured_bonds() {
+    host_network_ensure_interfaces_file
+    awk '/^iface[[:space:]]+bond[0-9]+[[:space:]]+/ {print $2}' "$HOST_NETWORK_INTERFACES_FILE" 2>/dev/null | sort -u
+}
+
+host_network_guess_next_name() {
+    local prefix="$1"
+    local idx=0
+    while :; do
+        if ! host_network_get_all_interface_names | grep -qx "${prefix}${idx}"; then
+            echo "${prefix}${idx}"
+            return 0
+        fi
+        idx=$((idx + 1))
+    done
+}
+
+host_network_validate_iface_name() {
+    local name="$1"
+    [[ -n "$name" && ${#name} -le 15 && "$name" =~ ^[A-Za-z0-9_.:-]+$ ]]
+}
+
+host_network_validate_mtu() {
+    local mtu="$1"
+    [[ -z "$mtu" ]] && return 0
+    if [[ ! "$mtu" =~ ^[0-9]+$ || "$mtu" -lt 576 || "$mtu" -gt 9216 ]]; then
+        display_error "MTU 不合法: $mtu" "请输入 576-9216 之间的整数，或留空保持默认。"
+        return 1
+    fi
+}
+
+host_network_validate_ipv4() {
+    local ip="$1"
+    [[ "$ip" =~ ^([0-9]{1,3}\.){3}[0-9]{1,3}$ ]] || return 1
+    awk -F'.' '{for(i=1;i<=4;i++) if($i < 0 || $i > 255) exit 1; exit 0}' <<< "$ip"
+}
+
+host_network_validate_ipv4_cidr() {
+    local value="$1"
+    local ip="${value%/*}"
+    local prefix="${value##*/}"
+    [[ "$value" == */* ]] || return 1
+    host_network_validate_ipv4 "$ip" || return 1
+    [[ "$prefix" =~ ^[0-9]+$ && "$prefix" -ge 0 && "$prefix" -le 32 ]]
+}
+
+host_network_validate_ipv6() {
+    local ip="$1"
+    [[ "$ip" == *:* ]] || return 1
+    [[ "$ip" =~ ^[0-9A-Fa-f:]+(%[A-Za-z0-9_.-]+)?$ ]]
+}
+
+host_network_validate_ipv6_cidr() {
+    local value="$1"
+    local ip="${value%/*}"
+    local prefix="${value##*/}"
+    [[ "$value" == */* ]] || return 1
+    host_network_validate_ipv6 "$ip" || return 1
+    [[ "$prefix" =~ ^[0-9]+$ && "$prefix" -ge 0 && "$prefix" -le 128 ]]
+}
+
+host_network_validate_static_address() {
+    local family="$1"
+    local address="$2"
+    case "$family" in
+        inet) host_network_validate_ipv4_cidr "$address" ;;
+        inet6) host_network_validate_ipv6_cidr "$address" ;;
+        *) return 1 ;;
+    esac
+}
+
+host_network_validate_gateway() {
+    local family="$1"
+    local gateway="$2"
+    [[ -z "$gateway" ]] && return 0
+    case "$family" in
+        inet) host_network_validate_ipv4 "$gateway" ;;
+        inet6) host_network_validate_ipv6 "$gateway" ;;
+        *) return 1 ;;
+    esac
+}
+
+host_network_iface_exists() {
+    local iface_name="$1"
+    host_network_get_all_interface_names | grep -qx "$iface_name"
+}
+
+host_network_interface_has_master_dependency() {
+    local iface_name="$1"
+    awk -v iface_name="$iface_name" '
+        /^[[:space:]]*(bridge-ports|bond-slaves)[[:space:]]+/ {
+            for (i=2; i<=NF; i++) {
+                if ($i == iface_name) {
+                    print $0
+                    exit
+                }
+            }
+        }
+    ' "$HOST_NETWORK_INTERFACES_FILE" 2>/dev/null | grep -q .
+}
+
+host_network_validate_member_list() {
+    local members_text="$1"
+    local owner_name="$2"
+    local relation_label="$3"
+    local -A seen=()
+    local member count=0
+
+    while IFS= read -r member; do
+        [[ -n "$member" ]] || continue
+        host_network_validate_iface_name "$member" || {
+            display_error "$relation_label 中包含非法接口名: $member"
+            return 1
+        }
+        [[ "$member" != "$owner_name" ]] || {
+            display_error "$relation_label 不能引用自身接口: $owner_name"
+            return 1
+        }
+        if [[ -n "${seen[$member]:-}" ]]; then
+            display_error "$relation_label 中存在重复成员: $member"
+            return 1
+        fi
+        seen[$member]=1
+        host_network_iface_exists "$member" || {
+            display_error "接口不存在: $member" "请先确认该接口已经存在于宿主机链路或配置中。"
+            return 1
+        }
+        if host_network_interface_has_master_dependency "$member"; then
+            display_error "接口已被其他 bridge/bond 使用: $member" "请先解除现有从属关系，再重新编排宿主机网络。"
+            return 1
+        fi
+        count=$((count + 1))
+    done < <(printf '%s\n' "$members_text" | tr ' ' '\n' | awk 'NF')
+
+    if (( count == 0 )); then
+        display_error "$relation_label 不能为空"
+        return 1
+    fi
+}
+host_network_select_from_text() {
+    local title="$1"
+    local items_text="$2"
+    mapfile -t items < <(printf '%s\n' "$items_text" | awk 'NF')
+    if (( ${#items[@]} == 0 )); then
+        return 1
+    fi
+
+    echo -e "${CYAN}${title}${NC}"
+    local i=1
+    for item in "${items[@]}"; do
+        printf '  [%d] %s\n' "$i" "$item"
+        i=$((i + 1))
+    done
+    echo "$UI_DIVIDER"
+
+    local pick
+    read -p "请选择序号 (0 返回): " pick
+    pick="${pick:-0}"
+    [[ "$pick" == "0" ]] && return 2
+    [[ "$pick" =~ ^[0-9]+$ ]] || return 1
+    if (( pick < 1 || pick > ${#items[@]} )); then
+        return 1
+    fi
+    printf '%s\n' "${items[$((pick - 1))]}"
+}
+
+host_network_select_interface_name() {
+    host_network_select_from_text "可用接口：" "$(host_network_get_all_interface_names)"
+}
+
+host_network_select_bridge_name() {
+    host_network_select_from_text "已配置桥接：" "$(host_network_get_configured_bridges)"
+}
+
+host_network_select_bond_name() {
+    host_network_select_from_text "已配置 Bond：" "$(host_network_get_configured_bonds)"
+}
+
+host_network_select_vlan_name() {
+    host_network_select_from_text "已配置 VLAN 子接口：" "$(host_network_get_configured_vlans)"
+}
+
+host_network_show_current_overview() {
+    clear
+    show_menu_header "宿主机网络概览"
+    echo -e "${CYAN}运行时链路：${NC}"
+    ip -brief link 2>/dev/null | sed 's/^/  /' || true
+    echo -e "${CYAN}运行时地址：${NC}"
+    ip -brief addr 2>/dev/null | sed 's/^/  /' || true
+    echo -e "${CYAN}默认路由：${NC}"
+    ip route 2>/dev/null | sed 's/^/  /' || true
+    ip -6 route 2>/dev/null | sed 's/^/  /' || true
+    echo -e "${CYAN}当前配置中的 bridge / bond / VLAN：${NC}"
+    awk '
+        /^iface[[:space:]]+/ {
+            name=$2
+            fam=$3
+            method=$4
+            if (name ~ /^vmbr[0-9]+$/ || name ~ /^bond[0-9]+$/ || name ~ /\.[0-9]+$/) {
+                printf "  %s (%s %s)\n", name, fam, method
+            }
+        }
+    ' "$HOST_NETWORK_INTERFACES_FILE" 2>/dev/null || true
+    echo "$UI_DIVIDER"
+}
+
+host_network_collect_family_config() {
+    local family="$1"
+    local phase="${2:-create}"
+    local choice method address gateway extra
+
+    if [[ "$family" == "inet" ]]; then
+        if [[ "$phase" == "update" ]]; then
+            echo "  [1] 保持当前 IPv4"
+            echo "  [2] 静态 IPv4"
+            echo "  [3] DHCPv4"
+            read -p "请选择 IPv4 模式 [1-3]: " choice
+            case "$choice" in
+                1|"") echo "keep|||"; return 0 ;;
+                2) method="static" ;;
+                3) method="dhcp" ;;
+                *) return 1 ;;
+            esac
+        else
+            echo "  [1] 静态 IPv4"
+            echo "  [2] DHCPv4"
+            echo "  [3] 不配置 IPv4"
+            read -p "请选择 IPv4 模式 [1-3]: " choice
+            case "$choice" in
+                1) method="static" ;;
+                2) method="dhcp" ;;
+                3|"") echo "none|||"; return 0 ;;
+                *) return 1 ;;
+            esac
+        fi
+    else
+        if [[ "$phase" == "update" ]]; then
+            echo "  [1] 保持当前 IPv6"
+            echo "  [2] 静态 IPv6"
+            echo "  [3] DHCPv6"
+            echo "  [4] SLAAC"
+            echo "  [5] 移除 IPv6 stanza"
+            read -p "请选择 IPv6 模式 [1-5]: " choice
+            case "$choice" in
+                1|"") echo "keep|||"; return 0 ;;
+                2) method="static" ;;
+                3) method="dhcp" ;;
+                4) method="auto"; extra="accept-ra 2" ;;
+                5) echo "remove|||"; return 0 ;;
+                *) return 1 ;;
+            esac
+        else
+            echo "  [1] 静态 IPv6"
+            echo "  [2] DHCPv6"
+            echo "  [3] SLAAC"
+            echo "  [4] 不配置 IPv6"
+            read -p "请选择 IPv6 模式 [1-4]: " choice
+            case "$choice" in
+                1) method="static" ;;
+                2) method="dhcp" ;;
+                3) method="auto"; extra="accept-ra 2" ;;
+                4|"") echo "none|||"; return 0 ;;
+                *) return 1 ;;
+            esac
+        fi
+    fi
+
+    if [[ "$method" == "static" ]]; then
+        if [[ "$family" == "inet" ]]; then
+            read -p "请输入静态 IPv4/CIDR（示例 192.168.10.2/24）: " address
+        else
+            read -p "请输入静态 IPv6/CIDR（示例 2001:db8::2/64）: " address
+        fi
+        [[ -n "$address" ]] || return 1
+        host_network_validate_static_address "$family" "$address" || {
+            display_error "静态地址格式无效: $address"
+            return 1
+        }
+        read -p "请输入网关（留空跳过）: " gateway
+        host_network_validate_gateway "$family" "$gateway" || {
+            display_error "网关格式无效: $gateway"
+            return 1
+        }
+    fi
+
+    printf '%s|%s|%s|%s\n' "$method" "$address" "$gateway" "$extra"
+}
+host_network_extract_family_stanza() {
+    local file_path="$1"
+    local iface_name="$2"
+    local family="$3"
+    awk -v iface_name="$iface_name" -v family="$family" '
+        BEGIN { capture=0 }
+        {
+            if (capture) {
+                if ($0 !~ /^[[:space:]]/ && $0 ~ /^(iface|auto|allow-)/) {
+                    exit
+                }
+                print
+                next
+            }
+            if ($0 ~ ("^iface[[:space:]]+" iface_name "[[:space:]]+" family "([[:space:]]+|$)")) {
+                capture=1
+                print
+            }
+        }
+    ' "$file_path"
+}
+
+host_network_collect_preserved_family_options() {
+    local file_path="$1"
+    local iface_name="$2"
+    local family="$3"
+    host_network_extract_family_stanza "$file_path" "$iface_name" "$family" | awk '
+        NR == 1 { next }
+        /^[[:space:]]+/ {
+            line=$0
+            sub(/^[[:space:]]+/, "", line)
+            if (line ~ /^(address|gateway|netmask|broadcast|pointopoint|accept-ra|dns-nameservers|dns-search)\b/) next
+            if (line ~ /MASQUERADE/) next
+            if (line ~ /net\.ipv6\.conf\.all\.forwarding/) next
+            print line
+        }
+    '
+}
+
+host_network_remove_iface_family_from_candidate() {
+    local file_path="$1"
+    local iface_name="$2"
+    local family="$3"
+    local tmp
+    tmp=$(mktemp)
+    awk -v iface_name="$iface_name" -v family="$family" '
+        BEGIN { skip=0 }
+        {
+            if (skip) {
+                if ($0 !~ /^[[:space:]]/ && $0 ~ /^(iface|auto|allow-)/) {
+                    skip=0
+                } else {
+                    next
+                }
+            }
+            if ($0 ~ ("^iface[[:space:]]+" iface_name "[[:space:]]+" family "([[:space:]]+|$)")) {
+                skip=1
+                next
+            }
+            print
+        }
+    ' "$file_path" > "$tmp"
+    mv "$tmp" "$file_path"
+}
+
+host_network_remove_iface_from_candidate() {
+    local file_path="$1"
+    local iface_name="$2"
+    local tmp
+    tmp=$(mktemp)
+    awk -v iface_name="$iface_name" '
+        BEGIN { skip=0 }
+        function rebuild_line(line,   n, i, parts, out, kept) {
+            n=split(line, parts, /[[:space:]]+/)
+            out=parts[1]
+            kept=0
+            for (i=2; i<=n; i++) {
+                if (parts[i] == iface_name || parts[i] == "") continue
+                out=out " " parts[i]
+                kept=1
+            }
+            if (kept) print out
+        }
+        {
+            if (skip) {
+                if ($0 !~ /^[[:space:]]/ && $0 ~ /^(iface|auto|allow-)/) {
+                    skip=0
+                } else {
+                    next
+                }
+            }
+            if ($0 ~ ("^# PVE-TOOLS HOST IFACE (BEGIN|END) " iface_name "$")) next
+            if ($0 ~ /^(auto|allow-[^[:space:]]+)/) {
+                if ($0 ~ ("(^|[[:space:]])" iface_name "([[:space:]]|$)")) {
+                    rebuild_line($0)
+                    next
+                }
+            }
+            if ($0 ~ ("^iface[[:space:]]+" iface_name "[[:space:]]+(inet|inet6)([[:space:]]+|$)")) {
+                skip=1
+                next
+            }
+            print
+        }
+    ' "$file_path" > "$tmp"
+    mv "$tmp" "$file_path"
+}
+
+host_network_ensure_auto_line_in_candidate() {
+    local file_path="$1"
+    local iface_name="$2"
+    if ! grep -Eq "^(auto|allow-[^[:space:]]+)[[:space:]].*\b${iface_name}\b" "$file_path"; then
+        printf '\nauto %s\n' "$iface_name" >> "$file_path"
+    fi
+}
+
+host_network_append_text_to_candidate() {
+    local file_path="$1"
+    local text="$2"
+    printf '\n%s\n' "$text" >> "$file_path"
+}
+
+host_network_build_family_stanza() {
+    local iface_name="$1"
+    local family="$2"
+    local cfg="$3"
+    local preserved_text="$4"
+    local method address gateway extra
+    IFS='|' read -r method address gateway extra <<< "$cfg"
+
+    [[ "$method" == "remove" ]] && return 0
+    [[ "$method" == "keep" ]] && return 0
+
+    printf 'iface %s %s %s\n' "$iface_name" "$family" "$method"
+    if [[ -n "$preserved_text" ]]; then
+        while IFS= read -r line; do
+            [[ -n "$line" ]] && printf '    %s\n' "$line"
+        done <<< "$preserved_text"
+    fi
+    [[ -n "$address" ]] && printf '    address %s\n' "$address"
+    [[ -n "$gateway" ]] && printf '    gateway %s\n' "$gateway"
+    [[ -n "$extra" ]] && printf '    %s\n' "$extra"
+}
+
+host_network_build_bridge_block() {
+    local iface_name="$1"
+    local ports="$2"
+    local vlan_aware="$3"
+    local mtu="$4"
+    local ipv4_cfg="$5"
+    local ipv6_cfg="$6"
+    local v4_method v4_addr v4_gw v4_extra
+    local v6_method v6_addr v6_gw v6_extra
+    IFS='|' read -r v4_method v4_addr v4_gw v4_extra <<< "$ipv4_cfg"
+    IFS='|' read -r v6_method v6_addr v6_gw v6_extra <<< "$ipv6_cfg"
+
+    [[ "$v4_method" == "none" ]] && v4_method="manual"
+    printf 'auto %s\n' "$iface_name"
+    printf 'iface %s inet %s\n' "$iface_name" "$v4_method"
+    printf '    bridge-ports %s\n' "${ports:-none}"
+    printf '    bridge-stp off\n'
+    printf '    bridge-fd 0\n'
+    [[ "$vlan_aware" == "yes" || "$vlan_aware" == "YES" ]] && printf '    bridge-vlan-aware yes\n'
+    [[ -n "$mtu" ]] && printf '    mtu %s\n' "$mtu"
+    [[ "$v4_method" == "static" && -n "$v4_addr" ]] && printf '    address %s\n' "$v4_addr"
+    [[ "$v4_method" == "static" && -n "$v4_gw" ]] && printf '    gateway %s\n' "$v4_gw"
+
+    if [[ "$v6_method" != "none" ]]; then
+        printf '\niface %s inet6 %s\n' "$iface_name" "$v6_method"
+        [[ -n "$v6_addr" ]] && printf '    address %s\n' "$v6_addr"
+        [[ -n "$v6_gw" ]] && printf '    gateway %s\n' "$v6_gw"
+        [[ -n "$v6_extra" ]] && printf '    %s\n' "$v6_extra"
+    fi
+}
+
+host_network_build_vlan_block() {
+    local iface_name="$1"
+    local raw_dev="$2"
+    local mtu="$3"
+    local ipv4_cfg="$4"
+    local ipv6_cfg="$5"
+    local v4_method v4_addr v4_gw v4_extra
+    local v6_method v6_addr v6_gw v6_extra
+    IFS='|' read -r v4_method v4_addr v4_gw v4_extra <<< "$ipv4_cfg"
+    IFS='|' read -r v6_method v6_addr v6_gw v6_extra <<< "$ipv6_cfg"
+
+    [[ "$v4_method" == "none" ]] && v4_method="manual"
+    printf 'auto %s\n' "$iface_name"
+    printf 'iface %s inet %s\n' "$iface_name" "$v4_method"
+    printf '    vlan-raw-device %s\n' "$raw_dev"
+    [[ -n "$mtu" ]] && printf '    mtu %s\n' "$mtu"
+    [[ "$v4_method" == "static" && -n "$v4_addr" ]] && printf '    address %s\n' "$v4_addr"
+    [[ "$v4_method" == "static" && -n "$v4_gw" ]] && printf '    gateway %s\n' "$v4_gw"
+
+    if [[ "$v6_method" != "none" ]]; then
+        printf '\niface %s inet6 %s\n' "$iface_name" "$v6_method"
+        [[ -n "$v6_addr" ]] && printf '    address %s\n' "$v6_addr"
+        [[ -n "$v6_gw" ]] && printf '    gateway %s\n' "$v6_gw"
+        [[ -n "$v6_extra" ]] && printf '    %s\n' "$v6_extra"
+    fi
+}
+
+host_network_build_bond_block() {
+    local iface_name="$1"
+    local slaves="$2"
+    local mode="$3"
+    local mtu="$4"
+    local ipv4_cfg="$5"
+    local ipv6_cfg="$6"
+    local mode_name=""
+    local v4_method v4_addr v4_gw v4_extra
+    local v6_method v6_addr v6_gw v6_extra
+    IFS='|' read -r v4_method v4_addr v4_gw v4_extra <<< "$ipv4_cfg"
+    IFS='|' read -r v6_method v6_addr v6_gw v6_extra <<< "$ipv6_cfg"
+
+    case "$mode" in
+        0) mode_name="balance-rr" ;;
+        1) mode_name="active-backup" ;;
+        4) mode_name="802.3ad" ;;
+        6) mode_name="balance-alb" ;;
+        *) return 1 ;;
+    esac
+
+    [[ "$v4_method" == "none" ]] && v4_method="manual"
+    printf 'auto %s\n' "$iface_name"
+    printf 'iface %s inet %s\n' "$iface_name" "$v4_method"
+    printf '    bond-slaves %s\n' "$slaves"
+    printf '    bond-mode %s\n' "$mode_name"
+    printf '    bond-miimon 100\n'
+    [[ "$mode_name" == "802.3ad" ]] && printf '    bond-xmit-hash-policy layer2+3\n    bond-lacp-rate fast\n'
+    [[ -n "$mtu" ]] && printf '    mtu %s\n' "$mtu"
+    [[ "$v4_method" == "static" && -n "$v4_addr" ]] && printf '    address %s\n' "$v4_addr"
+    [[ "$v4_method" == "static" && -n "$v4_gw" ]] && printf '    gateway %s\n' "$v4_gw"
+
+    if [[ "$v6_method" != "none" ]]; then
+        printf '\niface %s inet6 %s\n' "$iface_name" "$v6_method"
+        [[ -n "$v6_addr" ]] && printf '    address %s\n' "$v6_addr"
+        [[ -n "$v6_gw" ]] && printf '    gateway %s\n' "$v6_gw"
+        [[ -n "$v6_extra" ]] && printf '    %s\n' "$v6_extra"
+    fi
+}
+
+host_network_commit_candidate() {
+    local candidate_file="$1"
+    local action_desc="$2"
+    local risk_desc="$3"
+    local impact_desc="$4"
+    local backup_desc="$5"
+    local backup_path=""
+
+    mkdir -p "$(dirname "$HOST_NETWORK_INTERFACES_STAGED_FILE")" >/dev/null 2>&1 || true
+    cp "$candidate_file" "$HOST_NETWORK_INTERFACES_STAGED_FILE"
+
+    clear
+    show_menu_header "宿主机网络变更预览"
+    echo -e "${YELLOW}动作:${NC} $action_desc"
+    echo -e "${YELLOW}已写入 staged:${NC} $HOST_NETWORK_INTERFACES_STAGED_FILE"
+    echo "$UI_DIVIDER"
+    diff -u "$HOST_NETWORK_INTERFACES_FILE" "$candidate_file" 2>/dev/null | sed 's/^/  /' || true
+    echo "$UI_DIVIDER"
+
+    local stage_only
+    read -p "是否只写入 staged 文件而不立即应用？(yes/no) [yes]: " stage_only
+    stage_only="${stage_only:-yes}"
+    if [[ "$stage_only" == "yes" || "$stage_only" == "YES" ]]; then
+        display_success "候选网络配置已写入 staged 文件" "建议先在控制台或带外环境审阅后，再使用 pvenetcommit / ifreload 正式切换。"
+        return 0
+    fi
+
+    if ! confirm_high_risk_action "$action_desc" "$risk_desc" "$impact_desc" "$backup_desc" "APPLY-NET"; then
+        return 0
+    fi
+
+    backup_file "$HOST_NETWORK_INTERFACES_FILE" backup_path >/dev/null 2>&1 || true
+
+    if command -v pvenetcommit >/dev/null 2>&1; then
+        if pvenetcommit >/dev/null 2>&1; then
+            display_success "网络配置已通过 pvenetcommit 提交" "如 SSH 断连，请通过控制台确认新链路已生效。"
+            return 0
+        fi
+        log_warn "pvenetcommit 执行失败，准备回退到显式文件切换流程。"
+    fi
+
+    if ! command -v ifreload >/dev/null 2>&1; then
+        display_error "当前环境缺少 ifreload，已拒绝直接覆盖正式网络配置" "请保留 staged 文件，并在控制台中使用 pvenetcommit 或人工审核后再应用。"
+        return 1
+    fi
+
+    cp "$candidate_file" "$HOST_NETWORK_INTERFACES_FILE"
+    if ifreload -a >/dev/null 2>&1; then
+        display_success "网络配置已应用" "如当前会话断连，请通过控制台确认 bridge / bond / VLAN 和路由状态。"
+        return 0
+    fi
+
+    if [[ -n "$backup_path" && -f "$backup_path" ]]; then
+        log_warn "新网络配置应用失败，正在尝试自动恢复备份。"
+        cp "$backup_path" "$HOST_NETWORK_INTERFACES_FILE"
+        if ifreload -a >/dev/null 2>&1; then
+            display_error "网络配置应用失败，已自动回滚" "请审阅 $HOST_NETWORK_INTERFACES_STAGED_FILE 与备份 $backup_path 后再重试。"
+            return 1
+        fi
+        display_error "网络配置应用失败，且自动回滚未能重新加载" "请立即通过控制台检查 $HOST_NETWORK_INTERFACES_FILE、$HOST_NETWORK_INTERFACES_STAGED_FILE 与备份 $backup_path。"
+        return 1
+    fi
+
+    display_error "网络配置应用失败" "未获取到可用备份，需立即通过控制台检查 $HOST_NETWORK_INTERFACES_FILE。"
+    return 1
+}
+host_network_create_bridge() {
+    host_network_show_current_overview
+    local default_name bridge_name ports vlan_aware mtu ipv4_cfg ipv6_cfg tmp block
+    default_name="$(host_network_guess_next_name vmbr)"
+    read -p "请输入桥接名称 [$default_name]: " bridge_name
+    bridge_name="${bridge_name:-$default_name}"
+    host_network_validate_iface_name "$bridge_name" || {
+        display_error "桥接名称不合法: $bridge_name" "接口名需为 1-15 位，且仅允许字母、数字、._:-。"
+        return 1
+    }
+    if host_network_get_all_interface_names | grep -qx "$bridge_name"; then
+        display_error "接口已存在: $bridge_name"
+        return 1
+    fi
+
+    echo -e "${CYAN}可作为 bridge-ports 的接口（可输入多个，以空格分隔；留空表示 none）：${NC}"
+    host_network_get_all_interface_names | sed 's/^/  - /'
+    read -p "bridge-ports [none]: " ports
+    ports="${ports:-none}"
+    if [[ "$ports" != "none" ]]; then
+        host_network_validate_member_list "$ports" "$bridge_name" "bridge-ports" || return 1
+    fi
+
+    read -p "是否启用 VLAN Aware？(yes/no) [yes]: " vlan_aware
+    vlan_aware="${vlan_aware:-yes}"
+    case "$vlan_aware" in
+        yes|YES|no|NO) ;;
+        *)
+            display_error "VLAN Aware 仅支持 yes/no"
+            return 1
+            ;;
+    esac
+
+    read -p "MTU（留空保持默认）: " mtu
+    host_network_validate_mtu "$mtu" || return 1
+    echo "$UI_DIVIDER"
+    ipv4_cfg="$(host_network_collect_family_config inet create)" || return 1
+    ipv6_cfg="$(host_network_collect_family_config inet6 create)" || return 1
+
+    tmp=$(mktemp)
+    cp "$HOST_NETWORK_INTERFACES_FILE" "$tmp"
+    block="$(host_network_build_bridge_block "$bridge_name" "$ports" "$vlan_aware" "$mtu" "$ipv4_cfg" "$ipv6_cfg")"
+    host_network_remove_iface_from_candidate "$tmp" "$bridge_name"
+    host_network_append_text_to_candidate "$tmp" "# PVE-TOOLS HOST IFACE BEGIN $bridge_name
+$block
+# PVE-TOOLS HOST IFACE END $bridge_name"
+    host_network_commit_candidate "$tmp" "创建桥接 $bridge_name" "将直接改写宿主机网桥配置，错误的桥接成员口、地址或网关会导致宿主机失联。" "SSH/WebUI、集群网络、VM 出口网络都可能受到影响。" "请确认控制台可用、bridge-ports 和网关正确，并已准备回滚。"
+    rm -f "$tmp"
+}
+host_network_delete_bridge() {
+    local bridge_name
+    bridge_name="$(host_network_select_bridge_name)"
+    local rc=$?
+    [[ "$rc" -eq 2 ]] && return 0
+    [[ -n "$bridge_name" ]] || return 1
+
+    if grep -Eq "(bridge-ports|bond-slaves|vlan-raw-device)[[:space:]].*\b${bridge_name}\b" "$HOST_NETWORK_INTERFACES_FILE" 2>/dev/null; then
+        display_error "检测到其他接口仍依赖 $bridge_name" "请先删除依赖它的 VLAN、bond 或 bridge 关系后再试。"
+        return 1
+    fi
+
+    local tmp
+    tmp=$(mktemp)
+    cp "$HOST_NETWORK_INTERFACES_FILE" "$tmp"
+    host_network_remove_iface_from_candidate "$tmp" "$bridge_name"
+    host_network_commit_candidate "$tmp" "删除桥接 $bridge_name" "删除桥接会切断与该 bridge 绑定的宿主机与 VM 网络配置。" "如果该 bridge 承载管理口或生产流量，宿主机会立即失联。" "请确认管理流量不走该桥接，且相关 VM 已迁移或停机。"
+    rm -f "$tmp"
+}
+
+host_network_bridge_menu() {
+    while true; do
+        clear
+        show_menu_header "桥接管理"
+        host_network_show_risk_banner
+        echo -e "${CYAN}当前 bridge：${NC}"
+        if host_network_get_configured_bridges | awk 'NF{print "  - "$0}'; then :; fi
+        echo "$UI_DIVIDER"
+        show_menu_option "1" "列出当前网卡与桥接"
+        show_menu_option "2" "创建桥接"
+        show_menu_option "3" "删除桥接"
+        show_menu_option "0" "返回"
+        show_menu_footer
+        read -p "请选择操作 [0-3]: " choice
+        case "$choice" in
+            1) host_network_show_current_overview ;;
+            2) host_network_create_bridge ;;
+            3) host_network_delete_bridge ;;
+            0) return ;;
+            *) log_error "无效选择" ;;
+        esac
+        pause_function
+    done
+}
+
+host_network_create_vlan() {
+    local raw_dev vlan_id iface_name mtu ipv4_cfg ipv6_cfg tmp block
+    raw_dev="$(host_network_select_interface_name)"
+    local rc=$?
+    [[ "$rc" -eq 2 ]] && return 0
+    [[ -n "$raw_dev" ]] || return 1
+
+    host_network_iface_exists "$raw_dev" || {
+        display_error "上联接口不存在: $raw_dev"
+        return 1
+    }
+
+    read -p "请输入 VLAN ID: " vlan_id
+    [[ "$vlan_id" =~ ^[0-9]+$ && "$vlan_id" -ge 1 && "$vlan_id" -le 4094 ]] || {
+        display_error "VLAN ID 不合法: $vlan_id" "请输入 1-4094 之间的整数。"
+        return 1
+    }
+    iface_name="${raw_dev}.${vlan_id}"
+    read -p "请输入 VLAN 子接口名称 [$iface_name]: " iface_name
+    iface_name="${iface_name:-${raw_dev}.${vlan_id}}"
+    host_network_validate_iface_name "$iface_name" || {
+        display_error "接口名称不合法: $iface_name" "接口名需为 1-15 位，且仅允许字母、数字、._:-。"
+        return 1
+    }
+    if host_network_get_all_interface_names | grep -qx "$iface_name"; then
+        display_error "接口已存在: $iface_name"
+        return 1
+    fi
+    read -p "MTU（留空保持默认）: " mtu
+    host_network_validate_mtu "$mtu" || return 1
+    echo "$UI_DIVIDER"
+    ipv4_cfg="$(host_network_collect_family_config inet create)" || return 1
+    ipv6_cfg="$(host_network_collect_family_config inet6 create)" || return 1
+
+    tmp=$(mktemp)
+    cp "$HOST_NETWORK_INTERFACES_FILE" "$tmp"
+    block="$(host_network_build_vlan_block "$iface_name" "$raw_dev" "$mtu" "$ipv4_cfg" "$ipv6_cfg")"
+    host_network_remove_iface_from_candidate "$tmp" "$iface_name"
+    host_network_append_text_to_candidate "$tmp" "# PVE-TOOLS HOST IFACE BEGIN $iface_name
+$block
+# PVE-TOOLS HOST IFACE END $iface_name"
+    host_network_commit_candidate "$tmp" "创建 VLAN 子接口 $iface_name" "VLAN 子接口会改写宿主机链路与上联 VLAN 规划。" "VLAN ID、上联接口或网关错误时，相关业务与管理流量会中断。" "请确认上联交换机配置、VLAN ID、地址规划和控制台回滚路径。"
+    rm -f "$tmp"
+}
+host_network_delete_vlan() {
+    local iface_name
+    iface_name="$(host_network_select_vlan_name)"
+    local rc=$?
+    [[ "$rc" -eq 2 ]] && return 0
+    [[ -n "$iface_name" ]] || return 1
+
+    if grep -Eq "(bridge-ports|bond-slaves|vlan-raw-device)[[:space:]].*\b${iface_name}\b" "$HOST_NETWORK_INTERFACES_FILE" 2>/dev/null; then
+        display_error "检测到其他接口仍依赖 $iface_name" "请先删除依赖关系后再试。"
+        return 1
+    fi
+
+    local tmp
+    tmp=$(mktemp)
+    cp "$HOST_NETWORK_INTERFACES_FILE" "$tmp"
+    host_network_remove_iface_from_candidate "$tmp" "$iface_name"
+    host_network_commit_candidate "$tmp" "删除 VLAN 子接口 $iface_name" "删除 VLAN 子接口会中断承载在该 VLAN 上的宿主机和 VM 网络。" "业务中断、管理口断连和路由丢失都可能立即发生。" "请先确认该 VLAN 不再承担管理面或生产流量。"
+    rm -f "$tmp"
+}
+
+host_network_vlan_menu() {
+    while true; do
+        clear
+        show_menu_header "VLAN 子接口管理"
+        host_network_show_risk_banner
+        echo -e "${CYAN}当前 VLAN 子接口：${NC}"
+        if host_network_get_configured_vlans | awk 'NF{print "  - "$0}'; then :; fi
+        echo "$UI_DIVIDER"
+        show_menu_option "1" "列出 VLAN 子接口"
+        show_menu_option "2" "创建 VLAN 子接口"
+        show_menu_option "3" "删除 VLAN 子接口"
+        show_menu_option "0" "返回"
+        show_menu_footer
+        read -p "请选择操作 [0-3]: " choice
+        case "$choice" in
+            1) host_network_show_current_overview ;;
+            2) host_network_create_vlan ;;
+            3) host_network_delete_vlan ;;
+            0) return ;;
+            *) log_error "无效选择" ;;
+        esac
+        pause_function
+    done
+}
+
+host_network_create_bond() {
+    local default_name bond_name slaves mode mtu ipv4_cfg ipv6_cfg tmp block
+    default_name="$(host_network_guess_next_name bond)"
+    read -p "请输入 Bond 名称 [$default_name]: " bond_name
+    bond_name="${bond_name:-$default_name}"
+    host_network_validate_iface_name "$bond_name" || {
+        display_error "Bond 名称不合法: $bond_name" "接口名需为 1-15 位，且仅允许字母、数字、._:-。"
+        return 1
+    }
+    if host_network_get_all_interface_names | grep -qx "$bond_name"; then
+        display_error "接口已存在: $bond_name"
+        return 1
+    fi
+    echo -e "${CYAN}可加入 Bond 的接口（输入多个，以空格分隔）：${NC}"
+    host_network_get_all_interface_names | sed 's/^/  - /'
+    read -p "bond-slaves: " slaves
+    host_network_validate_member_list "$slaves" "$bond_name" "bond-slaves" || return 1
+
+    echo "  [0] mode 0  = balance-rr"
+    echo "  [1] mode 1  = active-backup"
+    echo "  [4] mode 4  = 802.3ad"
+    echo "  [6] mode 6  = balance-alb"
+    read -p "请选择 Bond 模式 [0/1/4/6]: " mode
+    [[ "$mode" =~ ^(0|1|4|6)$ ]] || {
+        display_error "仅支持 Bond 模式 0/1/4/6"
+        return 1
+    }
+    read -p "MTU（留空保持默认）: " mtu
+    host_network_validate_mtu "$mtu" || return 1
+    echo "$UI_DIVIDER"
+    ipv4_cfg="$(host_network_collect_family_config inet create)" || return 1
+    ipv6_cfg="$(host_network_collect_family_config inet6 create)" || return 1
+
+    tmp=$(mktemp)
+    cp "$HOST_NETWORK_INTERFACES_FILE" "$tmp"
+    block="$(host_network_build_bond_block "$bond_name" "$slaves" "$mode" "$mtu" "$ipv4_cfg" "$ipv6_cfg")"
+    host_network_remove_iface_from_candidate "$tmp" "$bond_name"
+    host_network_append_text_to_candidate "$tmp" "# PVE-TOOLS HOST IFACE BEGIN $bond_name
+$block
+# PVE-TOOLS HOST IFACE END $bond_name"
+    host_network_commit_candidate "$tmp" "创建 Bond $bond_name" "Bond 会重组宿主机上联链路，错误的成员口或模式会导致管理面和业务流量异常。" "交换机 LACP/静态聚合不匹配时，链路可能抖动、黑洞或单向丢包。" "请确认交换机侧聚合模式、成员口、MTU 与回滚路径已经准备好。"
+    rm -f "$tmp"
+}
+host_network_delete_bond() {
+    local bond_name
+    bond_name="$(host_network_select_bond_name)"
+    local rc=$?
+    [[ "$rc" -eq 2 ]] && return 0
+    [[ -n "$bond_name" ]] || return 1
+
+    if grep -Eq "(bridge-ports|bond-slaves|vlan-raw-device)[[:space:]].*\b${bond_name}\b" "$HOST_NETWORK_INTERFACES_FILE" 2>/dev/null; then
+        display_error "检测到其他接口仍依赖 $bond_name" "请先解除 bridge、VLAN 或其他依赖后再删除。"
+        return 1
+    fi
+
+    local tmp
+    tmp=$(mktemp)
+    cp "$HOST_NETWORK_INTERFACES_FILE" "$tmp"
+    host_network_remove_iface_from_candidate "$tmp" "$bond_name"
+    host_network_commit_candidate "$tmp" "删除 Bond $bond_name" "删除 Bond 会让其上的 bridge、VLAN、地址和上联聚合失效。" "生产网络、存储网络、集群心跳都可能立即受影响。" "请确认已迁移上层依赖，并通过控制台执行。"
+    rm -f "$tmp"
+}
+
+host_network_bond_menu() {
+    while true; do
+        clear
+        show_menu_header "Bond 管理"
+        host_network_show_risk_banner
+        echo -e "${CYAN}当前 Bond：${NC}"
+        if host_network_get_configured_bonds | awk 'NF{print "  - "$0}'; then :; fi
+        echo "$UI_DIVIDER"
+        show_menu_option "1" "列出 Bond"
+        show_menu_option "2" "创建 Bond"
+        show_menu_option "3" "删除 Bond"
+        show_menu_option "0" "返回"
+        show_menu_footer
+        read -p "请选择操作 [0-3]: " choice
+        case "$choice" in
+            1) host_network_show_current_overview ;;
+            2) host_network_create_bond ;;
+            3) host_network_delete_bond ;;
+            0) return ;;
+            *) log_error "无效选择" ;;
+        esac
+        pause_function
+    done
+}
+
+host_network_configure_interface_addressing() {
+    local iface_name ipv4_cfg ipv6_cfg tmp preserved block method
+    iface_name="$(host_network_select_interface_name)"
+    local rc=$?
+    [[ "$rc" -eq 2 ]] && return 0
+    [[ -n "$iface_name" ]] || return 1
+
+    echo -e "${CYAN}为接口 $iface_name 更新地址模式：${NC}"
+    ipv4_cfg="$(host_network_collect_family_config inet update)" || return 1
+    ipv6_cfg="$(host_network_collect_family_config inet6 update)" || return 1
+
+    tmp=$(mktemp)
+    cp "$HOST_NETWORK_INTERFACES_FILE" "$tmp"
+
+    IFS='|' read -r method _ <<< "$ipv4_cfg"
+    if [[ "$method" != "keep" ]]; then
+        preserved="$(host_network_collect_preserved_family_options "$HOST_NETWORK_INTERFACES_FILE" "$iface_name" inet)"
+        host_network_remove_iface_family_from_candidate "$tmp" "$iface_name" inet
+        if [[ "$method" != "remove" ]]; then
+            host_network_ensure_auto_line_in_candidate "$tmp" "$iface_name"
+            block="$(host_network_build_family_stanza "$iface_name" inet "$ipv4_cfg" "$preserved")"
+            host_network_append_text_to_candidate "$tmp" "$block"
+        fi
+    fi
+
+    IFS='|' read -r method _ <<< "$ipv6_cfg"
+    if [[ "$method" != "keep" ]]; then
+        preserved="$(host_network_collect_preserved_family_options "$HOST_NETWORK_INTERFACES_FILE" "$iface_name" inet6)"
+        host_network_remove_iface_family_from_candidate "$tmp" "$iface_name" inet6
+        if [[ "$method" != "remove" ]]; then
+            host_network_ensure_auto_line_in_candidate "$tmp" "$iface_name"
+            block="$(host_network_build_family_stanza "$iface_name" inet6 "$ipv6_cfg" "$preserved")"
+            host_network_append_text_to_candidate "$tmp" "$block"
+        fi
+    fi
+
+    host_network_commit_candidate "$tmp" "更新接口 $iface_name 的 IPv4/IPv6 地址模式" "会直接改写宿主机接口地址、网关和 RA/DHCP 行为。" "管理面 IP、默认路由和业务地址可能立即切换。" "请确认新的地址、网关、前缀和维护窗口都已校对。"
+    rm -f "$tmp"
+}
+
+host_firewall_get_node_names() {
+    find /etc/pve/nodes -mindepth 1 -maxdepth 1 -type d -printf '%f\n' 2>/dev/null | sort
+}
+
+host_firewall_select_node_name() {
+    host_network_select_from_text "可用节点：" "$(host_firewall_get_node_names)"
+}
+
+host_firewall_select_guest() {
+    local kind="$1"
+    local list_text
+    if [[ "$kind" == "vm" ]]; then
+        list_text="$(qm list 2>/dev/null | awk 'NR>1 {print $1 "|" $2}')"
+    else
+        list_text="$(pct list 2>/dev/null | awk 'NR>1 {print $1 "|" $2}')"
+    fi
+    mapfile -t items < <(printf '%s\n' "$list_text" | awk 'NF')
+    (( ${#items[@]} > 0 )) || return 1
+    echo -e "${CYAN}请选择${kind^^}：${NC}"
+    local idx=1
+    local item id name
+    for item in "${items[@]}"; do
+        id="${item%%|*}"
+        name="${item#*|}"
+        printf '  [%d] %s (%s)\n' "$idx" "$id" "$name"
+        idx=$((idx + 1))
+    done
+    echo "$UI_DIVIDER"
+    local pick
+    read -p "请选择序号 (0 返回): " pick
+    pick="${pick:-0}"
+    [[ "$pick" == "0" ]] && return 2
+    [[ "$pick" =~ ^[0-9]+$ ]] || return 1
+    if (( pick < 1 || pick > ${#items[@]} )); then
+        return 1
+    fi
+    id="${items[$((pick - 1))]%%|*}"
+    printf '%s\n' "$id"
+}
+
+host_firewall_validate_group_name() {
+    local group_name="$1"
+    [[ -n "$group_name" && "$group_name" =~ ^[A-Za-z0-9][A-Za-z0-9_.:-]{0,63}$ ]]
+}
+
+host_firewall_validate_identifier() {
+    local scope="$1"
+    local identifier="$2"
+    case "$scope" in
+        datacenter)
+            [[ "$identifier" == "cluster" ]]
+            ;;
+        node)
+            [[ "$identifier" =~ ^[A-Za-z0-9][A-Za-z0-9.-]*$ ]]
+            ;;
+        vm|ct)
+            [[ "$identifier" =~ ^[0-9]+$ ]]
+            ;;
+        security-group)
+            host_firewall_validate_group_name "$identifier"
+            ;;
+        *)
+            return 1
+            ;;
+    esac
+}
+
+host_firewall_is_allowed_target_path() {
+    local file_path="$1"
+    case "$file_path" in
+        /etc/pve/firewall/cluster.fw|/etc/pve/nodes/*/host.fw|/etc/pve/firewall/*.fw)
+            return 0
+            ;;
+        *)
+            return 1
+            ;;
+    esac
+}
+
+host_firewall_target_path() {
+    local scope="$1"
+    local identifier="$2"
+    local path=""
+
+    host_firewall_validate_identifier "$scope" "$identifier" || return 1
+
+    case "$scope" in
+        datacenter) path="$PVE_CLUSTER_FIREWALL_FILE" ;;
+        node) printf -v path '/etc/pve/nodes/%s/host.fw' "$identifier" ;;
+        vm|ct) printf -v path '/etc/pve/firewall/%s.fw' "$identifier" ;;
+        *) return 1 ;;
+    esac
+
+    host_firewall_is_allowed_target_path "$path" || return 1
+    printf '%s\n' "$path"
+}
+
+host_firewall_validate_ruleset_content_for_target() {
+    local kind="$1"
+    local content="$2"
+    if [[ "$kind" == "security-group" ]]; then
+        printf '%s\n' "$content" | awk 'NF{exit !($0 ~ /^\[[Gg][Rr][Oo][Uu][Pp][[:space:]]+/)} END{if(NR==0) exit 1}'
+        return $?
+    fi
+    printf '%s\n' "$content" | grep -Eq '^\[[^]]+\]'
+}
+
+host_firewall_prepare_group_section() {
+    local group_name="$1"
+    local content="$2"
+    awk -v target="[group ${group_name}]" '
+        BEGIN { started=0 }
+        {
+            if (!started) {
+                if ($0 ~ /^\[[Gg][Rr][Oo][Uu][Pp][[:space:]]+/) {
+                    print target
+                    started=1
+                }
+                next
+            }
+            if ($0 ~ /^\[/) {
+                exit
+            }
+            print
+        }
+        END { if (!started) exit 1 }
+    ' <<< "$content"
+}
+
+host_firewall_ensure_target_file() {
+    local file_path="$1"
+    mkdir -p "$(dirname "$file_path")" >/dev/null 2>&1 || true
+    if [[ ! -f "$file_path" ]]; then
+        cat > "$file_path" <<'EOF_FW'
+[OPTIONS]
+enable: 0
+
+[RULES]
+EOF_FW
+    fi
+}
+
+host_firewall_upsert_option() {
+    local file_path="$1"
+    local option_key="$2"
+    local option_value="$3"
+    local tmp
+    tmp=$(mktemp)
+
+    awk -v option_key="$option_key" -v option_value="$option_value" '
+        BEGIN { in_options=0; found_options=0; replaced=0 }
+        {
+            if ($0 == "[OPTIONS]") {
+                found_options=1
+                in_options=1
+                print
+                next
+            }
+            if (in_options && $0 ~ /^\[/) {
+                if (!replaced) {
+                    printf "%s: %s\n", option_key, option_value
+                    replaced=1
+                }
+                in_options=0
+            }
+            if (in_options && $0 ~ ("^" option_key ":[[:space:]]*")) {
+                printf "%s: %s\n", option_key, option_value
+                replaced=1
+                next
+            }
+            print
+        }
+        END {
+            if (!found_options) {
+                print "[OPTIONS]"
+                printf "%s: %s\n\n", option_key, option_value
+                print "[RULES]"
+            } else if (in_options && !replaced) {
+                printf "%s: %s\n", option_key, option_value
+            }
+        }
+    ' "$file_path" > "$tmp"
+    mv "$tmp" "$file_path"
+}
+
+host_firewall_select_security_group() {
+    local allow_new="${1:-}"
+    mapfile -t groups < <(host_firewall_get_security_groups)
+    echo -e "${CYAN}当前安全组：${NC}"
+    local idx=1
+    local group
+    for group in "${groups[@]}"; do
+        printf '  [%d] %s\n' "$idx" "$group"
+        idx=$((idx + 1))
+    done
+    if [[ "$allow_new" == "allow_new" ]]; then
+        echo "  [N] 新建安全组"
+    fi
+    echo "$UI_DIVIDER"
+    local pick
+    read -p "请选择安全组 (0 返回): " pick
+    [[ "$pick" == "0" ]] && return 2
+    if [[ "$allow_new" == "allow_new" && ( "$pick" == "N" || "$pick" == "n" ) ]]; then
+        read -p "请输入新的安全组名称: " group
+        host_firewall_validate_group_name "$group" || {
+            display_error "安全组名称不合法: $group" "仅允许字母、数字、._:-，且长度不超过 64。"
+            return 1
+        }
+        printf '%s\n' "$group"
+        return 0
+    fi
+    [[ "$pick" =~ ^[0-9]+$ ]] || return 1
+    if (( pick < 1 || pick > ${#groups[@]} )); then
+        return 1
+    fi
+    printf '%s\n' "${groups[$((pick - 1))]}"
+}
+host_firewall_get_security_groups() {
+    host_firewall_ensure_target_file "$PVE_CLUSTER_FIREWALL_FILE"
+    awk '/^\[[Gg][Rr][Oo][Uu][Pp][[:space:]]+/ {line=$0; sub(/^\[[Gg][Rr][Oo][Uu][Pp][[:space:]]+/, "", line); sub(/\]$/, "", line); print line}' "$PVE_CLUSTER_FIREWALL_FILE" 2>/dev/null | sort -u
+}
+
+host_firewall_get_group_section() {
+    local group_name="$1"
+    host_firewall_ensure_target_file "$PVE_CLUSTER_FIREWALL_FILE"
+    awk -v header="[group ${group_name}]" '
+        BEGIN { capture=0 }
+        {
+            if (capture) {
+                if ($0 ~ /^\[/ && $0 != header) {
+                    exit
+                }
+                print
+                next
+            }
+            if ($0 == header) {
+                capture=1
+                print
+            }
+        }
+    ' "$PVE_CLUSTER_FIREWALL_FILE"
+}
+
+host_firewall_replace_group_section_in_file() {
+    local group_name="$1"
+    local new_content="$2"
+    local tmp
+    tmp=$(mktemp)
+    awk -v header="[group ${group_name}]" -v new_content="$new_content" '
+        BEGIN { skip=0; replaced=0; split(new_content, repl, "\n") }
+        {
+            if (skip) {
+                if ($0 ~ /^\[/ && $0 != header) {
+                    skip=0
+                } else {
+                    next
+                }
+            }
+            if (!replaced && $0 == header) {
+                for (i=1; i in repl; i++) print repl[i]
+                replaced=1
+                skip=1
+                next
+            }
+            print
+        }
+        END {
+            if (!replaced) {
+                print ""
+                for (i=1; i in repl; i++) print repl[i]
+            }
+        }
+    ' "$PVE_CLUSTER_FIREWALL_FILE" > "$tmp"
+    mv "$tmp" "$PVE_CLUSTER_FIREWALL_FILE"
+}
+
+host_firewall_select_ruleset_target() {
+    echo "  [1] 数据中心 firewall"
+    echo "  [2] 节点 firewall"
+    echo "  [3] VM firewall"
+    echo "  [4] CT firewall"
+    echo "  [5] 安全组"
+    read -p "请选择目标 [1-5]: " choice
+    local node_name guest_id path group_name rc
+    case "$choice" in
+        1)
+            printf 'datacenter|cluster|%s|数据中心 firewall\n' "$PVE_CLUSTER_FIREWALL_FILE"
+            ;;
+        2)
+            node_name="$(host_firewall_select_node_name)"
+            rc=$?
+            [[ "$rc" -eq 2 ]] && return 2
+            [[ -n "$node_name" ]] || return 1
+            path="$(host_firewall_target_path node "$node_name")"
+            printf 'node|%s|%s|节点 firewall (%s)\n' "$node_name" "$path" "$node_name"
+            ;;
+        3)
+            guest_id="$(host_firewall_select_guest vm)"
+            rc=$?
+            [[ "$rc" -eq 2 ]] && return 2
+            [[ -n "$guest_id" ]] || return 1
+            path="$(host_firewall_target_path vm "$guest_id")"
+            printf 'vm|%s|%s|VM firewall (%s)\n' "$guest_id" "$path" "$guest_id"
+            ;;
+        4)
+            guest_id="$(host_firewall_select_guest ct)"
+            rc=$?
+            [[ "$rc" -eq 2 ]] && return 2
+            [[ -n "$guest_id" ]] || return 1
+            path="$(host_firewall_target_path ct "$guest_id")"
+            printf 'ct|%s|%s|CT firewall (%s)\n' "$guest_id" "$path" "$guest_id"
+            ;;
+        5)
+            group_name="$(host_firewall_select_security_group allow_new)"
+            rc=$?
+            [[ "$rc" -eq 2 ]] && return 2
+            [[ -n "$group_name" ]] || return 1
+            printf 'security-group|%s|%s|安全组 (%s)\n' "$group_name" "$PVE_CLUSTER_FIREWALL_FILE" "$group_name"
+            ;;
+        *)
+            return 1
+            ;;
+    esac
+}
+
+host_firewall_toggle_enable() {
+    local scope="$1"
+    local identifier="$2"
+    local label="$3"
+    local state file_path
+    file_path="$(host_firewall_target_path "$scope" "$identifier")" || return 1
+    host_firewall_ensure_target_file "$file_path"
+    read -p "是否启用 $label 防火墙？(yes/no) [yes]: " state
+    state="${state:-yes}"
+    if ! confirm_high_risk_action "切换 $label 防火墙状态" "错误的防火墙开关或默认策略可能导致管理口、集群通信或业务端口不可达。" "如果规则集本身有误，启用后可能立即造成 SSH/WebUI/业务中断。" "请确认已有控制台或带外管理手段，并已审查当前 firewall 规则。" "FIREWALL"; then
+        return 0
+    fi
+    backup_file "$file_path" >/dev/null 2>&1 || true
+    if [[ "$state" == "yes" || "$state" == "YES" ]]; then
+        host_firewall_upsert_option "$file_path" enable 1
+    else
+        host_firewall_upsert_option "$file_path" enable 0
+    fi
+    display_success "$label 防火墙状态已更新" "$file_path"
+    if [[ "$scope" == "vm" || "$scope" == "ct" ]]; then
+        log_warn "PVE 客体防火墙还依赖对应网卡开启 firewall=1；如未开启，请同步检查网卡配置。"
+    fi
+}
+
+host_firewall_toggle_menu() {
+    while true; do
+        clear
+        show_menu_header "PVE 防火墙开关"
+        host_network_show_risk_banner
+        show_menu_option "1" "数据中心级别开关"
+        show_menu_option "2" "节点级别开关"
+        show_menu_option "3" "VM 级别开关"
+        show_menu_option "4" "CT 级别开关"
+        show_menu_option "0" "返回"
+        show_menu_footer
+        read -p "请选择操作 [0-4]: " choice
+        case "$choice" in
+            1) host_firewall_toggle_enable datacenter cluster "数据中心" ;;
+            2)
+                local node_name rc
+                node_name="$(host_firewall_select_node_name)"
+                rc=$?
+                [[ "$rc" -eq 2 ]] && continue
+                [[ -n "$node_name" ]] && host_firewall_toggle_enable node "$node_name" "节点 $node_name"
+                ;;
+            3)
+                local vmid rc
+                vmid="$(host_firewall_select_guest vm)"
+                rc=$?
+                [[ "$rc" -eq 2 ]] && continue
+                [[ -n "$vmid" ]] && host_firewall_toggle_enable vm "$vmid" "VM $vmid"
+                ;;
+            4)
+                local ctid rc
+                ctid="$(host_firewall_select_guest ct)"
+                rc=$?
+                [[ "$rc" -eq 2 ]] && continue
+                [[ -n "$ctid" ]] && host_firewall_toggle_enable ct "$ctid" "CT $ctid"
+                ;;
+            0) return ;;
+            *) log_error "无效选择" ;;
+        esac
+        pause_function
+    done
+}
+
+host_firewall_list_security_groups() {
+    clear
+    show_menu_header "安全组规则"
+    host_firewall_ensure_target_file "$PVE_CLUSTER_FIREWALL_FILE"
+    local groups_text group
+    groups_text="$(host_firewall_get_security_groups)"
+    if [[ -z "$groups_text" ]]; then
+        echo "  当前没有安全组。"
+        return 0
+    fi
+    while IFS= read -r group; do
+        [[ -z "$group" ]] && continue
+        echo -e "${CYAN}[group ${group}]${NC}"
+        host_firewall_get_group_section "$group" | awk 'NR>1 && NF {print "  "$0}'
+        echo "$UI_DIVIDER"
+    done <<< "$groups_text"
+}
+
+host_firewall_add_security_group_rule() {
+    local group_name direction action rule_body existing new_section
+    group_name="$(host_firewall_select_security_group allow_new)"
+    local rc=$?
+    [[ "$rc" -eq 2 ]] && return 0
+    [[ -n "$group_name" ]] || return 1
+
+    echo "  [1] IN"
+    echo "  [2] OUT"
+    read -p "请选择方向 [1-2]: " direction
+    case "$direction" in
+        1) direction="IN" ;;
+        2) direction="OUT" ;;
+        *) return 1 ;;
+    esac
+    echo "  [1] ACCEPT"
+    echo "  [2] DROP"
+    echo "  [3] REJECT"
+    read -p "请选择动作 [1-3]: " action
+    case "$action" in
+        1) action="ACCEPT" ;;
+        2) action="DROP" ;;
+        3) action="REJECT" ;;
+        *) return 1 ;;
+    esac
+    read -p "请输入规则主体（示例 -p tcp --dport 22 -source +management，留空则仅写方向/动作）: " rule_body
+
+    host_firewall_ensure_target_file "$PVE_CLUSTER_FIREWALL_FILE"
+    backup_file "$PVE_CLUSTER_FIREWALL_FILE" >/dev/null 2>&1 || true
+    existing="$(host_firewall_get_group_section "$group_name")"
+    if [[ -z "$existing" ]]; then
+        new_section="[group ${group_name}]"
+    else
+        new_section="$existing"
+    fi
+    new_section+=$'\n'
+    new_section+="${direction} ${action}"
+    [[ -n "$rule_body" ]] && new_section+=" ${rule_body}"
+    host_firewall_replace_group_section_in_file "$group_name" "$new_section"
+    display_success "安全组规则已写入" "group ${group_name}"
+}
+
+host_firewall_delete_security_group_rule() {
+    local group_name section idx pick new_section
+    group_name="$(host_firewall_select_security_group)"
+    local rc=$?
+    [[ "$rc" -eq 2 ]] && return 0
+    [[ -n "$group_name" ]] || return 1
+
+    section="$(host_firewall_get_group_section "$group_name")"
+    [[ -n "$section" ]] || {
+        display_error "安全组不存在或无规则: $group_name"
+        return 1
+    }
+
+    mapfile -t rules < <(printf '%s\n' "$section" | awk 'NR>1 && NF && $0 !~ /^#/ {print}')
+    (( ${#rules[@]} > 0 )) || {
+        display_error "安全组没有可删除的规则: $group_name"
+        return 1
+    }
+
+    echo -e "${CYAN}[group ${group_name}]${NC}"
+    idx=1
+    local rule
+    for rule in "${rules[@]}"; do
+        printf '  [%d] %s\n' "$idx" "$rule"
+        idx=$((idx + 1))
+    done
+    echo "$UI_DIVIDER"
+    read -p "请选择要删除的规则序号 (0 返回): " pick
+    pick="${pick:-0}"
+    [[ "$pick" == "0" ]] && return 0
+    [[ "$pick" =~ ^[0-9]+$ ]] || return 1
+    if (( pick < 1 || pick > ${#rules[@]} )); then
+        return 1
+    fi
+
+    new_section="[group ${group_name}]"
+    idx=1
+    for rule in "${rules[@]}"; do
+        if (( idx != pick )); then
+            new_section+=$'\n'
+            new_section+="$rule"
+        fi
+        idx=$((idx + 1))
+    done
+    backup_file "$PVE_CLUSTER_FIREWALL_FILE" >/dev/null 2>&1 || true
+    host_firewall_replace_group_section_in_file "$group_name" "$new_section"
+    display_success "安全组规则已删除" "group ${group_name}"
+}
+
+host_firewall_show_target_rules() {
+    local target_data kind identifier path label content
+    target_data="$(host_firewall_select_ruleset_target)"
+    local rc=$?
+    [[ "$rc" -eq 2 ]] && return 0
+    [[ -n "$target_data" ]] || return 1
+    IFS='|' read -r kind identifier path label <<< "$target_data"
+    clear
+    show_menu_header "$label"
+    if [[ "$kind" == "security-group" ]]; then
+        content="$(host_firewall_get_group_section "$identifier")"
+        [[ -n "$content" ]] && printf '%s\n' "$content" | sed 's/^/  /' || echo '  当前安全组为空。'
+    else
+        host_firewall_ensure_target_file "$path"
+        sed 's/^/  /' "$path"
+    fi
+    echo "$UI_DIVIDER"
+}
+
+host_firewall_export_ruleset() {
+    local target_data kind identifier path label format export_file content b64 safe_name
+    target_data="$(host_firewall_select_ruleset_target)"
+    local rc=$?
+    [[ "$rc" -eq 2 ]] && return 0
+    [[ -n "$target_data" ]] || return 1
+    IFS='|' read -r kind identifier path label <<< "$target_data"
+
+    if [[ "$kind" == "security-group" ]]; then
+        content="$(host_firewall_get_group_section "$identifier")"
+    else
+        host_firewall_ensure_target_file "$path"
+        content="$(cat "$path")"
+    fi
+
+    mkdir -p "$HOST_NETWORK_EXPORT_DIR"
+    safe_name="$(echo "$identifier" | tr '/: ' '___')"
+    echo "  [1] JSON"
+    echo "  [2] CLI / raw"
+    read -p "请选择导出格式 [1-2]: " format
+    case "$format" in
+        1)
+            export_file="$HOST_NETWORK_EXPORT_DIR/${kind}-${safe_name}-$(date +%Y%m%d_%H%M%S).json"
+            b64="$(printf '%s' "$content" | base64 | tr -d '\n')"
+            cat > "$export_file" <<EOF_JSON
+{
+  "format": "pve-tools-firewall-json",
+  "target_kind": "${kind}",
+  "identifier": "${identifier}",
+  "exported_at": "$(date +%F' '%T)",
+  "content_base64": "${b64}"
+}
+EOF_JSON
+            ;;
+        2)
+            export_file="$HOST_NETWORK_EXPORT_DIR/${kind}-${safe_name}-$(date +%Y%m%d_%H%M%S).fw"
+            printf '%s\n' "$content" > "$export_file"
+            ;;
+        *)
+            return 1
+            ;;
+    esac
+    display_success "规则集已导出" "$export_file"
+}
+
+host_firewall_import_ruleset() {
+    local import_path source_kind source_identifier content b64 target_data kind identifier path label prepared_content rc
+    read -p "请输入要导入的规则集文件路径: " import_path
+    [[ -f "$import_path" ]] || {
+        display_error "文件不存在: $import_path"
+        return 1
+    }
+
+    if grep -q '"format": "pve-tools-firewall-json"' "$import_path" 2>/dev/null; then
+        source_kind="$(sed -n 's/.*"target_kind": "\([^"]*\)".*/\1/p' "$import_path" | head -n 1)"
+        source_identifier="$(sed -n 's/.*"identifier": "\([^"]*\)".*/\1/p' "$import_path" | head -n 1)"
+        b64="$(sed -n 's/.*"content_base64": "\([^"]*\)".*/\1/p' "$import_path" | head -n 1)"
+        content="$(printf '%s' "$b64" | base64 -d 2>/dev/null)"
+    else
+        content="$(cat "$import_path")"
+    fi
+
+    [[ -n "$content" ]] || {
+        display_error "导入内容为空或解析失败"
+        return 1
+    }
+
+    if [[ -n "$source_kind" || -n "$source_identifier" ]]; then
+        log_warn "导入文件携带的原始目标为 ${source_kind:-unknown}:${source_identifier:-unknown}，实际写入目标仍需重新选择。"
+    fi
+
+    target_data="$(host_firewall_select_ruleset_target)"
+    rc=$?
+    [[ "$rc" -eq 2 ]] && return 0
+    [[ -n "$target_data" ]] || return 1
+    IFS='|' read -r kind identifier path label <<< "$target_data"
+
+    host_firewall_validate_identifier "$kind" "$identifier" || {
+        display_error "导入目标不合法: ${kind}:${identifier}"
+        return 1
+    }
+    if [[ "$kind" != "security-group" ]]; then
+        path="$(host_firewall_target_path "$kind" "$identifier")" || {
+            display_error "导入目标路径非法或超出允许范围"
+            return 1
+        }
+    fi
+    host_firewall_validate_ruleset_content_for_target "$kind" "$content" || {
+        display_error "规则集内容与目标类型不匹配" "请避免把整份 firewall 文件导入到安全组，或把安全组片段导入到数据中心/节点/客体 firewall。"
+        return 1
+    }
+
+    if ! confirm_high_risk_action "导入规则集到 $label" "导入会覆盖当前目标的规则或安全组内容。" "错误的规则集可能立即封死管理口、业务端口或集群通信。" "请确认已导出当前规则备份，并通过控制台进行高风险导入。" "IMPORT-FW"; then
+        return 0
+    fi
+
+    if [[ "$kind" == "security-group" ]]; then
+        prepared_content="$(host_firewall_prepare_group_section "$identifier" "$content")" || {
+            display_error "无法从导入文件中提取有效安全组段落"
+            return 1
+        }
+        host_firewall_ensure_target_file "$PVE_CLUSTER_FIREWALL_FILE"
+        backup_file "$PVE_CLUSTER_FIREWALL_FILE" >/dev/null 2>&1 || true
+        host_firewall_replace_group_section_in_file "$identifier" "$prepared_content"
+        display_success "安全组规则已导入" "group ${identifier}"
+        return 0
+    fi
+
+    host_firewall_ensure_target_file "$path"
+    backup_file "$path" >/dev/null 2>&1 || true
+    printf '%s\n' "$content" > "$path"
+    display_success "规则集已导入" "$path"
+}
+host_firewall_menu() {
+    while true; do
+        clear
+        show_menu_header "PVE 防火墙管理"
+        host_network_show_risk_banner
+        show_menu_option "1" "数据中心 / 节点 / VM / CT 防火墙开关"
+        show_menu_option "2" "查看目标规则集"
+        show_menu_option "3" "列出安全组规则"
+        show_menu_option "4" "新增安全组规则"
+        show_menu_option "5" "删除安全组规则"
+        show_menu_option "6" "导出规则集（JSON / CLI）"
+        show_menu_option "7" "导入规则集（JSON / CLI）"
+        show_menu_option "0" "返回"
+        show_menu_footer
+        read -p "请选择操作 [0-7]: " choice
+        case "$choice" in
+            1) host_firewall_toggle_menu ;;
+            2) host_firewall_show_target_rules ;;
+            3) host_firewall_list_security_groups ;;
+            4) host_firewall_add_security_group_rule ;;
+            5) host_firewall_delete_security_group_rule ;;
+            6) host_firewall_export_ruleset ;;
+            7) host_firewall_import_ruleset ;;
+            0) return ;;
+            *) log_error "无效选择" ;;
+        esac
+        pause_function
+    done
+}
+
+ipv6_helper_detect_host_readiness() {
+    clear
+    show_menu_header "IPv6 宿主机就绪度"
+    echo -e "${CYAN}全局 IPv6 地址：${NC}"
+    ip -6 -o addr show scope global 2>/dev/null | sed 's/^/  /' || true
+    echo -e "${CYAN}IPv6 默认路由：${NC}"
+    ip -6 route show default 2>/dev/null | sed 's/^/  /' || true
+    echo -e "${CYAN}IPv6 连通性测试：${NC}"
+    if ping -6 -c 2 -W 2 2606:4700:4700::1111 >/dev/null 2>&1; then
+        echo "  Cloudflare DNS IPv6 连通正常"
+    else
+        echo "  Cloudflare DNS IPv6 连通失败"
+    fi
+    echo "$UI_DIVIDER"
+}
+
+ipv6_helper_detect_vm_readiness() {
+    clear
+    show_menu_header "VM IPv6 就绪度（Guest Agent 最佳）"
+    local vmid name ips
+    while read -r vmid name _; do
+        [[ -n "$vmid" && "$vmid" != "VMID" ]] || continue
+        ips="$(qm guest cmd "$vmid" network-get-interfaces 2>/dev/null | grep -oE '([0-9a-fA-F]{0,4}:){2,}[0-9a-fA-F]{0,4}(/[0-9]+)?' | grep -v '^fe80' | sort -u | tr '\n' ' ')"
+        if [[ -n "$ips" ]]; then
+            printf '  VM %s (%s): %s\n' "$vmid" "$name" "$ips"
+        else
+            printf '  VM %s (%s): 无法通过 Guest Agent 获取 IPv6（可能未安装 agent 或未启动）\n' "$vmid" "$name"
+        fi
+    done < <(qm list 2>/dev/null)
+    echo "$UI_DIVIDER"
+}
+
+ipv6_helper_configure_passthrough() {
+    local bridge_name preserved tmp block
+    bridge_name="$(host_network_select_bridge_name)"
+    local rc=$?
+    [[ "$rc" -eq 2 ]] && return 0
+    [[ -n "$bridge_name" ]] || return 1
+
+    tmp=$(mktemp)
+    cp "$HOST_NETWORK_INTERFACES_FILE" "$tmp"
+    preserved="$(host_network_collect_preserved_family_options "$HOST_NETWORK_INTERFACES_FILE" "$bridge_name" inet6)"
+    host_network_remove_iface_family_from_candidate "$tmp" "$bridge_name" inet6
+    host_network_ensure_auto_line_in_candidate "$tmp" "$bridge_name"
+    block="$(host_network_build_family_stanza "$bridge_name" inet6 'auto|||accept-ra 2' "$preserved")"
+    host_network_append_text_to_candidate "$tmp" "$block"
+    host_network_commit_candidate "$tmp" "为桥接 $bridge_name 启用 IPv6 透传 / SLAAC" "会调整桥接的 IPv6 获取方式和 RA 行为。" "若上游 IPv6/RA 不可用或桥接承载管理口，可能导致地址和默认路由改变。" "请确认上游已提供 IPv6 RA，并通过控制台执行。"
+    rm -f "$tmp"
+}
+
+ipv6_helper_configure_nat6() {
+    local bridge_name uplink prefix bridge_addr preserved tmp block
+    bridge_name="$(host_network_select_bridge_name)"
+    local rc=$?
+    [[ "$rc" -eq 2 ]] && return 0
+    [[ -n "$bridge_name" ]] || return 1
+    uplink="$(host_network_select_interface_name)"
+    rc=$?
+    [[ "$rc" -eq 2 ]] && return 0
+    [[ -n "$uplink" ]] || return 1
+    [[ "$uplink" != "$bridge_name" ]] || {
+        display_error "NAT6 上联接口不能与桥接接口相同"
+        return 1
+    }
+    command -v ip6tables >/dev/null 2>&1 || {
+        display_error "未检测到 ip6tables" "请先确认系统已安装并启用 IPv6 NAT 所需工具。"
+        return 1
+    }
+    host_network_iface_exists "$uplink" || {
+        display_error "上联接口不存在: $uplink"
+        return 1
+    }
+
+    read -p "请输入 NAT6 内网前缀（示例 fd10:10:10::/64）: " prefix
+    host_network_validate_static_address inet6 "$prefix" || {
+        display_error "前缀格式无效: $prefix" "请使用类似 fd10:10:10::/64 的 IPv6 前缀。"
+        return 1
+    }
+    read -p "请输入桥接 IPv6 地址（示例 fd10:10:10::1/64）: " bridge_addr
+    host_network_validate_static_address inet6 "$bridge_addr" || {
+        display_error "桥接 IPv6 地址格式无效: $bridge_addr"
+        return 1
+    }
+
+    tmp=$(mktemp)
+    cp "$HOST_NETWORK_INTERFACES_FILE" "$tmp"
+    preserved="$(host_network_collect_preserved_family_options "$HOST_NETWORK_INTERFACES_FILE" "$bridge_name" inet6)"
+    host_network_remove_iface_family_from_candidate "$tmp" "$bridge_name" inet6
+    host_network_ensure_auto_line_in_candidate "$tmp" "$bridge_name"
+    block=$(cat <<EOF_NAT6
+iface $bridge_name inet6 static
+$(while IFS= read -r line; do [[ -n "$line" ]] && printf '    %s\n' "$line"; done <<< "$preserved")    address $bridge_addr
+    post-up sysctl -w net.ipv6.conf.all.forwarding=1 >/dev/null
+    post-up ip6tables -t nat -C POSTROUTING -s $prefix -o $uplink -j MASQUERADE || ip6tables -t nat -A POSTROUTING -s $prefix -o $uplink -j MASQUERADE
+    post-down ip6tables -t nat -D POSTROUTING -s $prefix -o $uplink -j MASQUERADE || true
+EOF_NAT6
+)
+    host_network_append_text_to_candidate "$tmp" "$block"
+    host_network_commit_candidate "$tmp" "为桥接 $bridge_name 配置 NAT6" "会开启 IPv6 转发并对 $prefix 执行 NAT6 出口伪装。" "错误的 uplink、前缀或防火墙策略会导致 IPv6 业务不可达。" "请确认上游具备 IPv6 出口、ip6tables 可用，并已在控制台中准备回滚。"
+    rm -f "$tmp"
+}
+ipv6_helper_test_connectivity() {
+    local target
+    read -p "请输入要测试的 IPv6 目标 [2606:4700:4700::1111]: " target
+    target="${target:-2606:4700:4700::1111}"
+    clear
+    show_menu_header "IPv6 连通性测试"
+    echo -e "${CYAN}ping -6 ${target}${NC}"
+    ping -6 -c 4 -W 2 "$target" 2>&1 | sed 's/^/  /'
+    echo "$UI_DIVIDER"
+}
+
+ipv6_helper_menu() {
+    while true; do
+        clear
+        show_menu_header "IPv6 助手"
+        host_network_show_risk_banner
+        show_menu_option "1" "检测宿主机 IPv6 就绪度"
+        show_menu_option "2" "检测 VM IPv6 就绪度（Guest Agent）"
+        show_menu_option "3" "一键配置桥接 IPv6 透传 / SLAAC"
+        show_menu_option "4" "一键配置桥接 NAT6"
+        show_menu_option "5" "测试 IPv6 连通性"
+        show_menu_option "0" "返回"
+        show_menu_footer
+        read -p "请选择操作 [0-5]: " choice
+        case "$choice" in
+            1) ipv6_helper_detect_host_readiness ;;
+            2) ipv6_helper_detect_vm_readiness ;;
+            3) ipv6_helper_configure_passthrough ;;
+            4) ipv6_helper_configure_nat6 ;;
+            5) ipv6_helper_test_connectivity ;;
+            0) return ;;
+            *) log_error "无效选择" ;;
+        esac
+        pause_function
+    done
+}
+
+netdiag_require_cmd() {
+    local cmd="$1"
+    if ! command -v "$cmd" >/dev/null 2>&1; then
+        display_error "缺少命令: $cmd" "请先安装对应工具后再试。"
+        return 1
+    fi
+}
+
+netdiag_run_traceroute() {
+    netdiag_require_cmd traceroute || return 1
+    local target
+    read -p "请输入 traceroute 目标 [1.1.1.1]: " target
+    target="${target:-1.1.1.1}"
+    traceroute "$target"
+}
+
+netdiag_run_mtr() {
+    netdiag_require_cmd mtr || return 1
+    local target
+    read -p "请输入 mtr 目标 [1.1.1.1]: " target
+    target="${target:-1.1.1.1}"
+    mtr -rwzc 10 "$target"
+}
+
+netdiag_run_nmap() {
+    netdiag_require_cmd nmap || return 1
+    local target
+    read -p "请输入 nmap 扫描目标: " target
+    [[ -n "$target" ]] || return 1
+    nmap -Pn -T4 "$target"
+}
+
+netdiag_run_tcpdump() {
+    netdiag_require_cmd tcpdump || return 1
+    local iface_name filter_expr seconds
+    iface_name="$(host_network_select_interface_name)"
+    local rc=$?
+    [[ "$rc" -eq 2 ]] && return 0
+    [[ -n "$iface_name" ]] || return 1
+    read -p "请输入抓包过滤表达式（留空抓全部）: " filter_expr
+    read -p "抓包秒数 [15]: " seconds
+    seconds="${seconds:-15}"
+    [[ "$seconds" =~ ^[0-9]+$ ]] || return 1
+    timeout "$seconds" tcpdump -ni "$iface_name" ${filter_expr:+$filter_expr}
+}
+
+netdiag_pick_vm_ip() {
+    local vmid ips vm_ip
+    vmid="$(host_firewall_select_guest vm)"
+    local rc=$?
+    [[ "$rc" -eq 2 ]] && return 2
+    [[ -n "$vmid" ]] || return 1
+    ips="$(qm guest cmd "$vmid" network-get-interfaces 2>/dev/null | grep -oE '([0-9]{1,3}\.){3}[0-9]{1,3}|([0-9a-fA-F]{0,4}:){2,}[0-9a-fA-F]{0,4}' | grep -v '^fe80' | sort -u)"
+    if [[ -z "$ips" ]]; then
+        read -p "Guest Agent 未返回 IP，请手工输入 VM IP: " vm_ip
+        [[ -n "$vm_ip" ]] && printf '%s\n' "$vm_ip"
+        return 0
+    fi
+    host_network_select_from_text "VM $vmid 的可用 IP：" "$ips"
+}
+
+netdiag_check_port_connectivity() {
+    local target_mode target port
+    echo "  [1] 检查宿主机管理口"
+    echo "  [2] 检查 VM 端口"
+    echo "  [3] 自定义目标"
+    read -p "请选择目标类型 [1-3]: " target_mode
+    case "$target_mode" in
+        1)
+            target="$(ip -4 -o addr show scope global 2>/dev/null | awk 'NR==1 {print $4}' | cut -d'/' -f1)"
+            [[ -n "$target" ]] || target="127.0.0.1"
+            ;;
+        2)
+            target="$(netdiag_pick_vm_ip)"
+            local rc=$?
+            [[ "$rc" -eq 2 ]] && return 0
+            [[ -n "$target" ]] || return 1
+            ;;
+        3)
+            read -p "请输入目标 IP / 主机名: " target
+            [[ -n "$target" ]] || return 1
+            ;;
+        *) return 1 ;;
+    esac
+    read -p "请输入端口号: " port
+    [[ "$port" =~ ^[0-9]+$ ]] || return 1
+
+    clear
+    show_menu_header "端口连通性测试"
+    echo -e "${CYAN}目标: ${target}:${port}${NC}"
+    if command -v nc >/dev/null 2>&1; then
+        nc -zvw 3 "$target" "$port"
+    else
+        timeout 3 bash -c "</dev/tcp/${target}/${port}" >/dev/null 2>&1 && echo "端口可达" || echo "端口不可达"
+    fi
+    echo "$UI_DIVIDER"
+}
+
+netdiag_quick_stack_check() {
+    clear
+    show_menu_header "网络诊断摘要"
+    network_show_diagnostics
+    echo -e "${CYAN}IPv6 地址：${NC}"
+    ip -6 -o addr show scope global 2>/dev/null | awk '{print "  "$2": "$4}' || true
+    echo -e "${CYAN}监听端口（前 20 条）：${NC}"
+    ss -lntup 2>/dev/null | sed -n '1,20p' | sed 's/^/  /' || true
+    echo "$UI_DIVIDER"
+}
+
+netdiag_toolbox_menu() {
+    while true; do
+        clear
+        show_menu_header "网络诊断工具箱"
+        show_menu_option "1" "网络摘要与监听端口"
+        show_menu_option "2" "traceroute"
+        show_menu_option "3" "mtr"
+        show_menu_option "4" "nmap"
+        show_menu_option "5" "tcpdump"
+        show_menu_option "6" "端口连通性检查（宿主机 / VM / 自定义）"
+        show_menu_option "0" "返回"
+        show_menu_footer
+        read -p "请选择操作 [0-6]: " choice
+        case "$choice" in
+            1) netdiag_quick_stack_check ;;
+            2) netdiag_run_traceroute ;;
+            3) netdiag_run_mtr ;;
+            4) netdiag_run_nmap ;;
+            5) netdiag_run_tcpdump ;;
+            6) netdiag_check_port_connectivity ;;
+            0) return ;;
+            *) log_error "无效选择" ;;
+        esac
+        pause_function
+    done
+}
+
+menu_host_networking() {
+    while true; do
+        clear
+        show_menu_header "宿主机网络配置向导"
+        host_network_show_risk_banner
+        show_menu_option "1" "列出当前网卡与桥接（vmbr0~N）"
+        show_menu_option "2" "桥接管理（创建 / 删除）"
+        show_menu_option "3" "配置接口静态 IPv4 / IPv6 / SLAAC / DHCP"
+        show_menu_option "4" "VLAN 子接口管理"
+        show_menu_option "5" "Bond 管理（模式 0 / 1 / 4 / 6）"
+        show_menu_option "6" "PVE 防火墙管理"
+        show_menu_option "7" "IPv6 助手"
+        show_menu_option "8" "网络诊断工具箱"
+        echo -e "${RED}警告：应用宿主机网络修改时，建议在控制台或带外管理环境中执行，避免误断 SSH / WebUI。${NC}"
+        show_menu_option "0" "返回主菜单"
+        show_menu_footer
+        read -p "请选择操作 [0-8]: " choice
+        case "$choice" in
+            1) host_network_show_current_overview ;;
+            2) host_network_bridge_menu ;;
+            3) host_network_configure_interface_addressing ;;
+            4) host_network_vlan_menu ;;
+            5) host_network_bond_menu ;;
+            6) host_firewall_menu ;;
+            7) ipv6_helper_menu ;;
+            8) netdiag_toolbox_menu ;;
             0) return ;;
             *) log_error "无效选择" ;;
         esac
@@ -6112,7 +9806,17 @@ check_update() {
     local mirror_version_url="${GITHUB_MIRROR_PREFIX}${VERSION_FILE_URL}"
     local mirror_update_url="${GITHUB_MIRROR_PREFIX}${UPDATE_FILE_URL}"
 
-    if detect_network_region; then
+    if [[ -n "$USER_COUNTRY_CODE" ]]; then
+        prefer_mirror=$USE_MIRROR_FOR_UPDATE
+        if [[ $prefer_mirror -eq 1 ]]; then
+            log_info "当前地区为： $USER_COUNTRY_CODE，使用镜像源检查更新...请等待 3 秒"
+            # log_info "检测到中国大陆网络环境，将优先使用镜像源检查更新"
+            preferred_version_url="$mirror_version_url"
+            preferred_update_url="$mirror_update_url"
+        else
+            log_info "检测到当前地区为: $USER_COUNTRY_CODE，将使用 GitHub 源检查更新"
+        fi
+    elif detect_network_region; then
         prefer_mirror=$USE_MIRROR_FOR_UPDATE
         if [[ $prefer_mirror -eq 1 ]]; then
             log_info "当前地区为： $USER_COUNTRY_CODE，使用镜像源检查更新...请等待 3 秒"
@@ -7475,6 +11179,582 @@ nvidia_gpu_management_menu() {
     done
 }
 
+amd_list_gpus() {
+    lspci -Dnn 2>/dev/null | grep -Ei 'VGA compatible controller|3D controller|Display controller' | grep -iE 'AMD|ATI' | awk '{print $1 "|" $0}'
+}
+
+amd_select_gpu_bdf() {
+    local title="${1:-可用 AMD GPU 列表：}"
+    local prompt_label="${2:-请选择 AMD GPU 序号}"
+    local gpus
+    gpus="$(amd_list_gpus)"
+    if [[ -z "$gpus" ]]; then
+        log_error "未检测到 AMD GPU"
+        log_tips "请先确认 AMD 显卡已安装，并执行 lspci -Dnn 可见。"
+        return 1
+    fi
+
+    local cols max_line
+    cols="$(nvidia_get_cols)"
+    max_line=$((cols-6))
+    if [[ "$max_line" -lt 40 ]]; then
+        max_line=40
+    fi
+
+    {
+        echo -e "${CYAN}${title}${NC}"
+        echo "$gpus" | awk -F'|' -v w="$max_line" '{
+            line=$2;
+            if (length(line)>w) line=substr(line,1,w-3)"...";
+            printf "  [%d] %s\n", NR, line
+        }'
+        echo -e "${UI_DIVIDER}"
+    } >&2
+
+    local pick
+    read -p "${prompt_label} (0 返回): " pick
+    pick="${pick:-0}"
+    if [[ "$pick" == "0" ]]; then
+        return 2
+    fi
+    if [[ ! "$pick" =~ ^[0-9]+$ ]]; then
+        log_error "序号必须是数字"
+        return 1
+    fi
+
+    local line bdf
+    line="$(echo "$gpus" | awk -v n="$pick" -F'|' 'NR==n{print $0}')"
+    bdf="$(echo "$line" | awk -F'|' '{print $1}')"
+    if [[ -z "$bdf" ]]; then
+        log_error "无效选择"
+        return 1
+    fi
+    echo "$bdf"
+    return 0
+}
+
+amd_try_write_vfio_ids_conf() {
+    local ids_csv="$1"
+    local file="/etc/modprobe.d/pve-tools-amd-vfio.conf"
+
+    local other
+    other="$(grep -RhsE '^\s*options\s+vfio-pci\s+ids=' /etc/modprobe.d 2>/dev/null | grep -vF 'pve-tools-amd-vfio.conf' || true)"
+    if [[ -n "$other" ]]; then
+        display_error "检测到系统已存在 vfio-pci ids 配置" "为避免冲突，本功能不会自动写入。请手工合并 vfio-pci ids 后再 update-initramfs -u。"
+        return 1
+    fi
+
+    if ! confirm_action "写入 AMD 的 VFIO 绑定配置（$file）并要求重启宿主机？"; then
+        return 0
+    fi
+
+    local content
+    content="options vfio-pci ids=${ids_csv}"
+    apply_block "$file" "AMD_VFIO_IDS" "$content"
+    display_success "AMD 的 VFIO 绑定配置已写入" "请执行 update-initramfs -u 并重启宿主机后再进行直通。"
+    return 0
+}
+
+amd_host_prepare_for_passthrough() {
+    echo -e "${YELLOW}将执行以下操作：${NC}"
+    echo "  1) 写入 GRUB IOMMU 参数"
+    echo "  2) 写入 /etc/modules 的 VFIO 模块配置块"
+    echo "  3) 写入 AMD 显卡黑名单配置 (amdgpu / radeon)"
+    echo "  4) 执行 update-grub 与 update-initramfs"
+    echo
+    echo -e "${RED}重要提醒：如果宿主机当前依赖 AMD 核显或 AMD 独显输出，本地控制台画面可能在重启后消失。${NC}"
+    echo -e "${YELLOW}如遇 Windows Code 43 或黑屏，请优先检查 BIOS 中的 Resizable BAR / Smart Access Memory 是否已关闭。${NC}"
+    if lsmod 2>/dev/null | grep -Eq '^(amdgpu|radeon)\b'; then
+        echo -e "${YELLOW}检测到 amdgpu / radeon 当前已加载，说明宿主机很可能正在占用 AMD 显卡。${NC}"
+    fi
+    echo
+
+    if ! confirm_high_risk_action "为 AMD GPU 直通写入宿主机预配置" "会修改 GRUB、VFIO 模块和 AMD 显卡黑名单配置。" "错误配置可能导致宿主机本地输出消失、GPU 无法用于宿主机图形界面，甚至在重启后需要控制台修复。" "请确认已准备带外管理或物理控制台，并已理解回滚方式。" "AMD-HOST"; then
+        return 0
+    fi
+
+    local cpu_vendor
+    cpu_vendor="$(grep -m1 'vendor_id' /proc/cpuinfo 2>/dev/null | awk '{print $3}')"
+
+    if [[ "$cpu_vendor" == "GenuineIntel" ]]; then
+        grub_add_param "intel_iommu=on"
+    elif [[ "$cpu_vendor" == "AuthenticAMD" ]]; then
+        grub_add_param "amd_iommu=on"
+    else
+        log_warn "未识别 CPU 厂商，跳过厂商特定 IOMMU 参数"
+    fi
+    grub_add_param "iommu=pt"
+    grub_add_param "pcie_acs_override=downstream,multifunction"
+
+    local modules_content
+    modules_content=$(cat <<'EOF'
+vfio
+vfio_iommu_type1
+vfio_pci
+vfio_virqfd
+EOF
+)
+    apply_block "/etc/modules" "AMD_VFIO_MODULES" "$modules_content"
+
+    local blacklist_content
+    blacklist_content=$(cat <<'EOF'
+blacklist amdgpu
+blacklist radeon
+options vfio_iommu_type1 allow_unsafe_interrupts=1
+EOF
+)
+    apply_block "/etc/modprobe.d/pve-tools-amd-blacklist.conf" "AMD_GPU_BLACKLIST" "$blacklist_content"
+
+    if command -v update-grub >/dev/null 2>&1; then
+        update-grub || log_warn "update-grub 执行失败，请手工检查"
+    elif command -v grub-mkconfig >/dev/null 2>&1; then
+        grub-mkconfig -o /boot/grub/grub.cfg || log_warn "grub-mkconfig 执行失败，请手工检查"
+    else
+        log_warn "未找到 update-grub/grub-mkconfig，请手工更新 GRUB"
+    fi
+
+    update-initramfs -u -k all || log_warn "update-initramfs 执行失败，请手工检查"
+    display_success "AMD 宿主机预配置已完成" "建议重启宿主机后再执行 AMD 显卡或核显直通。"
+
+    if confirm_action "是否现在重启宿主机？"; then
+        reboot
+    fi
+    return 0
+}
+
+amd_gpu_passthrough_vm() {
+    log_step "AMD 独显直通虚拟机"
+
+    if ! iommu_is_enabled; then
+        display_error "未检测到 IOMMU 已开启" "请先在 BIOS 开启 VT-d/AMD-Vi，并在 PVE 中启用 IOMMU（可在“硬件直通一键配置(IOMMU)”里开启）。"
+        return 1
+    fi
+
+    local vmid
+    vmid="$(nvidia_select_vmid)"
+    local rc=$?
+    if [[ "$rc" -eq 2 ]]; then
+        return 0
+    fi
+    if [[ -z "$vmid" ]]; then
+        return 1
+    fi
+
+    local gpu_bdf
+    gpu_bdf="$(amd_select_gpu_bdf '可用 AMD 独显 / GPU 列表：' '请选择 AMD 独显序号')"
+    rc=$?
+    if [[ "$rc" -eq 2 ]]; then
+        return 0
+    fi
+    if [[ -z "$gpu_bdf" ]]; then
+        return 1
+    fi
+
+    clear
+    show_menu_header "AMD 独显直通虚拟机"
+    echo -e "${YELLOW}VMID: ${NC}$vmid"
+    echo -e "${YELLOW}GPU: ${NC}$gpu_bdf"
+    echo -e "${UI_DIVIDER}"
+    nvidia_show_passthrough_status "$gpu_bdf"
+
+    local audio_bdf=""
+    if nvidia_pci_has_function "$gpu_bdf" "1"; then
+        audio_bdf="${gpu_bdf%.*}.1"
+        echo -e "${UI_DIVIDER}"
+        nvidia_show_passthrough_status "$audio_bdf"
+    fi
+
+    local gpu_id audio_id ids_csv
+    gpu_id="$(nvidia_get_pci_ids "$gpu_bdf")"
+    audio_id=""
+    if [[ -n "$audio_bdf" ]]; then
+        audio_id="$(nvidia_get_pci_ids "$audio_bdf")"
+    fi
+    ids_csv="$gpu_id"
+    if [[ -n "$audio_id" ]]; then
+        ids_csv="${ids_csv},${audio_id}"
+    fi
+
+    echo -e "${UI_DIVIDER}"
+    if [[ -n "$ids_csv" ]]; then
+        echo -e "${CYAN}VFIO ids 建议: ${NC}$ids_csv"
+    fi
+    echo -e "${YELLOW}提示：若宿主机仍在使用 amdgpu / radeon，直通可能失败。${NC}"
+    echo -e "${YELLOW}如 Windows 来宾报 Code 43，请优先检查 BIOS 的 Resizable BAR / Smart Access Memory。${NC}"
+    echo -e "${UI_DIVIDER}"
+
+    local include_audio="no"
+    if [[ -n "$audio_bdf" ]]; then
+        read -p "是否同时直通显卡音频功能（${audio_bdf}）？(yes/no) [yes]: " include_audio
+        include_audio="${include_audio:-yes}"
+    fi
+
+    local enable_x_vga="yes"
+    read -p "是否为 AMD 显卡启用 x-vga=1（Windows 常见）？(yes/no) [yes]: " enable_x_vga
+    enable_x_vga="${enable_x_vga:-yes}"
+
+    if qm_has_hostpci_bdf "$vmid" "$gpu_bdf"; then
+        display_error "该 AMD GPU 已存在于 VM 的 hostpci 配置中" "无需重复添加。"
+        return 1
+    fi
+
+    local idx0
+    idx0="$(qm_find_free_hostpci_index "$vmid" 2>/dev/null)" || {
+        display_error "未找到可用 hostpci 插槽" "请先释放 VM 的 hostpci0-hostpci15。"
+        return 1
+    }
+
+    local hostpci0_value="$gpu_bdf"
+    if qm_is_q35_machine "$vmid"; then
+        hostpci0_value="${hostpci0_value},pcie=1"
+    fi
+    if [[ "$enable_x_vga" == "yes" || "$enable_x_vga" == "YES" ]]; then
+        hostpci0_value="${hostpci0_value},x-vga=1"
+    fi
+
+    local conf_path
+    conf_path="$(get_qm_conf_path "$vmid")"
+    if [[ -f "$conf_path" ]]; then
+        backup_file "$conf_path" >/dev/null 2>&1 || true
+    fi
+
+    if ! confirm_action "为 VM $vmid 添加 AMD 独显直通（hostpci${idx0} = ${hostpci0_value}）"; then
+        return 0
+    fi
+
+    if ! qm set "$vmid" "-hostpci${idx0}" "$hostpci0_value" >/dev/null 2>&1; then
+        display_error "qm set 执行失败" "请检查 VM 是否锁定、IOMMU / IOMMU group，或查看 /var/log/pve-tools.log。"
+        return 1
+    fi
+
+    if [[ "$include_audio" == "yes" || "$include_audio" == "YES" ]] && [[ -n "$audio_bdf" ]]; then
+        local idx1
+        idx1="$(qm_find_free_hostpci_index "$vmid" 2>/dev/null)" || {
+            display_error "显卡已添加，但未找到可用 hostpci 插槽添加音频功能" "请手工添加 $audio_bdf。"
+            return 1
+        }
+
+        local hostpci1_value="$audio_bdf"
+        if qm_is_q35_machine "$vmid"; then
+            hostpci1_value="${hostpci1_value},pcie=1"
+        fi
+
+        if ! qm set "$vmid" "-hostpci${idx1}" "$hostpci1_value" >/dev/null 2>&1; then
+            log_warn "音频功能直通写入失败（GPU 已写入）"
+        else
+            log_success "音频功能已写入: hostpci${idx1} = $hostpci1_value"
+        fi
+    fi
+
+    if [[ -n "$ids_csv" ]]; then
+        local set_vfio="no"
+        read -p "是否写入 AMD 的 VFIO ids 绑定配置（用于将设备绑定到 vfio-pci）（yes/no）[no]: " set_vfio
+        set_vfio="${set_vfio:-no}"
+        if [[ "$set_vfio" == "yes" || "$set_vfio" == "YES" ]]; then
+            amd_try_write_vfio_ids_conf "$ids_csv" || true
+        fi
+    fi
+
+    display_success "AMD 独显直通已写入" "如 VM 正在运行中，请重启 VM；如写入了 VFIO 配置，请按提示重启宿主机。"
+    return 0
+}
+
+amd_list_romfiles() {
+    if [[ ! -d "$PVE_KVM_ROM_DIR" ]]; then
+        return 0
+    fi
+    find "$PVE_KVM_ROM_DIR" -maxdepth 1 -type f \( -iname '*.rom' -o -iname '*.bin' \) 2>/dev/null | sort
+}
+
+amd_normalize_romfile_input() {
+    local input="$1"
+    local rom_path base
+
+    if [[ -z "$input" ]]; then
+        return 1
+    fi
+
+    if [[ "$input" == /* ]]; then
+        rom_path="$input"
+    else
+        rom_path="${PVE_KVM_ROM_DIR}/${input}"
+    fi
+
+    case "$rom_path" in
+        "${PVE_KVM_ROM_DIR}/"*) ;;
+        *)
+            log_error "ROM 文件路径必须位于 ${PVE_KVM_ROM_DIR}"
+            echo -e "${YELLOW}提示: 请先把用户自备的 AMD ROM / vBIOS 文件放入 ${PVE_KVM_ROM_DIR} 后再试。${NC}" >&2
+            return 1
+            ;;
+    esac
+
+    if [[ ! -f "$rom_path" ]]; then
+        log_error "未找到 ROM 文件: $rom_path"
+        echo -e "${YELLOW}提示: 请确认文件已放入 ${PVE_KVM_ROM_DIR}，并由用户自行提取、确认来源与兼容性。${NC}" >&2
+        return 1
+    fi
+
+    base="$(basename "$rom_path")"
+    if [[ ! "$base" =~ ^[A-Za-z0-9._+-]+$ ]]; then
+        log_error "ROM 文件名包含不安全字符: $base"
+        echo -e "${YELLOW}提示: 请将文件重命名为简单英文/数字文件名后再试。${NC}" >&2
+        return 1
+    fi
+
+    echo "$base"
+    return 0
+}
+
+amd_prompt_romfile_basename() {
+    local prompt="${1:-请输入 AMD ROM / vBIOS 文件路径或文件名}"
+    local roms
+    roms="$(amd_list_romfiles)"
+
+    {
+        echo -e "${CYAN}ROM 文件目录: ${NC}${PVE_KVM_ROM_DIR}"
+        if [[ -n "$roms" ]]; then
+            echo "$roms" | sed 's/^/  /'
+        else
+            echo "  (当前未发现 .rom / .bin 文件)"
+        fi
+        echo -e "${YELLOW}ROM / vBIOS 提取通常需要由用户自行完成，本脚本只负责校验并写入 romfile。${NC}"
+        echo -e "${UI_DIVIDER}"
+    } >&2
+
+    local input
+    read -p "${prompt} (0 返回): " input
+    input="${input:-0}"
+    if [[ "$input" == "0" ]]; then
+        return 2
+    fi
+
+    amd_normalize_romfile_input "$input"
+}
+
+amd_igpu_show_guidance() {
+    clear
+    show_menu_header "AMD 核显直通说明"
+    echo -e "${CYAN}使用建议：${NC}"
+    echo "  1) AMD 核显直通通常比独显更依赖正确的 ROM / vBIOS 文件。"
+    echo "  2) 建议 VM 使用 q35 + OVMF，并将核显作为主显示设备。"
+    echo "  3) ROM / vBIOS 提取一般交给用户自行完成，脚本不提供自动提取。"
+    echo "  4) 将 ROM 文件放入 ${PVE_KVM_ROM_DIR} 后，再通过本向导写入 romfile。"
+    echo "  5) 如 Windows 来宾报 Code 43 / 黑屏，请优先检查 BIOS 中的 Resizable BAR / SAM。"
+    echo
+    echo -e "${CYAN}参考：${NC}"
+    echo "  社区参考文章: https://diyforfun.cn/712.html"
+    echo "  Proxmox 官方: https://pve.proxmox.com/wiki/PCI_Passthrough"
+    echo
+    echo -e "${RED}免责声明：ROM / vBIOS 文件的提取、来源合法性、兼容性与由此导致的黑屏、Code 43、设备不可用等后果，由用户自行承担。${NC}"
+    echo "$UI_DIVIDER"
+}
+
+amd_igpu_check_romfile() {
+    clear
+    show_menu_header "AMD 核显 ROM / vBIOS 检查"
+    local rom_base
+    rom_base="$(amd_prompt_romfile_basename '请输入要校验的 AMD ROM / vBIOS 文件路径或文件名')"
+    local rc=$?
+    if [[ "$rc" -eq 2 ]]; then
+        return 0
+    fi
+    if [[ -z "$rom_base" ]]; then
+        return 1
+    fi
+    display_success "ROM 文件校验通过" "可在 hostpci 中使用 romfile=${rom_base}。"
+    return 0
+}
+
+amd_igpu_passthrough_vm() {
+    log_step "AMD 核显直通配置"
+
+    if ! iommu_is_enabled; then
+        display_error "未检测到 IOMMU 已开启" "请先在 BIOS 开启 VT-d/AMD-Vi，并在 PVE 中启用 IOMMU（可在“硬件直通一键配置(IOMMU)”里开启）。"
+        return 1
+    fi
+
+    local vmid
+    vmid="$(nvidia_select_vmid)"
+    local rc=$?
+    if [[ "$rc" -eq 2 ]]; then
+        return 0
+    fi
+    if [[ -z "$vmid" ]]; then
+        return 1
+    fi
+
+    local gpu_bdf
+    gpu_bdf="$(amd_select_gpu_bdf '可用 AMD GPU / 核显列表（请手工确认 APU 核显设备）:' '请选择 AMD 核显序号')"
+    rc=$?
+    if [[ "$rc" -eq 2 ]]; then
+        return 0
+    fi
+    if [[ -z "$gpu_bdf" ]]; then
+        return 1
+    fi
+
+    local rom_base
+    rom_base="$(amd_prompt_romfile_basename '请输入 AMD 核显 ROM / vBIOS 文件路径或文件名')"
+    rc=$?
+    if [[ "$rc" -eq 2 ]]; then
+        return 0
+    fi
+    if [[ -z "$rom_base" ]]; then
+        return 1
+    fi
+
+    clear
+    show_menu_header "AMD 核显直通配置"
+    echo -e "${YELLOW}VMID: ${NC}$vmid"
+    echo -e "${YELLOW}iGPU: ${NC}$gpu_bdf"
+    echo -e "${YELLOW}ROM: ${NC}${PVE_KVM_ROM_DIR}/${rom_base}"
+    echo -e "${UI_DIVIDER}"
+    nvidia_show_passthrough_status "$gpu_bdf"
+
+    local audio_bdf=""
+    if nvidia_pci_has_function "$gpu_bdf" "1"; then
+        audio_bdf="${gpu_bdf%.*}.1"
+        echo -e "${UI_DIVIDER}"
+        nvidia_show_passthrough_status "$audio_bdf"
+    fi
+
+    local include_audio="no"
+    if [[ -n "$audio_bdf" ]]; then
+        read -p "是否同时直通核显音频功能（${audio_bdf}）？(yes/no) [yes]: " include_audio
+        include_audio="${include_audio:-yes}"
+    fi
+
+    local gpu_id audio_id ids_csv
+    gpu_id="$(nvidia_get_pci_ids "$gpu_bdf")"
+    audio_id=""
+    if [[ -n "$audio_bdf" ]]; then
+        audio_id="$(nvidia_get_pci_ids "$audio_bdf")"
+    fi
+    ids_csv="$gpu_id"
+    if [[ -n "$audio_id" ]]; then
+        ids_csv="${ids_csv},${audio_id}"
+    fi
+
+    echo -e "${UI_DIVIDER}"
+    if [[ -n "$ids_csv" ]]; then
+        echo -e "${CYAN}VFIO ids 建议: ${NC}$ids_csv"
+    fi
+    echo -e "${YELLOW}提示：AMD 核显直通强依赖正确的 ROM / vBIOS；本脚本不会自动提取 ROM。${NC}"
+    if ! qm_is_q35_machine "$vmid"; then
+        echo -e "${YELLOW}警告：当前 VM 不是 q35 机型。AMD 核显直通通常更推荐 q35 + OVMF。${NC}"
+    fi
+    echo -e "${UI_DIVIDER}"
+
+    if qm_has_hostpci_bdf "$vmid" "$gpu_bdf"; then
+        display_error "该 AMD 核显已存在于 VM 的 hostpci 配置中" "无需重复添加。"
+        return 1
+    fi
+
+    local idx0
+    idx0="$(qm_find_free_hostpci_index "$vmid" 2>/dev/null)" || {
+        display_error "未找到可用 hostpci 插槽" "请先释放 VM 的 hostpci0-hostpci15。"
+        return 1
+    }
+
+    local hostpci0_value="$gpu_bdf"
+    if qm_is_q35_machine "$vmid"; then
+        hostpci0_value="${hostpci0_value},pcie=1"
+    fi
+    hostpci0_value="${hostpci0_value},x-vga=1,romfile=${rom_base}"
+
+    local conf_path
+    conf_path="$(get_qm_conf_path "$vmid")"
+    if [[ -f "$conf_path" ]]; then
+        backup_file "$conf_path" >/dev/null 2>&1 || true
+    fi
+
+    if ! confirm_high_risk_action "为 VM $vmid 写入 AMD 核显直通（hostpci${idx0} = ${hostpci0_value}）" "错误的 ROM / vBIOS、错误的 BDF 或错误的 hostpci 配置可能导致 VM 黑屏、来宾驱动报错或设备无法初始化。" "如果宿主机当前仍依赖该 AMD 核显输出，后续黑名单和 VFIO 绑定还可能导致宿主机本地画面丢失。" "请确认 ROM 文件由用户自行提取并已放入 ${PVE_KVM_ROM_DIR}，且已准备好回滚 hostpci 配置。" "AMD-iGPU"; then
+        return 0
+    fi
+
+    if ! qm set "$vmid" "-hostpci${idx0}" "$hostpci0_value" >/dev/null 2>&1; then
+        display_error "qm set 执行失败" "请检查 VM 是否锁定、IOMMU / IOMMU group，或查看 /var/log/pve-tools.log。"
+        return 1
+    fi
+
+    if [[ "$include_audio" == "yes" || "$include_audio" == "YES" ]] && [[ -n "$audio_bdf" ]]; then
+        local idx1
+        idx1="$(qm_find_free_hostpci_index "$vmid" 2>/dev/null)" || {
+            display_error "核显已添加，但未找到可用 hostpci 插槽添加音频功能" "请手工添加 $audio_bdf。"
+            return 1
+        }
+
+        local hostpci1_value="$audio_bdf"
+        if qm_is_q35_machine "$vmid"; then
+            hostpci1_value="${hostpci1_value},pcie=1"
+        fi
+
+        if ! qm set "$vmid" "-hostpci${idx1}" "$hostpci1_value" >/dev/null 2>&1; then
+            log_warn "核显音频功能直通写入失败（核显已写入）"
+        else
+            log_success "核显音频功能已写入: hostpci${idx1} = $hostpci1_value"
+        fi
+    fi
+
+    if [[ -n "$ids_csv" ]]; then
+        local set_vfio="no"
+        read -p "是否写入 AMD 的 VFIO ids 绑定配置（用于将设备绑定到 vfio-pci）（yes/no）[no]: " set_vfio
+        set_vfio="${set_vfio:-no}"
+        if [[ "$set_vfio" == "yes" || "$set_vfio" == "YES" ]]; then
+            amd_try_write_vfio_ids_conf "$ids_csv" || true
+        fi
+    fi
+
+    display_success "AMD 核显直通已写入" "请在来宾中按需安装驱动；如写入了 VFIO 配置，请按提示重启宿主机。"
+    return 0
+}
+
+amd_gpu_management_menu() {
+    while true; do
+        clear
+        show_menu_header "AMD 独显直通"
+        echo -e "${CYAN}提示：如宿主机仍在使用 amdgpu / radeon，占用中的 AMD 独显通常无法直接直通。${NC}"
+        echo -e "${UI_DIVIDER}"
+        show_menu_option "1" "AMD 显卡直通虚拟机"
+        show_menu_option "2" "AMD 宿主机预配置 ( IOMMU / VFIO / 黑名单 )"
+        show_menu_option "0" "返回"
+        show_menu_footer
+        read -p "请选择操作 [0-2]: " choice
+        case "$choice" in
+            1) amd_gpu_passthrough_vm ;;
+            2) amd_host_prepare_for_passthrough ;;
+            0) return ;;
+            *) log_error "无效选择" ;;
+        esac
+        pause_function
+    done
+}
+
+amd_igpu_management_menu() {
+    while true; do
+        clear
+        show_menu_header "AMD 核显直通"
+        echo -e "${RED}注意：AMD 核显直通通常需要用户自备 ROM / vBIOS 文件，本脚本不负责提取。${NC}"
+        echo -e "${UI_DIVIDER}"
+        show_menu_option "1" "配置 AMD 核显直通"
+        show_menu_option "2" "检查 ROM / vBIOS 文件"
+        show_menu_option "3" "查看 AMD 核显直通说明"
+        show_menu_option "4" "AMD 宿主机预配置 ( IOMMU / VFIO / 黑名单 )"
+        show_menu_option "0" "返回"
+        show_menu_footer
+        read -p "请选择操作 [0-4]: " choice
+        case "$choice" in
+            1) amd_igpu_passthrough_vm ;;
+            2) amd_igpu_check_romfile ;;
+            3) amd_igpu_show_guidance ;;
+            4) amd_host_prepare_for_passthrough ;;
+            0) return ;;
+            *) log_error "无效选择" ;;
+        esac
+        pause_function
+    done
+}
 # 主程序
 main() {
     check_root
@@ -7482,6 +11762,11 @@ main() {
     check_debug_mode "$@"
     check_pve_version
     network_offline_guard
+
+    if [[ "$IS_OFFLINE_MODE" -eq 0 ]]; then
+        detect_network_region >/dev/null 2>&1 || true
+    fi
+    fetch_session_tip
 
     if [[ "$IS_OFFLINE_MODE" -eq 1 ]]; then
         log_warn "离线模式下将跳过更新检查与镜像自动策略。"
@@ -7514,9 +11799,12 @@ main() {
                 menu_vm_container
                 ;;
             6)
-                menu_storage_disk
+                menu_host_networking
                 ;;
             7)
+                menu_storage_disk
+                ;;
+            8)
                 menu_tools_about
                 ;;
             0)
@@ -7537,3 +11825,4 @@ main() {
 
 # 运行主程序
 main "$@"
+

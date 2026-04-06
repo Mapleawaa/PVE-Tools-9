@@ -3,7 +3,7 @@
     {
       "title": "自动配置备份脚本",
       "status": "in-progress",
-      "description": "支持将 PVE 核心配置及 VM/LXC 配置备份至远程存储或网盘。"
+      "description": "支持将 PVE 核心配置及 VM / LXC 配置备份至远程存储或网盘。"
     },
     {
       "title": "增强型硬件监控面板",
@@ -13,19 +13,29 @@
     {
       "title": "一键部署常用的 LXC 容器镜像",
       "status": "pending",
-      "description": "集成更多如 Docker-compose, Nginx Proxy Manager 等常用应用的快速部署。"
+      "description": "集成更多如 Docker Compose、Nginx Proxy Manager 等常用应用的快速部署。"
     }
   ],
   "timeline": [
     {
-      "date": "2026-03-13",
+      "date": "2026-04-06",
+      "event": "v7.0.0 - 史诗级重构：安全边界、VM 运维、宿主机网络与 GPU 直通升级",
+      "description": "重构高风险确认体系，补齐 VM 生命周期运维、宿主机网络 / 防火墙 / IPv6、AMD / NVIDIA / Intel 直通与主菜单交互。"
+    },
+    {
+      "date": "2026-04-05",
+      "event": "v6.9.0 - VM 运维工具箱上线",
+      "description": "新增 VM 备份恢复、配置导入导出、模板 / 克隆 / Cloud-Init、磁盘管理、快照与迁移工具链。"
+    },
+    {
+      "date": "2026-03-19",
       "event": "v6.8.0 - 第三方市场、离线守卫与 NVIDIA 文档引导增强",
-      "description": "新增 Modules 第三方软件市场，增加vGPU的文档，重构文档站主页。"
+      "description": "新增 Modules 第三方软件市场，增加 vGPU 文档引导，并重构文档站主页。"
     },
     {
       "date": "2026-03-09",
       "event": "v6.7.0 - 温控与 SMART 增强",
-      "description": "修复温控概览布局，增强 NVMe/SATA SMART 展示，并重构温控恢复逻辑。"
+      "description": "修复温控概览布局，增强 NVMe / SATA SMART 展示，并重构温控恢复逻辑。"
     },
     {
       "date": "2026-02-22",
