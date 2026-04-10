@@ -616,31 +616,50 @@ network_offline_guard() {
 }
 
 disable_ups_service() {
+    local managed_any=false
+    local service
+    local services=("nut-monitor.service" "nut-server.service")
+
     if ! command -v systemctl >/dev/null 2>&1; then
         log_warn "系统不支持 systemctl，无法自动管理 UPS 服务"
         return 1
     fi
-    if ! systemctl list-unit-files 2>/dev/null | grep -q '^apcupsd\.service'; then
-        log_info "未检测到 apcupsd.service，跳过 UPS 服务管理"
+
+    for service in "${services[@]}"; do
+        if systemctl list-unit-files 2>/dev/null | grep -q "^${service}"; then
+            systemctl stop "${service%.service}" >/dev/null 2>&1 || true
+            systemctl disable "${service%.service}" >/dev/null 2>&1 || true
+            managed_any=true
+        fi
+    done
+
+    if [[ "$managed_any" != true ]]; then
+        log_info "未检测到可管理的 NUT 服务，跳过 UPS 服务管理"
         return 0
     fi
 
-    systemctl stop apcupsd >/dev/null 2>&1 || true
-    systemctl disable apcupsd >/dev/null 2>&1 || true
-    log_success "已执行 UPS 服务关闭: systemctl stop/disable apcupsd"
+    log_success "已执行 UPS 服务关闭: systemctl stop/disable nut-monitor nut-server"
     return 0
 }
 
 enable_ups_service() {
+    local managed_any=false
+    local service
+    local services=("nut-server.service" "nut-monitor.service")
+
     if ! command -v systemctl >/dev/null 2>&1; then
         return 1
     fi
-    if ! systemctl list-unit-files 2>/dev/null | grep -q '^apcupsd\.service'; then
-        return 1
-    fi
-    systemctl enable apcupsd >/dev/null 2>&1 || true
-    systemctl start apcupsd >/dev/null 2>&1 || true
-    return 0
+
+    for service in "${services[@]}"; do
+        if systemctl list-unit-files 2>/dev/null | grep -q "^${service}"; then
+            systemctl enable "${service%.service}" >/dev/null 2>&1 || true
+            systemctl start "${service%.service}" >/dev/null 2>&1 || true
+            managed_any=true
+        fi
+    done
+
+    [[ "$managed_any" == true ]]
 }
 
 # 显示横幅
@@ -2897,8 +2916,8 @@ cpu_add() {
     apt-get update
 
     log_step "开始安装所需工具..."
-    # 输入需要安装的软件包 (添加 hdparm 用于 SATA 硬盘休眠检测, apcupsd for UPS support)
-    packages=(lm-sensors nvme-cli sysstat linux-cpupower hdparm smartmontools apcupsd)
+    # 安装温度监控与 UPS(NUT) 所需软件包
+    packages=(lm-sensors nvme-cli sysstat linux-cpupower hdparm smartmontools nut-client)
 
     # 查询软件包，判断是否安装
     for package in "${packages[@]}"; do
@@ -2950,21 +2969,28 @@ cpu_add() {
     backup_file "$pvemanagerlib"
     backup_file "$proxmoxlib"
 
+    local enable_ups=false
+    local nut_ups_name=""
+    local nut_ups_target=""
+
     log_info "是否启用 UPS 监控？"
-    echo -n "（如果没有 UPS 设备或不想显示，请选择 N，默认Y）(y/N): "
+    echo -n "（使用 NUT / upsc 采集，如果没有 UPS 设备或不想显示，请选择 N，默认N）(y/N): "
     read -n 1 -r
     echo
     if [[ $REPLY =~ ^[Yy]$ ]]; then
         enable_ups=true
-        log_success "已选择启用UPS监控"
+        read -r -p "请输入 NUT UPS 设备名 [默认: ups]: " nut_ups_name
+        nut_ups_name=${nut_ups_name:-ups}
+        nut_ups_target="${nut_ups_name}@localhost"
+        log_success "已选择启用 UPS 监控 (NUT: ${nut_ups_target})"
         if enable_ups_service; then
-            log_info "已启用并启动 apcupsd 服务"
+            log_info "已尝试启用并启动 NUT 服务"
         else
-            log_warn "未能自动启用 apcupsd 服务，UPS 信息可能为空"
+            log_warn "未检测到可管理的 NUT 服务，仍将尝试通过 upsc 读取 UPS 信息"
         fi
     else
         enable_ups=false
-        log_info "已选择跳过UPS监控"
+        log_info "已选择跳过 UPS 监控"
         disable_ups_service
     fi
 
@@ -2994,8 +3020,22 @@ cpu_add() {
 EOF
 
     if [ "$enable_ups" = true ]; then
-        cat >> $tmpf << 'EOF'
-        $res->{ups_status} = `apcaccess status`;
+        cat >> $tmpf << EOF
+        \$res->{ups_status} = \`
+            UPS_TARGET="$nut_ups_target"
+            if command -v upsc >/dev/null 2>&1; then
+                UPS_DATA=\$(upsc "\$UPS_TARGET" 2>/dev/null || true)
+                if [ -n "\$UPS_DATA" ]; then
+                    printf '%s\n' "\$UPS_DATA" | grep -E '^(device\.model|ups\.status|battery\.charge|battery\.runtime|input\.voltage|output\.voltage|ups\.load|ups\.power\.nominal|ups\.realpower|battery\.charge\.low|battery\.voltage|ups\.beeper\.status|ups\.delay\.shutdown|ups\.timer\.shutdown|ups\.delay\.start|ups\.timer\.start):'
+                else
+                    echo "NUT_STATUS: NO_DATA"
+                    echo "UPS_TARGET: \$UPS_TARGET"
+                fi
+            else
+                echo "NUT_STATUS: UPSC_MISSING"
+                echo "UPS_TARGET: \$UPS_TARGET"
+            fi
+        \`;
 EOF
     fi
 
@@ -3460,66 +3500,85 @@ EOF
         cellWrap: true,
         renderer: function(value) {
             if (!value || value.length === 0) {
-                return '提示: 未检测到 UPS 或 apcaccess 未运行';
+                return '提示: 未检测到 UPS 或 NUT 未返回数据';
             }
 
             try {
-                const DATE_MATCH      = value.match(/DATE\s*:\s*([^\n]+)/m);
-                const STATUS_MATCH    = value.match(/STATUS\s*:\s*([A-Z]+)/m);
-                const OUTPUTV_MATCH   = value.match(/OUTPUTV\s*:\s*([\d\.]+)/m);
-                const LINEV_MATCH     = value.match(/LINEV\s*:\s*([\d\.]+)/m);
-                const LOADPCT_MATCH   = value.match(/LOADPCT\s*:\s*([\d\.]+)/m);
-                const BCHARGE_MATCH   = value.match(/BCHARGE\s*:\s*([\d\.]+)/m);
-                const TIMELEFT_MATCH  = value.match(/TIMELEFT\s*:\s*([\d\.]+)/m);
-                const NOMPOWER_MATCH  = value.match(/NOMPOWER\s*:\s*([\d\.]+)/m);
-                const MODEL_MATCH     = value.match(/MODEL\s*:\s*(.+)/m);
+                const getValue = (key) => {
+                    const match = value.match(new RegExp(`^${key}\\s*:\\s*(.+)$`, 'm'));
+                    return match ? match[1].trim() : '';
+                };
 
-                const DATE       = DATE_MATCH ? DATE_MATCH[1].trim() : '未知时间';
-                const STATUS     = STATUS_MATCH ? STATUS_MATCH[1] : 'UNKNOWN';
-                const VOLTAGE    = (OUTPUTV_MATCH || LINEV_MATCH) ? (OUTPUTV_MATCH || LINEV_MATCH)[1] : '-';
-                const LOADPCT    = LOADPCT_MATCH ? parseFloat(LOADPCT_MATCH[1]) : NaN;
-                const LOADPCT_TXT= isNaN(LOADPCT) ? '-' : LOADPCT_MATCH[1];
-                const BCHARGE    = BCHARGE_MATCH ? BCHARGE_MATCH[1] : '-';
-                const TIMELEFT   = TIMELEFT_MATCH ? TIMELEFT_MATCH[1] : '-';
-                const NOMPOWER   = NOMPOWER_MATCH ? parseFloat(NOMPOWER_MATCH[1]) : NaN;
-                const MODEL      = MODEL_MATCH ? MODEL_MATCH[1].trim() : '未知型号';
+                const target = getValue('UPS_TARGET');
+                const model = getValue('device\\.model') || '未知型号';
+                const statusRaw = getValue('ups\\.status');
+                const charge = getValue('battery\\.charge') || '-';
+                const runtimeRaw = getValue('battery\\.runtime');
+                const inputVoltage = getValue('input\\.voltage');
+                const outputVoltage = getValue('output\\.voltage');
+                const loadRaw = getValue('ups\\.load');
+                const nominalPowerRaw = getValue('ups\\.power\\.nominal');
+                const realPowerRaw = getValue('ups\\.realpower');
+                const batteryVoltage = getValue('battery\\.voltage');
+                const beeper = getValue('ups\\.beeper\\.status');
+                const delayShutdown = getValue('ups\\.delay\\.shutdown');
+                const timerShutdown = getValue('ups\\.timer\\.shutdown');
+                const delayStart = getValue('ups\\.delay\\.start');
+                const timerStart = getValue('ups\\.timer\\.start');
+                const noData = getValue('NUT_STATUS');
 
-                let powerStatusText = '';
-                switch (STATUS) {
-                    case 'ONLINE':
-                        powerStatusText = '市电供电正常';
-                        break;
-                    case 'ONBATT':
-                        powerStatusText = '电池供电中（市电中断）';
-                        break;
-                    case 'CHRG':
-                        powerStatusText = '电池充电中';
-                        break;
-                    case 'DISCHRG':
-                        powerStatusText = '电池放电中';
-                        break;
-                    default:
-                        powerStatusText = '状态: ' + STATUS;
-                        break;
+                if (noData === 'UPSC_MISSING') {
+                    return `提示: 系统未安装 upsc，无法读取 ${target || 'UPS'} 的信息`;
+                }
+                if (noData === 'NO_DATA') {
+                    return `提示: 未从 ${target || 'UPS'} 获取到 NUT 数据`;
                 }
 
-                let totalPowerText = '-';
-                let currentPowerText = '-';
+                const statusTokens = statusRaw ? statusRaw.split(/\s+/).filter(Boolean) : [];
+                const statusTexts = [];
+                if (statusTokens.includes('OL')) statusTexts.push('在线');
+                if (statusTokens.includes('OB')) statusTexts.push('电池供电');
+                if (statusTokens.includes('CHRG')) statusTexts.push('充电中');
+                if (statusTokens.includes('DISCHRG')) statusTexts.push('放电中');
+                if (statusTokens.includes('LB')) statusTexts.push('低电量');
+                if (statusTexts.length === 0) statusTexts.push(statusRaw || '未知状态');
 
-                if (!isNaN(NOMPOWER) && NOMPOWER > 0) {
-                    const totalPowerW = NOMPOWER;
-                    totalPowerText = totalPowerW.toFixed(0) + ' W';
+                const runtimeSeconds = Number.parseFloat(runtimeRaw);
+                const runtimeText = Number.isFinite(runtimeSeconds)
+                    ? `${Math.round(runtimeSeconds)} 秒`
+                    : '-';
 
-                    if (!isNaN(LOADPCT)) {
-                        const currentPowerW = totalPowerW * LOADPCT / 100;
-                        currentPowerText = currentPowerW.toFixed(0) + ' W';
-                    }
+                const loadPct = Number.parseFloat(loadRaw);
+                const nominalPower = Number.parseFloat(nominalPowerRaw);
+                const realPower = Number.parseFloat(realPowerRaw);
+
+                let powerText = '-';
+                if (Number.isFinite(realPower) && realPower > 0) {
+                    powerText = `${realPower.toFixed(0)} W`;
+                } else if (Number.isFinite(nominalPower) && Number.isFinite(loadPct)) {
+                    powerText = `${(nominalPower * loadPct / 100).toFixed(0)} W`;
                 }
 
-                return `${MODEL} | ${powerStatusText} | ${DATE}<br>
-                        电量: ${BCHARGE} % | 剩余供电时间: ${TIMELEFT} 分钟<br>
-                        电压: ${VOLTAGE} V | 负载: ${LOADPCT_TXT} %<br>
-                        额定功率: ${totalPowerText} | 估算当前功率: ${currentPowerText}`;
+                const nominalPowerText = Number.isFinite(nominalPower) && nominalPower > 0
+                    ? `${nominalPower.toFixed(0)} W`
+                    : '-';
+
+                const voltageParts = [];
+                if (inputVoltage) voltageParts.push(`输入电压: ${inputVoltage} V`);
+                if (outputVoltage) voltageParts.push(`输出电压: ${outputVoltage} V`);
+                if (batteryVoltage) voltageParts.push(`电池电压: ${batteryVoltage} V`);
+
+                const extraParts = [];
+                if (beeper) extraParts.push(`蜂鸣器: ${beeper}`);
+                if (delayShutdown) extraParts.push(`延迟关机: ${delayShutdown} 秒`);
+                if (timerShutdown) extraParts.push(`关机计时: ${timerShutdown} 秒`);
+                if (delayStart) extraParts.push(`延迟启动: ${delayStart} 秒`);
+                if (timerStart) extraParts.push(`启动计时: ${timerStart} 秒`);
+
+                return `${model}${target ? ` (${target})` : ''} | 状态: ${statusTexts.join(' / ')}<br>
+                        电量: ${charge} % | 剩余时间: ${runtimeText} | 负载: ${loadRaw || '-'} %<br>
+                        ${voltageParts.length > 0 ? voltageParts.join(' | ') : '电压: -'}<br>
+                        额定功率: ${nominalPowerText} | 当前功率: ${powerText}${extraParts.length > 0 ? `<br>${extraParts.join(' | ')}` : ''}`;
             } catch(e) {
                 return 'UPS 信息解析失败: ' + value;
             }
@@ -9926,7 +9985,7 @@ temp_monitoring_menu() {
         show_menu_option "1" "配置温度监控 ${CYAN}(CPU/硬盘温度显示)${NC}"
         show_menu_option "2" "${RED}移除温度监控${NC} (移除温度监控功能)"
         show_menu_option "3" "自定义温度监控选项 ${MAGENTA}(高级)${NC}"
-        show_menu_option "4" "UPS 服务管理 ${CYAN}(apcupsd)${NC}"
+        show_menu_option "4" "UPS 服务管理 ${CYAN}(NUT)${NC}"
         echo "${UI_DIVIDER}"
         show_menu_option "0" "返回上级菜单"
         show_menu_footer
@@ -9945,23 +10004,40 @@ temp_monitoring_menu() {
                 custom_temp_monitoring
                 ;;
             4)
-                if command -v systemctl >/dev/null 2>&1 && systemctl list-unit-files 2>/dev/null | grep -q '^apcupsd\.service'; then
-                    local active_state enabled_state
-                    active_state=$(systemctl is-active apcupsd 2>/dev/null || echo unknown)
-                    enabled_state=$(systemctl is-enabled apcupsd 2>/dev/null || echo unknown)
-                    echo "当前 UPS 服务状态: active=${active_state}, enabled=${enabled_state}"
-                    echo "1) 禁用 UPS 服务（stop + disable）"
-                    echo "2) 启用 UPS 服务（enable + start）"
-                    echo "0) 返回"
-                    read -p "请选择 [0-2]: " ups_choice
-                    case "$ups_choice" in
-                        1) disable_ups_service ;;
-                        2) enable_ups_service && log_success "已启用 UPS 服务" || log_warn "启用 UPS 服务失败，请手工检查" ;;
-                        0) ;;
-                        *) log_error "无效选择" ;;
-                    esac
+                if command -v systemctl >/dev/null 2>&1; then
+                    local nut_server_active nut_server_enabled nut_monitor_active nut_monitor_enabled has_nut_service
+                    has_nut_service=false
+
+                    if systemctl list-unit-files 2>/dev/null | grep -q '^nut-server\.service'; then
+                        nut_server_active=$(systemctl is-active nut-server 2>/dev/null || echo unknown)
+                        nut_server_enabled=$(systemctl is-enabled nut-server 2>/dev/null || echo unknown)
+                        echo "NUT Server 状态: active=${nut_server_active}, enabled=${nut_server_enabled}"
+                        has_nut_service=true
+                    fi
+
+                    if systemctl list-unit-files 2>/dev/null | grep -q '^nut-monitor\.service'; then
+                        nut_monitor_active=$(systemctl is-active nut-monitor 2>/dev/null || echo unknown)
+                        nut_monitor_enabled=$(systemctl is-enabled nut-monitor 2>/dev/null || echo unknown)
+                        echo "NUT Monitor 状态: active=${nut_monitor_active}, enabled=${nut_monitor_enabled}"
+                        has_nut_service=true
+                    fi
+
+                    if [[ "$has_nut_service" == true ]]; then
+                        echo "1) 禁用 UPS 服务（stop + disable NUT）"
+                        echo "2) 启用 UPS 服务（enable + start NUT）"
+                        echo "0) 返回"
+                        read -p "请选择 [0-2]: " ups_choice
+                        case "$ups_choice" in
+                            1) disable_ups_service ;;
+                            2) enable_ups_service && log_success "已尝试启用 NUT 服务" || log_warn "未检测到可管理的 NUT 服务，请手工检查" ;;
+                            0) ;;
+                            *) log_error "无效选择" ;;
+                        esac
+                    else
+                        log_warn "未检测到可管理的 NUT 服务，但如果 upsc 可用仍可读取 UPS 数据"
+                    fi
                 else
-                    log_warn "未检测到 apcupsd.service，无法管理 UPS 服务"
+                    log_warn "系统不支持 systemctl，无法管理 NUT 服务"
                 fi
                 ;;
             0)
@@ -9993,7 +10069,7 @@ custom_temp_monitoring() {
     # options[6]="CPU 核心温度 (不支持 AMD, 必选 5)"
     # options[7]="核显温度 (仅支持 AMD, 必选 5)"
     # options[8]="风扇转速 (可能需要单独安装传感器驱动, 必选 5)"
-    # options[9]="UPS 信息 (仅支持 apcupsd - apcaccess 软件包)"
+    # options[9]="UPS 信息 (基于 NUT / upsc 采集)"
     # options[a]="硬盘基础信息 (容量、寿命 (仅 NVME )、温度)"
     # options[b]="硬盘通电信息 (必选 a)"
     # options[c]="硬盘 IO 信息 (必选 a)"

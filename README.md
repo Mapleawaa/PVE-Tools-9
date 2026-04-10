@@ -25,7 +25,7 @@ PVE-Tools-9 是一个面向 Proxmox VE 9.x 的交互式 Bash 工具。
 - VM 生命周期运维：备份、恢复、配置导入导出、模板、克隆、Cloud-Init、磁盘管理、快照、启动顺序、网络调整、集群内迁移。
 - 宿主机网络与防火墙：bridge、Bond、VLAN、IPv4 / IPv6 / SLAAC / DHCP、PVE 防火墙、安全组、IPv6 助手、网络诊断工具箱。
 - GPU / PCI 直通：Intel 核显虚拟化与直通、NVIDIA 显卡管理、AMD 独显直通、AMD 核显直通、RDM、NVMe、控制器直通。
-- 系统维护：换源、系统更新、PVE 8 -> 9 升级、内核管理、GRUB 备份恢复、邮件通知、温控与 UPS 辅助能力。
+- 系统维护：换源、系统更新、PVE 8 -> 9 升级、内核管理、GRUB 备份恢复、邮件通知、温控与基于 NUT 的 UPS 辅助能力。
 - 第三方生态：FastPVE、Modules、Community Scripts。
 
 ## 快速开始
