@@ -12,7 +12,7 @@
 
 
 # 版本信息
-CURRENT_VERSION="7.0.0"
+CURRENT_VERSION="7.0.1"
 BUILD_NICKNAME="Mika"
 VERSION_FILE_URL="https://raw.githubusercontent.com/Mapleawaa/PVE-Tools-9/main/VERSION"
 UPDATE_FILE_URL="https://raw.githubusercontent.com/Mapleawaa/PVE-Tools-9/main/UPDATE"
@@ -5455,7 +5455,7 @@ menu_optimization() {
         show_menu_option "1" "删除订阅弹窗"
         show_menu_option "2" "温度监控管理 ${CYAN}(CPU/硬盘监控设置)${NC}"
         show_menu_option "3" "CPU 电源模式配置"
-        show_menu_option "4" "${MAGENTA}一键优化 (换源+删弹窗+更新)${NC}"
+        show_menu_option "4" "${MAGENTA}一键优化 (换源+删弹窗+更新)${NC} / 请在外部SSH环境下使用该功能！否则会导致PVE WebUi重启导致Shell断开连接修改失效！"
         show_menu_option "5" "配置邮件通知 ${CYAN}(SMTP/Postfix)${NC}"
         echo "$UI_DIVIDER"
         show_menu_option "0" "返回主菜单"
@@ -9984,8 +9984,7 @@ temp_monitoring_menu() {
         show_menu_header "温度监控管理"
         show_menu_option "1" "配置温度监控 ${CYAN}(CPU/硬盘温度显示)${NC}"
         show_menu_option "2" "${RED}移除温度监控${NC} (移除温度监控功能)"
-        show_menu_option "3" "自定义温度监控选项 ${MAGENTA}(高级)${NC}"
-        show_menu_option "4" "UPS 服务管理 ${CYAN}(NUT)${NC}"
+        show_menu_option "3" "UPS 服务管理 ${CYAN}(NUT)${NC}"
         echo "${UI_DIVIDER}"
         show_menu_option "0" "返回上级菜单"
         show_menu_footer
@@ -10001,9 +10000,6 @@ temp_monitoring_menu() {
                 cpu_del
                 ;;
             3)
-                custom_temp_monitoring
-                ;;
-            4)
                 if command -v systemctl >/dev/null 2>&1; then
                     local nut_server_active nut_server_enabled nut_monitor_active nut_monitor_enabled has_nut_service
                     has_nut_service=false
@@ -10054,135 +10050,7 @@ temp_monitoring_menu() {
 }
 
 # 自定义温度监控配置
-custom_temp_monitoring() {
-    clear
-
-    
-    # Define options
-    declare -A options
-    # options[0]="CPU 实时主频"
-    # options[1]="CPU 最小及最大主频 (必选 0)"
-    # options[2]="CPU 线程主频"
-    # options[3]="CPU 工作模式 (必选 0)"
-    # options[4]="CPU 功率 (必选 0)"
-    # options[5]="CPU 温度"
-    # options[6]="CPU 核心温度 (不支持 AMD, 必选 5)"
-    # options[7]="核显温度 (仅支持 AMD, 必选 5)"
-    # options[8]="风扇转速 (可能需要单独安装传感器驱动, 必选 5)"
-    # options[9]="UPS 信息 (基于 NUT / upsc 采集)"
-    # options[a]="硬盘基础信息 (容量、寿命 (仅 NVME )、温度)"
-    # options[b]="硬盘通电信息 (必选 a)"
-    # options[c]="硬盘 IO 信息 (必选 a)"
-    # options[l]="概要信息: 居左显示"
-    # options[r]="概要信息: 居右显示"
-    # options[m]="概要信息: 居中显示"
-    # options[j]="概要信息: 平铺显示"
-    options[o]="推荐方案一：高大全 (除 UPS 信息以外全部居右显示)"
-    options[p]="推荐方案二：精简"
-    options[q]="推荐方案三：极简"
-    options[x]="一键清空 (还原默认)"
-    options[s]="跳过本次修改"
-    
-    echo "请选择要启用的监控项目 (用空格分隔，如: o):"
-    echo
-    
-    # Display options with checkboxes
-    # for key in 0 1 2 3 4 5 6 7 8 9 a b c l r m j o p q x s; do
-    for key in o p q x s; do
-        if [[ -n "${options[$key]}" ]]; then
-            echo "  [ ] $key) ${options[$key]}"
-        fi
-    done
-    
-    echo
-    read -p "请输入选择 (如: 0 5 6 或 o 或 s): " input
-    
-    # Process user selections
-    if [[ "$input" == "s" ]]; then
-        log_info "跳过自定义配置"
-        return
-    fi
-    
-    if [[ "$input" == "x" ]]; then
-        log_info "正在还原默认设置..."
-        cpu_del
-        log_success "已还原默认设置"
-        return
-    fi
-    
-    if [[ "$input" == "o" ]]; then
-        log_info "应用推荐方案一：高大全..."
-        # Apply comprehensive configuration
-        cpu_add
-        log_success "推荐方案一已应用"
-        return
-    fi
-    
-    if [[ "$input" == "p" ]]; then
-        log_info "应用推荐方案二：精简..."
-        # Apply simplified configuration
-        cpu_add
-        log_success "推荐方案二已应用"
-        return
-    fi
-    
-    if [[ "$input" == "q" ]]; then
-        log_info "应用推荐方案三：极简..."
-        # Apply minimal configuration
-        cpu_add
-        log_success "推荐方案三已应用"
-        return
-    fi
-    
-    # Process selected individual options
-    echo "您选择了: $input"
-    echo "正在配置自定义温度监控..."
-    
-    # Parse and validate dependencies
-    selections=($input)
-    dependencies_met=true
-    
-    # Check for dependencies
-    for selection in "${selections[@]}"; do
-        case "$selection" in
-            1) if [[ ! " ${selections[@]} " =~ " 0 " ]]; then
-                 log_error "选项 1 需要选项 0，请重新选择"
-                 dependencies_met=false
-                 break
-               fi ;;
-            3|4) if [[ ! " ${selections[@]} " =~ " 0 " ]]; then
-                 log_error "选项 3 或 4 需要选项 0，请重新选择"
-                 dependencies_met=false
-                 break
-               fi ;;
-            6|7|8) if [[ ! " ${selections[@]} " =~ " 5 " ]]; then
-                 log_error "选项 6, 7 或 8 需要选项 5，请重新选择"
-                 dependencies_met=false
-                 break
-               fi ;;
-            b) if [[ ! " ${selections[@]} " =~ " a " ]]; then
-                 log_error "选项 b 需要选项 a，请重新选择"
-                 dependencies_met=false
-                 break
-               fi ;;
-            c) if [[ ! " ${selections[@]} " =~ " a " ]]; then
-                 log_error "选项 c 需要选项 a，请重新选择"
-                 dependencies_met=false
-                 break
-               fi ;;
-        esac
-    done
-    
-    if [[ "$dependencies_met" == true ]]; then
-        log_info "配置所选监控项..."
-        # In a real implementation, this would customize the monitoring based on selections
-        # For now, we'll use the existing cpu_add function
-        cpu_add  # Use the existing function to install the basic monitoring
-        log_success "自定义温度监控配置完成"
-    else
-        log_error "配置失败，依赖关系不满足"
-    fi
-}
+# 已经死了。
 
 # Ceph管理菜单
 ceph_management_menu() {
