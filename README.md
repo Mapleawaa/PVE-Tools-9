@@ -61,14 +61,16 @@ sudo ./PVE-Tools.sh
 
 ## 官方资源
 
-- **官方文档**：https://pve.u3u.icu
-- **功能特性**：https://pve.u3u.icu/features
-- **更新日志**：https://pve.u3u.icu/update
-- **常见问题**：https://pve.u3u.icu/faq
-- **数据误操作恢复参考**：https://pve.u3u.icu/advanced/data-recovery-after-mistake
-- **宿主机网络 / 防火墙 / IPv6 专题**：https://pve.u3u.icu/advanced/host-network-firewall-ipv6
-- **VM 备份 / 迁移 / Cloud-Init 专题**：https://pve.u3u.icu/advanced/vm-backup-migration-cloudinit
-- **完整 ULA 页面**：https://pve.u3u.icu/ula
+| 资源类型 | 链接 |
+| :--- | :--- |
+| **官方文档** | [https://pve.u3u.icu](https://pve.u3u.icu) |
+| **功能特性** | [https://pve.u3u.icu/features](https://pve.u3u.icu/features) |
+| **更新日志** | [https://pve.u3u.icu/update](https://pve.u3u.icu/update) |
+| **常见问题** | [https://pve.u3u.icu/faq](https://pve.u3u.icu/faq) |
+| **数据误操作恢复参考** | [https://pve.u3u.icu/advanced/data-recovery-after-mistake](https://pve.u3u.icu/advanced/data-recovery-after-mistake) |
+| **宿主机网络 / 防火墙 / IPv6 专题** | [https://pve.u3u.icu/advanced/host-network-firewall-ipv6](https://pve.u3u.icu/advanced/host-network-firewall-ipv6) |
+| **VM 备份 / 迁移 / Cloud-Init 专题** | [https://pve.u3u.icu/advanced/vm-backup-migration-cloudinit](https://pve.u3u.icu/advanced/vm-backup-migration-cloudinit) |
+| **完整 ULA 页面** | [https://pve.u3u.icu/ula](https://pve.u3u.icu/ula) |
 
 ## 社区与支持
 
