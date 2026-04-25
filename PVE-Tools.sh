@@ -12,8 +12,8 @@
 
 
 # 版本信息
-CURRENT_VERSION="7.0.1"
-BUILD_NICKNAME="Mika"
+CURRENT_VERSION="7.1.0"
+BUILD_NICKNAME="Hana"
 VERSION_FILE_URL="https://raw.githubusercontent.com/Mapleawaa/PVE-Tools-9/main/VERSION"
 UPDATE_FILE_URL="https://raw.githubusercontent.com/Mapleawaa/PVE-Tools-9/main/UPDATE"
 PVE_VERSION_DETECTED=""
@@ -660,6 +660,50 @@ enable_ups_service() {
     done
 
     [[ "$managed_any" == true ]]
+}
+
+show_ups_diagnostics() {
+    local service active_state enabled_state has_nut_service=false
+    local upsc_path ups_list
+
+    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    echo "UPS / NUT 诊断信息"
+    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+
+    if upsc_path=$(command -v upsc 2>/dev/null); then
+        log_success "检测到 upsc: $upsc_path"
+        if command -v timeout >/dev/null 2>&1; then
+            ups_list=$(timeout --signal=TERM 3s upsc -l 2>/dev/null || true)
+            if [[ -n "$ups_list" ]]; then
+                echo "已发现 UPS 设备名："
+                printf '%s\n' "$ups_list"
+            else
+                log_info "未列出 UPS 设备名；请确认 NUT 已由系统正确配置"
+            fi
+        else
+            log_warn "未检测到 timeout，脚本不会在 Web UI 热路径里直接调用 upsc"
+        fi
+    else
+        log_warn "未检测到 upsc（nut-client 未安装），无法读取 UPS 数据"
+    fi
+
+    if command -v systemctl >/dev/null 2>&1; then
+        for service in nut-server.service nut-monitor.service; do
+            if systemctl list-unit-files 2>/dev/null | grep -q "^${service}"; then
+                active_state=$(systemctl is-active "${service%.service}" 2>/dev/null || echo unknown)
+                enabled_state=$(systemctl is-enabled "${service%.service}" 2>/dev/null || echo unknown)
+                echo "${service%.service} 状态: active=${active_state}, enabled=${enabled_state}"
+                has_nut_service=true
+            fi
+        done
+        if [[ "$has_nut_service" != true ]]; then
+            log_info "未检测到可管理的 NUT systemd 服务"
+        fi
+    else
+        log_info "系统不支持 systemctl，跳过 NUT 服务状态检查"
+    fi
+
+    echo "说明：温度监控中的 UPS 展示仅做安全读取，不会自动启停 NUT 服务。"
 }
 
 # 显示横幅
@@ -2916,8 +2960,8 @@ cpu_add() {
     apt-get update
 
     log_step "开始安装所需工具..."
-    # 安装温度监控与 UPS(NUT) 所需软件包
-    packages=(lm-sensors nvme-cli sysstat linux-cpupower hdparm smartmontools nut-client)
+    # 安装温度监控基础软件包；UPS 依赖按需安装
+    packages=(lm-sensors nvme-cli sysstat linux-cpupower hdparm smartmontools)
 
     # 查询软件包，判断是否安装
     for package in "${packages[@]}"; do
@@ -2981,17 +3025,29 @@ cpu_add() {
         enable_ups=true
         read -r -p "请输入 NUT UPS 设备名 [默认: ups]: " nut_ups_name
         nut_ups_name=${nut_ups_name:-ups}
+        if [[ ! "$nut_ups_name" =~ ^[A-Za-z0-9._-]+$ ]]; then
+            log_warn "UPS 设备名包含不支持字符，已回退为默认值 ups"
+            nut_ups_name="ups"
+        fi
         nut_ups_target="${nut_ups_name}@localhost"
         log_success "已选择启用 UPS 监控 (NUT: ${nut_ups_target})"
-        if enable_ups_service; then
-            log_info "已尝试启用并启动 NUT 服务"
-        else
-            log_warn "未检测到可管理的 NUT 服务，仍将尝试通过 upsc 读取 UPS 信息"
+
+        if ! dpkg -s nut-client &> /dev/null; then
+            log_info "nut-client 未安装，开始安装以提供 upsc 命令"
+            apt-get install nut-client -y
         fi
+
+        if command -v upsc >/dev/null 2>&1; then
+            log_info "已检测到 upsc，UPS 数据将通过带超时保护的读取方式展示"
+        else
+            log_warn "未检测到 upsc，UPS 信息将显示为不可用"
+        fi
+
+        log_info "脚本不会自动启停 NUT 服务，请保持现有 NUT 配置不变"
     else
         enable_ups=false
         log_info "已选择跳过 UPS 监控"
-        disable_ups_service
+        log_info "已跳过 UPS 展示，脚本不会改动系统当前的 NUT 服务状态"
     fi
 
     # 生成系统变量 (参考 PVE 8 脚本的改进实现)
@@ -3024,11 +3080,30 @@ EOF
         \$res->{ups_status} = \`
             UPS_TARGET="$nut_ups_target"
             if command -v upsc >/dev/null 2>&1; then
-                UPS_DATA=\$(upsc "\$UPS_TARGET" 2>/dev/null || true)
-                if [ -n "\$UPS_DATA" ]; then
-                    printf '%s\n' "\$UPS_DATA" | grep -E '^(device\.model|ups\.status|battery\.charge|battery\.runtime|input\.voltage|output\.voltage|ups\.load|ups\.power\.nominal|ups\.realpower|battery\.charge\.low|battery\.voltage|ups\.beeper\.status|ups\.delay\.shutdown|ups\.timer\.shutdown|ups\.delay\.start|ups\.timer\.start):'
+                if command -v timeout >/dev/null 2>&1; then
+                    UPS_DATA=\$(timeout --signal=TERM 3s upsc "\$UPS_TARGET" 2>/dev/null)
+                    UPS_EXIT=\$?
+                    if [ "\$UPS_EXIT" -eq 0 ] && [ -n "\$UPS_DATA" ]; then
+                        FILTERED_DATA=\$(printf '%s\n' "\$UPS_DATA" | grep -E '^(device\.model|ups\.status|battery\.charge|battery\.runtime|input\.voltage|output\.voltage|ups\.load|ups\.power\.nominal|ups\.realpower|battery\.charge\.low|battery\.voltage|ups\.beeper\.status|ups\.delay\.shutdown|ups\.timer\.shutdown|ups\.delay\.start|ups\.timer\.start):' || true)
+                        if [ -n "\$FILTERED_DATA" ]; then
+                            printf '%s\n' "\$FILTERED_DATA"
+                            echo "UPS_TARGET: \$UPS_TARGET"
+                        else
+                            echo "NUT_STATUS: NO_DATA"
+                            echo "UPS_TARGET: \$UPS_TARGET"
+                        fi
+                    elif [ "\$UPS_EXIT" -eq 124 ] || [ "\$UPS_EXIT" -eq 137 ]; then
+                        echo "NUT_STATUS: TIMEOUT"
+                        echo "UPS_TARGET: \$UPS_TARGET"
+                    elif [ "\$UPS_EXIT" -eq 0 ]; then
+                        echo "NUT_STATUS: NO_DATA"
+                        echo "UPS_TARGET: \$UPS_TARGET"
+                    else
+                        echo "NUT_STATUS: QUERY_FAILED"
+                        echo "UPS_TARGET: \$UPS_TARGET"
+                    fi
                 else
-                    echo "NUT_STATUS: NO_DATA"
+                    echo "NUT_STATUS: TIMEOUT_MISSING"
                     echo "UPS_TARGET: \$UPS_TARGET"
                 fi
             else
@@ -3530,8 +3605,17 @@ EOF
                 if (noData === 'UPSC_MISSING') {
                     return `提示: 系统未安装 upsc，无法读取 ${target || 'UPS'} 的信息`;
                 }
+                if (noData === 'TIMEOUT_MISSING') {
+                    return `提示: 系统未检测到 timeout，为避免阻塞 Web UI，已跳过 ${target || 'UPS'} 的读取`;
+                }
+                if (noData === 'TIMEOUT') {
+                    return `提示: 读取 ${target || 'UPS'} 超时，已自动跳过以保护 Web UI`;
+                }
                 if (noData === 'NO_DATA') {
                     return `提示: 未从 ${target || 'UPS'} 获取到 NUT 数据`;
+                }
+                if (noData === 'QUERY_FAILED') {
+                    return `提示: ${target || 'UPS'} 查询失败，请检查 NUT 配置或设备名`;
                 }
 
                 const statusTokens = statusRaw ? statusRaw.split(/\s+/).filter(Boolean) : [];
@@ -9984,12 +10068,12 @@ temp_monitoring_menu() {
         show_menu_header "温度监控管理"
         show_menu_option "1" "配置温度监控 ${CYAN}(CPU/硬盘温度显示)${NC}"
         show_menu_option "2" "${RED}移除温度监控${NC} (移除温度监控功能)"
-        show_menu_option "3" "UPS 服务管理 ${CYAN}(NUT)${NC}"
+        show_menu_option "3" "UPS 状态诊断 ${CYAN}(NUT / upsc)${NC}"
         echo "${UI_DIVIDER}"
         show_menu_option "0" "返回上级菜单"
         show_menu_footer
         echo
-        read -p "请选择 [0-4]: " temp_choice
+        read -p "请选择 [0-3]: " temp_choice
         echo
         
         case $temp_choice in
@@ -10000,41 +10084,7 @@ temp_monitoring_menu() {
                 cpu_del
                 ;;
             3)
-                if command -v systemctl >/dev/null 2>&1; then
-                    local nut_server_active nut_server_enabled nut_monitor_active nut_monitor_enabled has_nut_service
-                    has_nut_service=false
-
-                    if systemctl list-unit-files 2>/dev/null | grep -q '^nut-server\.service'; then
-                        nut_server_active=$(systemctl is-active nut-server 2>/dev/null || echo unknown)
-                        nut_server_enabled=$(systemctl is-enabled nut-server 2>/dev/null || echo unknown)
-                        echo "NUT Server 状态: active=${nut_server_active}, enabled=${nut_server_enabled}"
-                        has_nut_service=true
-                    fi
-
-                    if systemctl list-unit-files 2>/dev/null | grep -q '^nut-monitor\.service'; then
-                        nut_monitor_active=$(systemctl is-active nut-monitor 2>/dev/null || echo unknown)
-                        nut_monitor_enabled=$(systemctl is-enabled nut-monitor 2>/dev/null || echo unknown)
-                        echo "NUT Monitor 状态: active=${nut_monitor_active}, enabled=${nut_monitor_enabled}"
-                        has_nut_service=true
-                    fi
-
-                    if [[ "$has_nut_service" == true ]]; then
-                        echo "1) 禁用 UPS 服务（stop + disable NUT）"
-                        echo "2) 启用 UPS 服务（enable + start NUT）"
-                        echo "0) 返回"
-                        read -p "请选择 [0-2]: " ups_choice
-                        case "$ups_choice" in
-                            1) disable_ups_service ;;
-                            2) enable_ups_service && log_success "已尝试启用 NUT 服务" || log_warn "未检测到可管理的 NUT 服务，请手工检查" ;;
-                            0) ;;
-                            *) log_error "无效选择" ;;
-                        esac
-                    else
-                        log_warn "未检测到可管理的 NUT 服务，但如果 upsc 可用仍可读取 UPS 数据"
-                    fi
-                else
-                    log_warn "系统不支持 systemctl，无法管理 NUT 服务"
-                fi
+                show_ups_diagnostics
                 ;;
             0)
                 break
@@ -11769,4 +11819,3 @@ main() {
 
 # 运行主程序
 main "$@"
-
