@@ -1,5 +1,6 @@
-v7.1.0
+v7.1.1
 
+- 热修复 UPS 监控注入到 PVE Nodes.pm 后的 Perl 插值问题，避免 ups@localhost 与 $UPS_* 被 Perl 当作变量导致 Web UI 后端编译失败
 - 调整 UPS 集成策略：温度监控中的 UPS 展示改为安全读取，不再自动启停用户现有的 NUT 服务
 - 为 upsc 查询加入超时与失败回退，避免异常情况下拖慢或影响 PVE Web UI
 - 新增 UPS / NUT 诊断入口，便于检查 upsc、UPS 设备名与 NUT 服务状态

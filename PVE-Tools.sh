@@ -3077,16 +3077,16 @@ EOF
 
     if [ "$enable_ups" = true ]; then
         cat >> $tmpf << EOF
-        \$res->{ups_status} = \`
+        \$res->{ups_status} = qx'
             UPS_TARGET="$nut_ups_target"
             if command -v upsc >/dev/null 2>&1; then
                 if command -v timeout >/dev/null 2>&1; then
                     UPS_DATA=\$(timeout --signal=TERM 3s upsc "\$UPS_TARGET" 2>/dev/null)
                     UPS_EXIT=\$?
                     if [ "\$UPS_EXIT" -eq 0 ] && [ -n "\$UPS_DATA" ]; then
-                        FILTERED_DATA=\$(printf '%s\n' "\$UPS_DATA" | grep -E '^(device\.model|ups\.status|battery\.charge|battery\.runtime|input\.voltage|output\.voltage|ups\.load|ups\.power\.nominal|ups\.realpower|battery\.charge\.low|battery\.voltage|ups\.beeper\.status|ups\.delay\.shutdown|ups\.timer\.shutdown|ups\.delay\.start|ups\.timer\.start):' || true)
+                        FILTERED_DATA=\$(printf "%s\n" "\$UPS_DATA" | grep -E "^(device\.model|ups\.status|battery\.charge|battery\.runtime|input\.voltage|output\.voltage|ups\.load|ups\.power\.nominal|ups\.realpower|battery\.charge\.low|battery\.voltage|ups\.beeper\.status|ups\.delay\.shutdown|ups\.timer\.shutdown|ups\.delay\.start|ups\.timer\.start):" || true)
                         if [ -n "\$FILTERED_DATA" ]; then
-                            printf '%s\n' "\$FILTERED_DATA"
+                            printf "%s\n" "\$FILTERED_DATA"
                             echo "UPS_TARGET: \$UPS_TARGET"
                         else
                             echo "NUT_STATUS: NO_DATA"
@@ -3110,7 +3110,7 @@ EOF
                 echo "NUT_STATUS: UPSC_MISSING"
                 echo "UPS_TARGET: \$UPS_TARGET"
             fi
-        \`;
+        ';
 EOF
     fi
 
