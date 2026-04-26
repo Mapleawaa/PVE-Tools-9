@@ -5540,6 +5540,7 @@ menu_optimization() {
         show_menu_option "2" "温度监控管理 ${CYAN}(CPU/硬盘监控设置)${NC}"
         show_menu_option "3" "CPU 电源模式配置"
         show_menu_option "4" "${MAGENTA}一键优化 (换源+删弹窗+更新)${NC} / 请在外部SSH环境下使用该功能！否则会导致PVE WebUi重启导致Shell断开连接修改失效！"
+        echo "不要犟！查看如何连接到PVE SSH教程：https://pve.u3u.icu/advanced/how-to-connect-ssh.html"
         show_menu_option "5" "配置邮件通知 ${CYAN}(SMTP/Postfix)${NC}"
         echo "$UI_DIVIDER"
         show_menu_option "0" "返回主菜单"
