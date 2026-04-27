@@ -1,19 +1,29 @@
 {
   "upcoming_features": [
     {
-      "title": "自动配置备份脚本",
+      "title": "支持按 MAC 地址绑定网卡到 Bridge",
       "status": "in-progress",
-      "description": "支持将 PVE 核心配置及 VM / LXC 配置备份至远程存储或网盘。"
+      "description": "通过 MAC 地址而不是 PCIe 地址来识别网卡，避免重启或硬件变更后网卡顺序变化，导致网络配置失效甚至失联。"
     },
     {
-      "title": "增强型硬件监控面板",
-      "status": "pending",
-      "description": "提供更详细的 CPU 温度、风扇转速及 NVMe 硬盘健康度监控。"
+      "title": "提供 Intel 核显 ROM 自动编译与下载服务",
+      "status": "in-progress",
+      "description": "通过自动化构建流程，生成稳定可用的核显 ROM 文件，方便用户在直通场景中直接下载使用，无需自行编译。"
     },
     {
-      "title": "一键部署常用的 LXC 容器镜像",
+      "title": "扩展更多国内外软件源与高校镜像",
+      "status": "in-progress",
+      "description": "增加腾讯、华为、阿里等公共镜像源，以及更多高校镜像站点，自动匹配更快、更稳定的下载源。"
+    },
+    {
+      "title": "支持 AMD 核显 ROM 自动提取",
       "status": "pending",
-      "description": "集成更多如 Docker Compose、Nginx Proxy Manager 等常用应用的快速部署。"
+      "description": "用户只需上传 BIOS 更新文件，即可自动提取核显直通所需的 ROM 文件，无需手动解析或处理。"
+    },
+    {
+      "title": "一键部署常用 LXC 应用环境",
+      "status": "pending",
+      "description": "提供常见服务（如 Docker Compose、Nginx Proxy Manager 等）的快速部署模板，减少手动配置步骤，开箱即用。"
     }
   ],
   "timeline": [
