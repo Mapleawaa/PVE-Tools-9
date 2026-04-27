@@ -20,6 +20,11 @@
       "status": "pending",
       "description": "用户只需上传 BIOS 更新文件，即可自动提取核显直通所需的 ROM 文件，无需手动解析或处理。"
     },
+        {
+      "title": "增强自定义首页显示的内容，栏目精细化可控",
+      "status": "pending",
+      "description": "用户可以根据需求自定义首页显示的内容，可以配置一些原本的功能模块的显示与隐藏。"
+    },
     {
       "title": "一键部署常用 LXC 应用环境",
       "status": "pending",
