@@ -12,7 +12,7 @@
 
 
 # 版本信息
-CURRENT_VERSION="7.1.0"
+CURRENT_VERSION="7.2.0"
 BUILD_NICKNAME="Hana"
 VERSION_FILE_URL="https://raw.githubusercontent.com/Mapleawaa/PVE-Tools-9/main/VERSION"
 UPDATE_FILE_URL="https://raw.githubusercontent.com/Mapleawaa/PVE-Tools-9/main/UPDATE"

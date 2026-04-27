@@ -5,13 +5,7 @@
 在 PVE 终端中执行以下命令即可启动工具：
 
 ```bash
-curl -sSL https://raw.githubusercontent.com/Mapleawaa/PVE-Tools-9/main/PVE-Tools.sh | bash
-```
-
-或者使用 `wget`：
-
-```bash
-wget -q -O PVE-Tools.sh https://raw.githubusercontent.com/Mapleawaa/PVE-Tools-9/main/PVE-Tools.sh && chmod +x PVE-Tools.sh && ./PVE-Tools.sh
+bash <(curl -sSL https://pve.u3u.icu/PVE-Tools.sh)
 ```
 
 ## 注意事项
