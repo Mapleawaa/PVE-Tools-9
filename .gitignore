@@ -34,16 +34,6 @@ report.[0-9]*.[0-9]*.[0-9]*.[0-9]*.json
 .env
 .env.*.local
 
-# Project specific ignores
-.codebuddy/
-.cache/
-.spec-workflow/
-.claude/
-Proxmox-Helper-Script/
-QWEN.md
-CLAUDE.md
-AGENTS.md
-
 # Python
 __pycache__/
 *.pyc

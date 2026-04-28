@@ -1,3 +1,8 @@
+---
+title: 存储管理
+description: 解释 Proxmox VE 中 local 与 local-lvm 的区别，介绍 PVE-Tools-9 的合并存储、硬盘休眠与存储安全建议。
+---
+
 # 存储管理：local 与 local-lvm 的爱恨情仇
 
 刚安装完 PVE 的用户通常会很困惑：为什么我的硬盘被分成了 `local` 和 `local-lvm`？为什么 `local` 只有一点点空间？

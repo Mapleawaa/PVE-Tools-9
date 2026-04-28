@@ -202,7 +202,7 @@ vm_show_data_risk_banner() {
     echo -e "${RED}高风险提示：以下操作可能直接改写 VM 配置、磁盘、快照、克隆、恢复或迁移状态。${NC}"
     echo -e "${YELLOW}开始前请确认：已有可验证备份、已核对 VMID/磁盘槽位/目标存储、业务已处于维护窗口。${NC}"
     echo -e "${YELLOW}一旦误操作，数据恢复成功率通常取决于后续写入量、存储类型以及是否立即停止写入。${NC}"
-    echo -e "${RED}恢复参考: https://pve.u3u.icu/advanced/data-recovery-after-mistake${NC}"
+    echo -e "${RED}恢复参考: https://pve.oowo.cc/advanced/data-recovery-after-mistake${NC}"
     echo -e "${RED}${UI_DIVIDER}${NC}"
 }
 
@@ -221,8 +221,8 @@ ensure_legal_acceptance() {
     clear
     show_menu_header "许可与服务条款"
     echo -e "${CYAN}继续使用本脚本前，请先认真阅读并同意以下条款：${NC}"
-    echo -e "  - ULA（最终用户许可与使用协议）: https://pve.u3u.icu/ula"
-    echo -e "  - TOS（服务条款）: https://pve.u3u.icu/tos"
+    echo -e "  - ULA（最终用户许可与使用协议）: https://pve.oowo.cc/ula"
+    echo -e "  - TOS（服务条款）: https://pve.oowo.cc/tos"
     echo -e "${RED} 高风险提醒：涉及宿主机网络、桥接/Bond/VLAN、防火墙，以及 VM、磁盘、快照、克隆、恢复、导入导出、迁移等操作时，可能造成管理面失联、业务中断或不可逆的数据/配置损坏。${NC}"
     echo -e "${RED} 请仅在已完成可验证备份、明确维护窗口并理解命令影响范围后继续；误操作导致的数据损失、恢复成本与第三方恢复费用均由使用者自行承担。${NC}"
     echo -e "${RED} 您可以随时撤回同意，只需删除 ${marker} 文件即可。${NC}"
@@ -4017,7 +4017,7 @@ igpu_management_menu_simple() {
 # Intel 11-15代 SR-IOV 核显虚拟化配置
 igpu_sriov_setup() {
     echo -e "${H2}开始配置 Intel 11-15代 SR-IOV 核显虚拟化${NC}"
-    echo -e "详细原理与教程： ${CYAN}https://pve.u3u.icu/advanced/gpu-virtualization${NC}"
+    echo -e "详细原理与教程： ${CYAN}https://pve.oowo.cc/advanced/gpu-virtualization${NC}"
     echo -e "如果配置失败，请访问文档站下方留言反馈。"
     echo
 
@@ -4291,7 +4291,7 @@ igpu_sriov_setup() {
 # Intel 6-10代 GVT-g 核显虚拟化配置
 igpu_gvtg_setup() {
     echo -e "${H2}开始配置 Intel 6-10代 GVT-g 核显虚拟化${NC}"
-    echo -e "详细原理与教程： ${CYAN}https://pve.u3u.icu/advanced/gpu-virtualization${NC}"
+    echo -e "详细原理与教程： ${CYAN}https://pve.oowo.cc/advanced/gpu-virtualization${NC}"
     echo -e "如果配置失败，请访问文档站下方留言反馈。"
     echo
 
@@ -5540,7 +5540,7 @@ menu_optimization() {
         show_menu_option "2" "温度监控管理 ${CYAN}(CPU/硬盘监控设置)${NC}"
         show_menu_option "3" "CPU 电源模式配置"
         show_menu_option "4" "${MAGENTA}一键优化 (换源+删弹窗+更新)${NC} / 请在外部SSH环境下使用该功能！否则会导致PVE WebUi重启导致Shell断开连接修改失效！"
-        echo "不要犟！查看如何连接到PVE SSH教程：https://pve.u3u.icu/advanced/how-to-connect-ssh.html"
+        echo "不要犟！查看如何连接到PVE SSH教程：https://pve.oowo.cc/advanced/how-to-connect-ssh.html"
         show_menu_option "5" "配置邮件通知 ${CYAN}(SMTP/Postfix)${NC}"
         echo "$UI_DIVIDER"
         show_menu_option "0" "返回主菜单"
@@ -10052,7 +10052,7 @@ check_update() {
         
         echo -e "----------------------------------------------"
         echo -e "${CYAN}官方文档与最新脚本：${NC}"
-        echo -e "🔗 https://pve.u3u.icu (推荐)"
+        echo -e "🔗 https://pve.oowo.cc (推荐)"
         echo -e "🔗 https://github.com/Mapleawaa/PVE-Tools-9"
         echo -e "${UI_FOOTER}"
         echo -e "按 ${GREEN}回车键${NC} 进入主菜单..."
@@ -10191,7 +10191,7 @@ restore_qemu_kvm() {
 intel_gpu_passthrough() {
     log_step "开始 Intel 核显直通配置"
     echo "注意：此功能基于 AICodo 的修改版 QEMU 和 ROM"
-    echo "详细原理与教程：https://pve.u3u.icu/advanced/gpu-passthrough"
+    echo "详细原理与教程：https://pve.oowo.cc/advanced/gpu-passthrough"
     echo "适用于需要将 Intel 核显直通给 Windows 虚拟机且遇到代码 43 或黑屏的情况"
     echo "支持的 CPU 架构：6代(Skylake) 到 14代(Raptor Lake Refresh)"
     echo "项目地址：https://github.com/AICodo/intel6-14rom"
@@ -10206,7 +10206,7 @@ intel_gpu_passthrough() {
     log_warn "折腾有风险，入坑需谨慎！"
     echo
     log_tips "如果配置失败，请访问文档站查看详细教程并留言反馈："
-    log_tips "🔗 https://pve.u3u.icu/advanced/gpu-passthrough"
+    log_tips "🔗 https://pve.oowo.cc/advanced/gpu-passthrough"
     echo
     log_tips "如需要反馈或者请求更新ROM文件适配你的CPU，请前往AICodo的GitHub仓库开ISSUE反馈，不是找我。"
     echo
@@ -11074,7 +11074,7 @@ nvidia_setup_vgpu_unlock() {
     echo "  驱动/内核/补丁版本不匹配可能导致服务异常、宿主机告警或 VM 无法使用 vGPU。"
     echo
     echo -e "${CYAN}推荐先阅读 Wiki：${NC}"
-    echo "  对应文章: https://pve.u3u.icu/advanced/nvidia-vgpu-driver-notes"
+    echo "  对应文章: https://pve.oowo.cc/advanced/nvidia-vgpu-driver-notes"
     echo "${UI_DIVIDER}"
     read -p "请输入 '确认' 或 'Sure' 继续: " response
     response=$(echo "$response" | xargs)

@@ -1,3 +1,8 @@
+---
+title: 宿主机网络、防火墙与 IPv6
+description: 了解 PVE-Tools-9 的 Proxmox VE 宿主机 bridge、Bond、VLAN、IPv4、IPv6、防火墙和网络诊断配置流程。
+---
+
 # 宿主机网络 / 防火墙 / IPv6
 
 这篇文档对应脚本中的“宿主机网络配置向导”，面向 PVE 9 宿主机的 bridge / Bond / VLAN / 防火墙 / IPv6 / 诊断场景。

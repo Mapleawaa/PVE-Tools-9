@@ -1,3 +1,8 @@
+---
+title: 使用指南
+description: 查看 PVE-Tools-9 的安装命令、运行要求、高风险功能说明和 Proxmox VE 9 运维推荐流程。
+---
+
 # 使用指南
 
 ## 快速开始
@@ -5,7 +10,7 @@
 在 PVE 终端中执行以下命令即可启动工具：
 
 ```bash
-bash <(curl -sSL https://pve.u3u.icu/PVE-Tools.sh)
+bash <(curl -sSL https://pve.oowo.cc/PVE-Tools.sh)
 ```
 
 ## 注意事项

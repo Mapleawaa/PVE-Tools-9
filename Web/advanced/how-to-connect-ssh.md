@@ -1,3 +1,8 @@
+---
+title: 如何连接到 PVE 主机的 SSH
+description: 介绍 Windows、Linux、macOS 和常见 SSH 工具连接 Proxmox VE 主机的方法、账号填写与连接故障处理建议。
+---
+
 # 如何连接到 PVE 主机的 SSH
 
 本文用于介绍如何通过各种已知方式连接到 PVE 主机的 SSH 教程。

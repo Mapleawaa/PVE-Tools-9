@@ -1,3 +1,8 @@
+---
+title: CPU 性能调优
+description: 了解 Proxmox VE 9 中 CPU 调速器、intel_pstate、性能模式、节能模式与 PVE-Tools-9 持久化调优方案。
+---
+
 # CPU 性能调优：让 PVE 跑得更丝滑
 
 很多用户发现 PVE 默认状态下 CPU 频率跳动异常，或者在低负载时功耗依然很高。这通常是因为 CPU 的“调速器（Governor）”配置不当。

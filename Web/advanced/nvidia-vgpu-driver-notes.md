@@ -1,3 +1,8 @@
+---
+title: NVIDIA vGPU 驱动安装说明
+description: 解释 PVE-Tools-9 不默认自动安装 NVIDIA vGPU 驱动的原因，以及 Proxmox VE 内核、驱动版本和 DKMS 匹配风险。
+---
+
 # NVIDIA vGPU 驱动安装说明：为何不建议脚本自动化安装
 
 本文用于解释：为什么 PVE-Tools 当前不再提供 NVIDIA vGPU 驱动“一键自动安装”，而是建议用户采用手工流程并按版本匹配后再安装。

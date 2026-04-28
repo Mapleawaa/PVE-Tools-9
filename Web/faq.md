@@ -1,3 +1,8 @@
+---
+title: 常见问题
+description: PVE-Tools-9 常见问题，包括支持版本、安全性、运行依赖、下载速度、回滚与卸载建议。
+---
+
 # 常见问题
 
 ## Q: 这个脚本安全吗？
@@ -6,8 +11,8 @@ A: 脚本是完全开源的，您可以随时在 GitHub 上查看源代码。它
 ## Q: 支持 PVE 8.x 版本吗？
 A: 本版本（PVE-Tools-9）主要针对 PVE 9.0 (Debian 13) 进行了优化。对于旧版本，虽然部分功能可能兼容，但建议使用对应的旧版脚本。
 
-## Q: 为什么 u3u.icu 域名访问缓慢或失败？
-A: 由于 `u3u.icu` 域名是近期新注册的，且托管在 Cloudflare 全球网络，部分地区的 ISP 可能会有解析延迟或访问限制。我们正在努力优化访问体验，并且**备案站点可能会在未来上线**，以提供更稳定的国内访问。
+## Q: 官方网站和安装地址是什么？
+A: 官方网站为 `https://pve.oowo.cc`。推荐安装命令为 `bash <(curl -sSL https://pve.oowo.cc/PVE-Tools.sh)`。
 
 ## Q: 执行脚本报错提示 "Command not found"？
 A: 请确保您安装了 `curl` 或 `wget`。如果是在新安装的系统上，可以先运行 `apt update && apt install curl -y`。

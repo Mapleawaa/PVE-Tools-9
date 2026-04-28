@@ -1,5 +1,7 @@
 ---
 layout: home
+title: Proxmox VE 9 一键运维脚本
+description: PVE-Tools-9 是面向 Proxmox VE 9.x 的一键运维脚本，覆盖换源、系统维护、VM 生命周期、宿主机网络、防火墙、IPv6、GPU 与 PCI 直通。
 
 hero:
   name: "PVE-Tools-9"

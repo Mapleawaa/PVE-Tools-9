@@ -1,0 +1,225 @@
+{
+  "meta": {
+    "project": "PVE-Tools-9",
+    "description": "Proxmox VE 9.x 一键运维脚本与文档站",
+    "version": "7.2.0",
+    "license": "GPL-3.0",
+    "generated_at": "2026-04-28T20:59:34+08:00",
+    "generator": "claude-init 自适应架构师",
+    "truncated": false
+  },
+  "scan_coverage": {
+    "estimated_total_files": 75,
+    "scanned_files": 62,
+    "coverage_percent": 82.7,
+    "skipped_by_ignore": 8,
+    "skipped_binary_large": 2,
+    "skipped_other": 3,
+    "skip_reasons": {
+      "binary_large": [
+        "Modules/VGPU/libvgpu_unlock_rs_20230207_44d5bb3.so",
+        "Web/assets/images/Proxmox-Corporate-Brandguideline.pdf"
+      ],
+      "ignore_rules": [
+        "Web/bun.lock (类似 bun.lockb)",
+        "Web/.vitepress/dist/ (构建产物)",
+        "Web/.vitepress/cache/ (缓存)",
+        "node_modules/ (依赖)",
+        ".codebuddy/ (项目忽略)",
+        ".cache/ (缓存)",
+        ".spec-workflow/ (项目忽略)",
+        ".claude/ (项目忽略)"
+      ],
+      "too_large_full_read": [
+        "PVE-Tools.sh (430KB，使用分段读取，覆盖率约60%)"
+      ]
+    }
+  },
+  "modules": [
+    {
+      "path": "/",
+      "name": "根模块 (主脚本)",
+      "language": "Bash",
+      "claude_md": "CLAUDE.md",
+      "entry_points": ["PVE-Tools.sh"],
+      "interfaces": ["主菜单 (9个一级选项，多个二级/三级子菜单)"],
+      "dependencies": ["bash", "curl/wget", "qm/pct/pvesh (PVE CLI)"],
+      "data_models": ["VERSION文件", "legal_acceptance marker文件", "/var/lib/pve-tools/ 运行时数据"],
+      "tests": ["CI: shellcheck, bash -n, 版本一致性检查"],
+      "config_files": ["VERSION", "UPDATE"],
+      "scanned_sections": [
+        "颜色系统 (lines 23-55)",
+        "日志函数 (lines 103-137)",
+        "许可与风险体系 (lines 209-241)",
+        "配置文件管理 (lines 244-331)",
+        "GRUB 管理 (lines 333-410)",
+        "主菜单 (lines 5480-5499)",
+        "VM 高级运维 (lines 6065+)",
+        "宿主机网络 (lines 7873+)"
+      ],
+      "scan_gaps": [
+        "RDM/NVMe 直通完整逻辑 (lines 1954-2240 仅部分阅读)",
+        "引导配置辅助 (lines 2669+ 仅部分阅读)",
+        "所有子菜单实现函数体 (数量庞大，仅了解入口)",
+        "GPU 直通各子功能详细实现",
+        "存储/磁盘维护二级菜单实现"
+      ],
+      "coverage": "medium"
+    },
+    {
+      "path": "Web/",
+      "name": "Web 文档站",
+      "language": "TypeScript/Vue/Markdown",
+      "claude_md": "Web/CLAUDE.md",
+      "entry_points": ["Web/index.md", "Web/.vitepress/config.mts"],
+      "interfaces": ["VitePress 配置 (nav/sidebar)", "5个自定义Vue组件", "18个Markdown页面"],
+      "dependencies": ["vitepress ^1.6.4", "vue ^3.5.27", "lucide-vue-next ^0.563.0", "bun"],
+      "data_models": ["todo-data.json (开发计划+时间线)"],
+      "tests": ["构建验证 (bun run build)"],
+      "config_files": ["package.json", "wrangler.jsonc", ".vitepress/config.mts"],
+      "scanned_files": [
+        "index.md", "guide.md", "features.md", "faq.md", "update.md",
+        "todo.md", "submit-plugin.md", "ula.md", "sponsor.md", "pay.md",
+        "config.mts", "theme/index.ts", "theme/custom.css",
+        "Announcement.vue", "CopyCodeBox.vue", "Giscus.vue",
+        "HomeFeaturesWithTimeline.vue", "TodoList.vue",
+        "package.json", "bun.lock", "wrangler.jsonc", "index.js",
+        "todo-data.json", "advanced/index.md"
+      ],
+      "scan_gaps": [
+        "advanced/ 下 10 篇 Markdown 教程详情（仅读取了索引，未逐篇阅读内容）"
+      ],
+      "coverage": "high"
+    },
+    {
+      "path": "Tools/",
+      "name": "第三方工具集",
+      "language": "Bash",
+      "claude_md": "Tools/CLAUDE.md",
+      "entry_points": ["各 .sh 文件独立运行"],
+      "interfaces": ["13个独立 Bash 脚本"],
+      "dependencies": ["bash", "apt", "各脚本特定依赖"],
+      "data_models": ["无持久化数据模型"],
+      "tests": ["无CI覆盖，由tteck社区人工验证"],
+      "config_files": ["Tools/README.md"],
+      "scanned_files": ["README.md"],
+      "scan_gaps": [
+        "13个.sh脚本均未读取详细内容（仅记录文件名和来源）"
+      ],
+      "coverage": "low"
+    },
+    {
+      "path": "Modules/",
+      "name": "插件市场",
+      "language": "Bash + 二进制",
+      "claude_md": "Modules/CLAUDE.md",
+      "entry_points": ["install-zsh.sh (示例插件)", "VGPU/*.so (二进制资源)"],
+      "interfaces": ["GitHub API 自动发现", "插件元信息头部注释"],
+      "dependencies": ["GitHub API", "主脚本下载框架"],
+      "data_models": ["插件元信息 (name/author/version/github)"],
+      "tests": ["无自动化测试"],
+      "config_files": [],
+      "scanned_files": ["install-zsh.sh (前30行)"],
+      "scan_gaps": [
+        "install-zsh.sh 完整实现 (仅读了前30行)",
+        "VGPU/*.so 二进制文件 (仅记录路径)"
+      ],
+      "coverage": "low"
+    },
+    {
+      "path": "Docs/",
+      "name": "补充文档",
+      "language": "Markdown",
+      "claude_md": null,
+      "entry_points": ["Docs/future-guide.md", "Docs/README-EN.md"],
+      "interfaces": ["2个 Markdown 文档"],
+      "dependencies": [],
+      "data_models": [],
+      "tests": [],
+      "config_files": [],
+      "scanned_files": [],
+      "scan_gaps": [
+        "future-guide.md 和 README-EN.md 均未读取"
+      ],
+      "coverage": "none"
+    },
+    {
+      "path": ".github/",
+      "name": "CI/CD 与社区",
+      "language": "YAML",
+      "claude_md": null,
+      "entry_points": ["workflows/release.yml", "workflows/beta-release.yml", "workflows/pr-validation.yml"],
+      "interfaces": ["release流水线 (shc编译+GitHub Release)", "beta-release流水线", "PR验证 (shellcheck+版本检查+安全扫描)"],
+      "dependencies": ["GitHub Actions", "shc", "shellcheck"],
+      "data_models": [],
+      "tests": ["PR验证流水线自动执行"],
+      "config_files": ["FUNDING.yml", "ISSUE_TEMPLATE/*.yml"],
+      "scanned_files": [
+        "release.yml (前60行)", "beta-release.yml (前40行)", "pr-validation.yml (前50行)"
+      ],
+      "scan_gaps": [
+        "FUNDING.yml 未读取",
+        "4个 Issue 模板未读取"
+      ],
+      "coverage": "medium"
+    }
+  ],
+  "next_steps": {
+    "priority": [
+      {
+        "module": "根模块",
+        "action": "深度扫描 PVE-Tools.sh 未覆盖区域",
+        "paths": [
+          "RDM 裸磁盘映射完整实现 (约1954-2240行)",
+          "PCIe/NVMe 控制器直通 (约2240-2669行)",
+          "GPU 直通各子菜单 (Intel/NVIDIA/AMD)",
+          "存储与磁盘维护二级菜单",
+          "软件源与系统升级二级菜单",
+          "诊断工具与项目信息菜单"
+        ],
+        "reason": "主脚本是项目的核心，但目前仅覆盖了约60%的关键区域"
+      },
+      {
+        "module": "Tools",
+        "action": "抽样阅读代表性脚本",
+        "paths": [
+          "Tools/post-pve-install.sh",
+          "Tools/kernel-clean.sh",
+          "Tools/netdata.sh"
+        ],
+        "reason": "了解第三方脚本的代码风格和风险等级"
+      },
+      {
+        "module": "Web",
+        "action": "补充阅读高级教程内容",
+        "paths": [
+          "Web/advanced/gpu-passthrough.md",
+          "Web/advanced/host-network-firewall-ipv6.md",
+          "Web/advanced/vm-backup-migration-cloudinit.md"
+        ],
+        "reason": "这些教程直接对应主脚本的高风险功能区域"
+      },
+      {
+        "module": "Docs",
+        "action": "首次读取",
+        "paths": [
+          "Docs/future-guide.md",
+          "Docs/README-EN.md"
+        ],
+        "reason": "此前未覆盖，含项目发展路线和英文文档"
+      }
+    ],
+    "optional": [
+      {
+        "module": "Modules",
+        "action": "完整阅读 install-zsh.sh",
+        "reason": "作为插件规范参考示例"
+      },
+      {
+        "module": ".github",
+        "action": "阅读 FUNDING.yml 和 Issue 模板",
+        "reason": "了解社区治理流程"
+      }
+    ]
+  }
+}
