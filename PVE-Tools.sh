@@ -3084,7 +3084,7 @@ EOF
                     UPS_DATA=\$(timeout --signal=TERM 3s upsc "\$UPS_TARGET" 2>/dev/null)
                     UPS_EXIT=\$?
                     if [ "\$UPS_EXIT" -eq 0 ] && [ -n "\$UPS_DATA" ]; then
-                        FILTERED_DATA=\$(printf "%s\n" "\$UPS_DATA" | grep -E "^(device\.model|ups\.status|battery\.charge|battery\.runtime|input\.voltage|output\.voltage|ups\.load|ups\.power\.nominal|ups\.realpower|battery\.charge\.low|battery\.voltage|ups\.beeper\.status|ups\.delay\.shutdown|ups\.timer\.shutdown|ups\.delay\.start|ups\.timer\.start):" || true)
+                        FILTERED_DATA=\$(printf "%s\n" "\$UPS_DATA" | grep -E "^(device\.model|ups\.status|battery\.charge|battery\.runtime|input\.voltage|output\.voltage|ups\.load|ups\.power\.nominal|ups\.realpower\.nominal|ups\.realpower|battery\.charge\.low|battery\.voltage|ups\.beeper\.status|ups\.delay\.shutdown|ups\.timer\.shutdown|ups\.delay\.start|ups\.timer\.start):" || true)
                         if [ -n "\$FILTERED_DATA" ]; then
                             printf "%s\n" "\$FILTERED_DATA"
                             echo "UPS_TARGET: \$UPS_TARGET"
@@ -3592,7 +3592,7 @@ EOF
                 const inputVoltage = getValue('input\\.voltage');
                 const outputVoltage = getValue('output\\.voltage');
                 const loadRaw = getValue('ups\\.load');
-                const nominalPowerRaw = getValue('ups\\.power\\.nominal');
+                const nominalPowerRaw = getValue('ups\\.realpower\\.nominal') || getValue('ups\\.power\\.nominal');
                 const realPowerRaw = getValue('ups\\.realpower');
                 const batteryVoltage = getValue('battery\\.voltage');
                 const beeper = getValue('ups\\.beeper\\.status');
