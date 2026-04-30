@@ -12,7 +12,7 @@
 
 
 # 版本信息
-CURRENT_VERSION="7.3.0"
+CURRENT_VERSION="7.4.0"
 BUILD_NICKNAME="Ania"
 VERSION_FILE_URL="https://raw.githubusercontent.com/Mapleawaa/PVE-Tools-9/main/VERSION"
 UPDATE_FILE_URL="https://raw.githubusercontent.com/Mapleawaa/PVE-Tools-9/main/UPDATE"
@@ -1134,6 +1134,83 @@ get_installed_kernel_packages() {
     ' | sort -Vu
 }
 
+# 获取可用的真实内核包（优先 proxmox-kernel，再回退 pve-kernel）
+get_available_kernel_packages_raw() {
+    local kernel_url="https://mirrors.tuna.tsinghua.edu.cn/proxmox/debian/pve/dists/trixie/pve-no-subscription/binary-amd64/Packages"
+    local packages_text=""
+    local available_kernels=""
+
+    packages_text="$(curl -fsSL "$kernel_url" 2>/dev/null || true)"
+    if [[ -n "$packages_text" ]]; then
+        available_kernels="$(
+            printf '%s\n' "$packages_text" | sed -nE 's/^Package: (proxmox-kernel-[0-9][0-9A-Za-z.+:~-]*-pve(-signed)?)$/\1/p' | sort -V | uniq
+        )"
+        if [[ -z "$available_kernels" ]]; then
+            available_kernels="$(
+                printf '%s\n' "$packages_text" | sed -nE 's/^Package: (pve-kernel-[0-9][0-9A-Za-z.+:~-]*-pve(-signed)?)$/\1/p' | sort -V | uniq
+            )"
+        fi
+    fi
+
+    if [[ -z "$available_kernels" ]]; then
+        available_kernels="$(apt-cache search --names-only '^proxmox-kernel-[0-9][0-9A-Za-z.+:~-]*-pve(-signed)?$' 2>/dev/null | awk '{print $1}' | sort -V | uniq)"
+        if [[ -z "$available_kernels" ]]; then
+            available_kernels="$(apt-cache search --names-only '^pve-kernel-[0-9][0-9A-Za-z.+:~-]*-pve(-signed)?$' 2>/dev/null | awk '{print $1}' | sort -V | uniq)"
+        fi
+    fi
+
+    [[ -n "$available_kernels" ]] || return 1
+    printf '%s\n' "$available_kernels"
+}
+
+kernel_package_is_valid() {
+    local package_name="$1"
+    [[ "$package_name" =~ ^(proxmox-kernel|pve-kernel)-[0-9][0-9A-Za-z.+:~-]*-pve(-signed)?$ ]]
+}
+
+kernel_package_release_from_name() {
+    local package_name="$1"
+
+    if [[ "$package_name" =~ ^(proxmox-kernel|pve-kernel)-([0-9][0-9A-Za-z.+:~-]*-pve)(-signed)?$ ]]; then
+        echo "${BASH_REMATCH[2]}"
+        return 0
+    fi
+
+    return 1
+}
+
+kernel_package_normalize_input() {
+    local kernel_input="$1"
+    local kernel_version=""
+
+    if [[ -z "$kernel_input" ]]; then
+        return 1
+    fi
+
+    if kernel_package_is_valid "$kernel_input"; then
+        echo "$kernel_input"
+        return 0
+    fi
+
+    case "$kernel_input" in
+        proxmox-kernel-*)
+            kernel_version="${kernel_input#proxmox-kernel-}"
+            ;;
+        pve-kernel-*)
+            kernel_version="${kernel_input#pve-kernel-}"
+            ;;
+        *)
+            kernel_version="$kernel_input"
+            ;;
+    esac
+
+    if [[ "$kernel_version" != *-pve && "$kernel_version" != *-pve-signed ]]; then
+        kernel_version="${kernel_version}-pve"
+    fi
+
+    echo "proxmox-kernel-$kernel_version"
+}
+
 # 检测当前内核版本
 check_kernel_version() {
     log_info "检测当前内核信息..."
@@ -1179,25 +1256,16 @@ get_available_kernels() {
         return 1
     fi
     
-    # 获取当前 PVE 版本
-    local pve_version=$(pveversion | head -n1 | cut -d'/' -f2 | cut -d'-' -f1)
-    local major_version=$(echo $pve_version | cut -d'.' -f1)
-    
-    # 构建内核包URL
-    local kernel_url="https://mirrors.tuna.tsinghua.edu.cn/proxmox/debian/pve/dists/trixie/pve-no-subscription/binary-amd64/Packages"
-    
-    # 下载并解析可用内核
-    local available_kernels=$(curl -s "$kernel_url" | grep -E 'Package: (pve-kernel|linux-pve)' | awk '{print $2}' | sort -V | uniq)
-    
-    if [[ -z "$available_kernels" ]]; then
-        log_warn "无法获取可用内核列表，使用备用方法"
-        # 备用方法：使用apt-cache搜索
-        available_kernels=$(apt-cache search --names-only '^pve-kernel-.*' | awk '{print $1}' | sort -V)
+    local available_kernels
+    if ! available_kernels="$(get_available_kernel_packages_raw)"; then
+        log_error "无法获取可用内核列表"
+        return 1
     fi
     
     if [[ -n "$available_kernels" ]]; then
         echo -e "${CYAN}可用内核版本：${NC}"
         while IFS= read -r kernel; do
+            [[ -n "$kernel" ]] || continue
             echo -e "  ${BLUE}•${NC} $kernel"
         done <<< "$available_kernels"
     else
@@ -1210,28 +1278,37 @@ get_available_kernels() {
 
 # 安装指定内核版本
 install_kernel() {
-    local kernel_version=$1
+    local kernel_input=$1
+    local kernel_version=""
     
     # 验证内核版本格式
-    if [[ -z "$kernel_version" ]]; then
+    if [[ -z "$kernel_input" ]]; then
         log_error "请指定要安装的内核版本"
         return 1
     fi
     
-    # 检查是否已经是完整包名格式 (contains "pve" and ends with "pve")
-    if [[ "$kernel_version" =~ ^[a-zA-Z0-9.-]+pve$ ]]; then
-        # This looks like a complete package name, use it as is
-        log_info "检测到完整包名格式: $kernel_version"
-    elif ! [[ "$kernel_version" =~ ^pve-kernel- ]]; then
-        # If not in the correct format, prepend "pve-kernel-"
-        log_info "检测到版本号格式，自动补全包名为 pve-kernel-$kernel_version"
-        kernel_version="pve-kernel-$kernel_version"
+    if kernel_package_is_valid "$kernel_input"; then
+        if [[ "$kernel_input" == pve-kernel-* ]]; then
+            kernel_version="proxmox-kernel-${kernel_input#pve-kernel-}"
+            log_info "检测到旧包名格式，自动转换为: $kernel_version"
+        else
+            kernel_version="$kernel_input"
+            log_info "检测到完整包名格式: $kernel_version"
+        fi
+    else
+        kernel_version="$(kernel_package_normalize_input "$kernel_input")"
+        log_info "检测到版本号格式，自动补全包名为 $kernel_version"
     fi
     
+    if ! kernel_package_is_valid "$kernel_version"; then
+        log_error "无效的内核包名: $kernel_version"
+        return 1
+    fi
+
     log_info "开始安装内核: $kernel_version"
     
     # 检查内核是否已安装
-    if dpkg -l | grep -q "^ii.*$kernel_version"; then
+    if dpkg -l 2>/dev/null | awk -v pkg="$kernel_version" '$1 == "ii" && $2 == pkg {found=1} END {exit !found}'; then
         log_warn "内核 $kernel_version 已经安装"
         read -p "是否重新安装？(y/N): " reinstall
         if [[ "$reinstall" != "y" && "$reinstall" != "Y" ]]; then
@@ -1423,7 +1500,7 @@ kernel_management_menu() {
             3)
                 echo "请输入要安装的内核版本："
                 echo "  - 完整包名格式 (推荐): 如 proxmox-kernel-6.14.8-2-pve"
-                echo "  - 简化版本格式: 如 6.8.8-1 (将自动补全为 pve-kernel-6.8.8-1)"
+                echo "  - 简化版本格式: 如 6.8.8-1 (将自动补全为 proxmox-kernel-6.8.8-1-pve)"
                 read -p "请输入内核标识: " kernel_ver
                 if [[ -n "$kernel_ver" ]]; then
                     install_kernel "$kernel_ver"
@@ -1477,23 +1554,38 @@ sync_kernel_update() {
     local current_kernel=$(uname -r)
     log_info "当前内核版本: ${GREEN}$current_kernel${NC}"
     
-    # 获取最新可用内核
-    local latest_kernel=$(get_available_kernels | tail -1 | awk '{print $2}')
-    
-    if [[ -z "$latest_kernel" ]]; then
+    # 获取最新可用内核包
+    local available_kernel_text=""
+    local -a available_kernel_packages=()
+    if ! available_kernel_text="$(get_available_kernel_packages_raw)"; then
         log_error "无法获取最新内核信息"
         return 1
     fi
-    
-    log_info "最新可用内核: ${GREEN}$latest_kernel${NC}"
+
+    mapfile -t available_kernel_packages < <(printf '%s\n' "$available_kernel_text" | sed '/^$/d')
+    if [[ ${#available_kernel_packages[@]} -eq 0 ]]; then
+        log_error "无法获取最新内核信息"
+        return 1
+    fi
+
+    local latest_kernel_index=$(( ${#available_kernel_packages[@]} - 1 ))
+    local latest_kernel_package="${available_kernel_packages[$latest_kernel_index]}"
+    local latest_kernel_release=""
+    if ! latest_kernel_release="$(kernel_package_release_from_name "$latest_kernel_package")"; then
+        log_error "无法解析最新内核包名: $latest_kernel_package"
+        return 1
+    fi
+
+    log_info "最新可用内核包: ${GREEN}$latest_kernel_package${NC}"
+    log_info "最新可用内核版本: ${GREEN}$latest_kernel_release${NC}"
     
     # 检查是否需要更新
-    if [[ "$current_kernel" == *"$latest_kernel"* ]]; then
+    if [[ "$current_kernel" == "$latest_kernel_release" ]]; then
         log_success "当前已是最新内核，无需更新"
         return 0
     fi
     
-    echo -e "${YELLOW}发现新内核版本: $latest_kernel${NC}"
+    echo -e "${YELLOW}发现新内核版本: $latest_kernel_release${NC}"
     read -p "是否安装并更新到最新内核？(Y/n): " update_confirm
     
     if [[ "$update_confirm" == "n" || "$update_confirm" == "N" ]]; then
@@ -1502,9 +1594,9 @@ sync_kernel_update() {
     fi
     
     # 安装最新内核
-    if install_kernel "$latest_kernel"; then
+    if install_kernel "$latest_kernel_package"; then
         # 设置新内核为默认启动项
-        if set_default_kernel "$latest_kernel"; then
+        if set_default_kernel "$latest_kernel_release"; then
             log_success "内核同步更新完成"
             echo -e "${YELLOW}建议重启系统以应用新内核${NC}"
             return 0
