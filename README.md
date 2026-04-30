@@ -11,24 +11,13 @@
 [![Proxmox VE](https://img.shields.io/badge/Proxmox-VE%209.x-E57000?logo=proxmox&logoColor=white)](https://www.proxmox.com/)
 [![Debian](https://img.shields.io/badge/Debian-13%20(Trixie)-A81D33?logo=debian&logoColor=white)](https://www.debian.org/)
 
-![产品截图](./images/main-logo.png)
+![产品截图](./images/main-cover.png)
 
 </div>
 
 >[!warning]
 > CVE-2026-31431 处置功能已经加入正式发布版本，推荐大家升级并处置漏洞
 > 漏洞来源：[CVE-2026-31431](https://nvd.nist.gov/vuln/detail/CVE-2026-31431)
-
-## 项目定位
-
-PVE-Tools-9 是一个面向 Proxmox VE 9.x 的交互式 Bash 工具。
-它不会替代 PVE 原生命令，而是把高频、易错、需要大量人工检查的运维动作收口为更清晰的菜单、更强的校验和更明确的高风险提示。
-
-- VM 生命周期运维：备份、恢复、配置导入导出、模板、克隆、Cloud-Init、磁盘管理、快照、启动顺序、网络调整、集群内迁移。
-- 宿主机网络与防火墙：bridge、Bond、VLAN、IPv4 / IPv6 / SLAAC / DHCP、PVE 防火墙、安全组、IPv6 助手、网络诊断工具箱。
-- GPU / PCI 直通：Intel 核显虚拟化与直通、NVIDIA 显卡管理、AMD 独显直通、AMD 核显直通、RDM、NVMe、控制器直通。
-- 系统维护：换源、系统更新、PVE 8 -> 9 升级、内核管理、GRUB 备份恢复、邮件通知、温控与基于 NUT 的 UPS 辅助能力。
-- 第三方生态：FastPVE、Modules、Community Scripts。
 
 ## 快速开始
 
@@ -37,7 +26,7 @@ PVE-Tools-9 是一个面向 Proxmox VE 9.x 的交互式 Bash 工具。
 本软件会做您明确告诉它要做的事情，无论那件事情多么荒谬或具有破坏性。
 您已被告知所有风险，并已独立决定使用本软件。从此刻起，您与您的数据之间唯一的屏障就是您自己的谨慎与备份策略。
 
-最后提醒：如果您仍然心存疑虑，请不要使用本软件。世界上有许多带有商业支持、附带责任保险的成熟 PVE 管理工具，您可以考虑购买它们。
+最后提醒：**如果您仍然心存疑虑，请不要使用本软件。世界上有许多带有商业支持、附带责任保险的成熟 PVE 管理工具，您可以考虑购买它们。**
 
 ### cloudflare 短域名
 ```bash
@@ -60,6 +49,18 @@ wget https://raw.githubusercontent.com/Mapleawaa/PVE-Tools-9/main/PVE-Tools.sh
 chmod +x PVE-Tools.sh
 sudo ./PVE-Tools.sh
 ```
+## 项目定位
+
+PVE-Tools-9 是一个面向 Proxmox VE 9.x 的交互式 Bash 工具。
+它不会替代 PVE 原生命令，而是把高频、易错、需要大量人工检查的运维动作收口为更清晰的菜单、更强的校验和更明确的高风险提示。
+
+| 功能模块 | 支持能力 |
+|---------|---------|
+| VM 生命周期运维 | 备份、恢复、配置导入导出、模板、克隆、Cloud-Init、磁盘管理、快照、启动顺序、网络调整、集群内迁移 |
+| 宿主机网络与防火墙 | bridge、Bond、VLAN、IPv4 / IPv6 / SLAAC / DHCP、PVE 防火墙、安全组、IPv6 助手、网络诊断工具箱 |
+| GPU / PCI 直通 | Intel 核显虚拟化与直通、NVIDIA 显卡管理、AMD 独显直通、AMD 核显直通、RDM、NVMe、控制器直通 |
+| 系统维护 | 换源、系统更新、PVE 8 → 9 升级、内核管理、GRUB 备份恢复、邮件通知、温控与基于 NUT 的 UPS 辅助能力 |
+| 第三方生态 | FastPVE、Modules、Community Scripts |
 
 ## 官网入口
 
@@ -78,9 +79,6 @@ sudo ./PVE-Tools.sh
 - Sponsor 页面：https://pve.oowo.cc/sponsor
 - 爱发电：https://afdian.com/a/cyrenenight
 - 微信：![微信赞赏码](./images/WeChat.jpg)
-
-
-
 
 赞助是对项目本身的支持，不等同于一对一技术服务。
 
