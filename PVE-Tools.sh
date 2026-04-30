@@ -6085,6 +6085,7 @@ show_menu() {
     show_menu_option "6" "宿主机网络与防火墙 ${CYAN}( bridge / Bond / VLAN / IPv6 )${NC}"
     show_menu_option "7" "存储与磁盘维护 ${CYAN}( Local合并 / Ceph / 休眠 / Swap )${NC}"
     show_menu_option "8" "诊断工具与项目信息 ${CYAN}( 系统信息 / 救砖 / 项目链接 )${NC}"
+    show_menu_option "9" "Copy Fail 安全处置 ${CYAN}( ${COPY_FAIL_CVE_ID} / 检测 / 缓解 / 回滚 )${NC}"
     echo "$UI_DIVIDER"
     show_menu_option "0" "${RED}退出脚本${NC}"
     show_menu_footer
@@ -12398,6 +12399,9 @@ main() {
             8)
                 menu_tools_about
                 ;;
+            9)
+                copy_fail_management_menu
+                ;;
             0)
                 echo "感谢使用,谢谢喵"
                 echo "再见！"
@@ -12405,7 +12409,7 @@ main() {
                 ;;
             *)
                 log_error "哎呀，这个选项不存在呢"
-                log_warn "请输入 0-7 之间的数字"
+                log_warn "请输入 0-9 之间的数字"
                 ;;
         esac
         
