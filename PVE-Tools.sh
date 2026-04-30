@@ -12,8 +12,8 @@
 
 
 # 版本信息
-CURRENT_VERSION="7.2.0"
-BUILD_NICKNAME="Hana"
+CURRENT_VERSION="7.3.0"
+BUILD_NICKNAME="Ania"
 VERSION_FILE_URL="https://raw.githubusercontent.com/Mapleawaa/PVE-Tools-9/main/VERSION"
 UPDATE_FILE_URL="https://raw.githubusercontent.com/Mapleawaa/PVE-Tools-9/main/UPDATE"
 PVE_VERSION_DETECTED=""
@@ -99,6 +99,11 @@ HOST_NETWORK_INTERFACES_FILE="/etc/network/interfaces"
 HOST_NETWORK_INTERFACES_STAGED_FILE="/etc/network/interfaces.new"
 HOST_NETWORK_EXPORT_DIR="/var/lib/pve-tools/network-firewall-exports"
 PVE_CLUSTER_FIREWALL_FILE="/etc/pve/firewall/cluster.fw"
+COPY_FAIL_CVE_ID="CVE-2026-31431"
+COPY_FAIL_DISCLOSURE_DATE="2026-04-29"
+COPY_FAIL_ALGIF_CONF="/etc/modprobe.d/disable-algif.conf"
+COPY_FAIL_AUTHENC_CONF="/etc/modprobe.d/disable-authencesn.conf"
+COPY_FAIL_FIX_COMMITS_REGEX='a664bf3d603d|ce42ee423e58|fafe0fa2995a0|19d43105a97b|3115af9644c3|893d22e0135f|8b88d99341f1|961cfa271a91|CVE-2026-31431|algif_aead - Revert to operating out-of-place'
 
 # 日志函数
 log_info() {
@@ -711,16 +716,16 @@ show_banner() {
     clear
     echo -ne "${NC}"
     cat << 'EOF'
-██████╗ ██╗   ██╗███████╗    ████████╗ ██████╗  ██████╗ ██╗     ███████╗     █████╗ 
-██╔══██╗██║   ██║██╔════╝    ╚══██╔══╝██╔═══██╗██╔═══██╗██║     ██╔════╝    ██╔══██╗
-██████╔╝██║   ██║█████╗         ██║   ██║   ██║██║   ██║██║     ███████╗    ╚██████║
-██╔═══╝ ╚██╗ ██╔╝██╔══╝         ██║   ██║   ██║██║   ██║██║     ╚════██║     ╚═══██║
-██║      ╚████╔╝ ███████╗       ██║   ╚██████╔╝╚██████╔╝███████╗███████║     █████╔╝
-╚═╝       ╚═══╝  ╚══════╝       ╚═╝    ╚═════╝  ╚═════╝ ╚══════╝╚══════╝     ╚════╝ 
+██████╗ ██╗   ██╗███████╗    ████████╗ ██████╗  ██████╗ ██╗     ███████╗    ██████╗ ██████╗  ██████╗ 
+██╔══██╗██║   ██║██╔════╝    ╚══██╔══╝██╔═══██╗██╔═══██╗██║     ██╔════╝    ██╔══██╗██╔══██╗██╔═══██╗
+██████╔╝██║   ██║█████╗         ██║   ██║   ██║██║   ██║██║     ███████╗    ██████╔╝██████╔╝██║   ██║
+██╔═══╝ ╚██╗ ██╔╝██╔══╝         ██║   ██║   ██║██║   ██║██║     ╚════██║    ██╔═══╝ ██╔══██╗██║   ██║
+██║      ╚████╔╝ ███████╗       ██║   ╚██████╔╝╚██████╔╝███████╗███████║    ██║     ██║  ██║╚██████╔╝
+╚═╝       ╚═══╝  ╚══════╝       ╚═╝    ╚═════╝  ╚═════╝ ╚══════╝╚══════╝    ╚═╝     ╚═╝  ╚═╝ ╚═════╝ 
 EOF
     echo -ne "${NC}"
     echo "$UI_BORDER"
-    echo -e "  ${H1}PVE-Tools-9 | ${BUILD_NICKNAME} Build | Support PVE 9.x.x${NC}"
+    echo -e "  ${H1}PVE-Tools-Pro | ${BUILD_NICKNAME} Build | Support PVE 9.x.x${NC}"
     echo "  让每个人都能体验虚拟化技术的的便利。"
     echo -e "  作者: ${PINK}Maple${NC} | 交流Q群: ${CYAN}1031976463${NC}"
     echo -e "  当前版本: ${GREEN}$CURRENT_VERSION${NC} | 最新版本: ${remote_version:-"Not Found"}"
@@ -1400,12 +1405,13 @@ kernel_management_menu() {
         show_menu_option "3" "安装新内核"
         show_menu_option "4" "设置默认启动内核"
         show_menu_option "5" "${RED}清理旧内核${NC}"
-        show_menu_option "6" "${YELLOW}重启系统应用新内核${NC}"
+        show_menu_option "6" "Copy Fail 漏洞检测/缓解 ${CYAN}(${COPY_FAIL_CVE_ID})${NC}"
+        show_menu_option "7" "${YELLOW}重启系统应用新内核${NC}"
         echo "${UI_DIVIDER}"
         show_menu_option "0" "返回主菜单"
         show_menu_footer
         
-        read -p "请选择操作 [0-6]: " choice
+        read -p "请选择操作 [0-7]: " choice
         
         case $choice in
             1)
@@ -1437,6 +1443,9 @@ kernel_management_menu() {
                 remove_old_kernels
                 ;;
             6)
+                copy_fail_management_menu
+                ;;
+            7)
                 read -p "确认要重启系统吗？(y/N): " reboot_confirm
                 if [[ "$reboot_confirm" == "y" || "$reboot_confirm" == "Y" ]]; then
                     log_info "系统将在5秒后重启..."
@@ -1507,6 +1516,593 @@ sync_kernel_update() {
         log_error "内核更新失败"
         return 1
     fi
+}
+
+copy_fail_version_ge() {
+    local lhs="$1"
+    local rhs="$2"
+    [[ -n "$lhs" && -n "$rhs" ]] || return 1
+    [[ "$(printf '%s\n' "$lhs" "$rhs" | sort -V | tail -n1)" == "$lhs" ]]
+}
+
+copy_fail_extract_kernel_base_version() {
+    local kernel_release="${1:-$(uname -r 2>/dev/null)}"
+    echo "$kernel_release" | sed -E 's/^[^0-9]*([0-9]+\.[0-9]+\.[0-9]+).*/\1/'
+}
+
+copy_fail_upstream_version_status() {
+    local base_version="$1"
+
+    if [[ -z "$base_version" ]]; then
+        echo "unknown"
+        return 0
+    fi
+
+    if ! copy_fail_version_ge "$base_version" "4.14.0"; then
+        echo "pre-introduced"
+        return 0
+    fi
+
+    case "$base_version" in
+        7.*)
+            echo "fixed"
+            ;;
+        6.19.*)
+            if copy_fail_version_ge "$base_version" "6.19.12"; then
+                echo "fixed"
+            else
+                echo "vulnerable"
+            fi
+            ;;
+        6.18.*)
+            if copy_fail_version_ge "$base_version" "6.18.22"; then
+                echo "fixed"
+            else
+                echo "vulnerable"
+            fi
+            ;;
+        6.2[0-9].*|6.[3-9][0-9].*)
+            echo "fixed"
+            ;;
+        *)
+            echo "vulnerable"
+            ;;
+    esac
+}
+
+copy_fail_find_kernel_config_file() {
+    local kernel_release="${1:-$(uname -r 2>/dev/null)}"
+
+    if [[ -f "/boot/config-$kernel_release" ]]; then
+        echo "/boot/config-$kernel_release"
+        return 0
+    fi
+
+    if [[ -f "/lib/modules/$kernel_release/build/.config" ]]; then
+        echo "/lib/modules/$kernel_release/build/.config"
+        return 0
+    fi
+
+    return 1
+}
+
+copy_fail_get_kernel_config_value() {
+    local config_key="$1"
+    local kernel_release="${2:-$(uname -r 2>/dev/null)}"
+    local config_file=""
+
+    config_file="$(copy_fail_find_kernel_config_file "$kernel_release" 2>/dev/null || true)"
+    if [[ -n "$config_file" ]]; then
+        if grep -q "^${config_key}=y" "$config_file" 2>/dev/null; then
+            echo "y"
+            return 0
+        fi
+        if grep -q "^${config_key}=m" "$config_file" 2>/dev/null; then
+            echo "m"
+            return 0
+        fi
+        if grep -q "^# ${config_key} is not set" "$config_file" 2>/dev/null; then
+            echo "n"
+            return 0
+        fi
+    fi
+
+    if [[ -r /proc/config.gz ]]; then
+        if zgrep -q "^${config_key}=y" /proc/config.gz 2>/dev/null; then
+            echo "y"
+            return 0
+        fi
+        if zgrep -q "^${config_key}=m" /proc/config.gz 2>/dev/null; then
+            echo "m"
+            return 0
+        fi
+        if zgrep -q "^# ${config_key} is not set" /proc/config.gz 2>/dev/null; then
+            echo "n"
+            return 0
+        fi
+    fi
+
+    echo "unknown"
+}
+
+copy_fail_find_running_kernel_package() {
+    local kernel_release="${1:-$(uname -r 2>/dev/null)}"
+    local kernel_pkg=""
+
+    kernel_pkg="$(dpkg-query -S "/boot/vmlinuz-$kernel_release" 2>/dev/null | awk -F: 'NR==1 {print $1; exit}')"
+    if [[ -n "$kernel_pkg" ]]; then
+        echo "$kernel_pkg"
+        return 0
+    fi
+
+    dpkg -l 2>/dev/null | awk -v kernel="$kernel_release" '
+        $1 == "ii" && $2 ~ /^(pve-kernel|proxmox-kernel)-/ && index($2, kernel) {
+            print $2
+            exit
+        }
+    '
+}
+
+copy_fail_file_contains_regex() {
+    local file_path="$1"
+    local regex="$2"
+
+    if [[ ! -f "$file_path" ]]; then
+        return 1
+    fi
+
+    if [[ "$file_path" == *.gz ]]; then
+        zgrep -Eiq "$regex" "$file_path" 2>/dev/null
+        return $?
+    fi
+
+    grep -Eiq "$regex" "$file_path" 2>/dev/null
+}
+
+copy_fail_find_fix_evidence() {
+    local kernel_pkg="$1"
+    local doc_path=""
+
+    if [[ -z "$kernel_pkg" ]]; then
+        return 1
+    fi
+
+    for doc_path in \
+        "/usr/share/doc/$kernel_pkg/changelog.Debian.gz" \
+        "/usr/share/doc/$kernel_pkg/changelog.gz" \
+        "/usr/share/doc/$kernel_pkg/changelog.Debian" \
+        "/usr/share/doc/$kernel_pkg/changelog"; do
+        if copy_fail_file_contains_regex "$doc_path" "$COPY_FAIL_FIX_COMMITS_REGEX"; then
+            echo "$doc_path"
+            return 0
+        fi
+    done
+
+    return 1
+}
+
+copy_fail_module_loaded() {
+    local module_name="$1"
+    lsmod 2>/dev/null | awk -v mod="$module_name" '$1 == mod {found=1; exit} END {exit !found}'
+}
+
+copy_fail_module_policy() {
+    local module_name="$1"
+
+    if [[ -d /etc/modprobe.d ]] && grep -REqs "^[[:space:]]*install[[:space:]]+${module_name}[[:space:]]+/bin/false([[:space:]]*|$)" /etc/modprobe.d 2>/dev/null; then
+        echo "install-false"
+        return 0
+    fi
+
+    if [[ -d /etc/modprobe.d ]] && grep -REqs "^[[:space:]]*blacklist[[:space:]]+${module_name}([[:space:]]*|$)" /etc/modprobe.d 2>/dev/null; then
+        echo "blacklist"
+        return 0
+    fi
+
+    echo "none"
+}
+
+copy_fail_module_mitigation_state() {
+    local config_state="$1"
+    local policy_state="$2"
+    local loaded_state="$3"
+
+    if [[ "$config_state" == "n" ]]; then
+        echo "not-present"
+        return 0
+    fi
+
+    if [[ "$config_state" == "y" ]]; then
+        if [[ "$policy_state" == "install-false" || "$policy_state" == "blacklist" ]]; then
+            echo "builtin-policy-only"
+        else
+            echo "builtin"
+        fi
+        return 0
+    fi
+
+    if [[ "$config_state" == "m" ]]; then
+        if [[ "$policy_state" == "install-false" && "$loaded_state" == "no" ]]; then
+            echo "effective"
+        elif [[ "$policy_state" == "install-false" && "$loaded_state" == "yes" ]]; then
+            echo "pending-unload"
+        elif [[ "$policy_state" == "blacklist" && "$loaded_state" == "no" ]]; then
+            echo "partial"
+        elif [[ "$policy_state" == "blacklist" && "$loaded_state" == "yes" ]]; then
+            echo "loaded-blacklisted"
+        else
+            echo "inactive"
+        fi
+        return 0
+    fi
+
+    echo "unknown"
+}
+
+copy_fail_count_interactive_users() {
+    awk -F: '
+        $3 >= 1000 && $1 != "nobody" && $7 !~ /(false|nologin|sync)$/ {count++}
+        END {print count + 0}
+    ' /etc/passwd 2>/dev/null
+}
+
+copy_fail_count_lxc_containers() {
+    pct list 2>/dev/null | awk 'NR > 1 && $1 ~ /^[0-9]+$/ {count++} END {print count + 0}'
+}
+
+copy_fail_count_running_lxc_containers() {
+    pct list 2>/dev/null | awk 'NR > 1 && $1 ~ /^[0-9]+$/ && $2 == "running" {count++} END {print count + 0}'
+}
+
+copy_fail_ssh_service_state() {
+    if systemctl is-active --quiet ssh.service 2>/dev/null || \
+       systemctl is-active --quiet ssh 2>/dev/null || \
+       systemctl is-active --quiet sshd.service 2>/dev/null; then
+        echo "active"
+    else
+        echo "inactive"
+    fi
+}
+
+copy_fail_describe_policy() {
+    local policy_state="$1"
+
+    case "$policy_state" in
+        install-false) echo "install /bin/false" ;;
+        blacklist) echo "blacklist" ;;
+        none) echo "未发现阻断策略" ;;
+        *) echo "$policy_state" ;;
+    esac
+}
+
+copy_fail_refresh_state() {
+    COPY_FAIL_STATE_KERNEL_RELEASE="$(uname -r 2>/dev/null)"
+    COPY_FAIL_STATE_KERNEL_BASE="$(copy_fail_extract_kernel_base_version "$COPY_FAIL_STATE_KERNEL_RELEASE")"
+    COPY_FAIL_STATE_UPSTREAM_STATUS="$(copy_fail_upstream_version_status "$COPY_FAIL_STATE_KERNEL_BASE")"
+    COPY_FAIL_STATE_KERNEL_PACKAGE="$(copy_fail_find_running_kernel_package "$COPY_FAIL_STATE_KERNEL_RELEASE")"
+    COPY_FAIL_STATE_FIX_EVIDENCE="$(copy_fail_find_fix_evidence "$COPY_FAIL_STATE_KERNEL_PACKAGE" 2>/dev/null || true)"
+    COPY_FAIL_STATE_AEAD_CONFIG="$(copy_fail_get_kernel_config_value CONFIG_CRYPTO_USER_API_AEAD "$COPY_FAIL_STATE_KERNEL_RELEASE")"
+    COPY_FAIL_STATE_AUTHENC_CONFIG="$(copy_fail_get_kernel_config_value CONFIG_CRYPTO_AUTHENCESN "$COPY_FAIL_STATE_KERNEL_RELEASE")"
+
+    if copy_fail_module_loaded algif_aead; then
+        COPY_FAIL_STATE_ALGIF_LOADED="yes"
+    else
+        COPY_FAIL_STATE_ALGIF_LOADED="no"
+    fi
+
+    if copy_fail_module_loaded authencesn; then
+        COPY_FAIL_STATE_AUTHENC_LOADED="yes"
+    else
+        COPY_FAIL_STATE_AUTHENC_LOADED="no"
+    fi
+
+    COPY_FAIL_STATE_ALGIF_POLICY="$(copy_fail_module_policy algif_aead)"
+    COPY_FAIL_STATE_AUTHENC_POLICY="$(copy_fail_module_policy authencesn)"
+    COPY_FAIL_STATE_ALGIF_MITIGATION="$(copy_fail_module_mitigation_state "$COPY_FAIL_STATE_AEAD_CONFIG" "$COPY_FAIL_STATE_ALGIF_POLICY" "$COPY_FAIL_STATE_ALGIF_LOADED")"
+    COPY_FAIL_STATE_AUTHENC_MITIGATION="$(copy_fail_module_mitigation_state "$COPY_FAIL_STATE_AUTHENC_CONFIG" "$COPY_FAIL_STATE_AUTHENC_POLICY" "$COPY_FAIL_STATE_AUTHENC_LOADED")"
+    COPY_FAIL_STATE_INTERACTIVE_USERS="$(copy_fail_count_interactive_users)"
+    COPY_FAIL_STATE_LXC_TOTAL="$(copy_fail_count_lxc_containers)"
+    COPY_FAIL_STATE_LXC_RUNNING="$(copy_fail_count_running_lxc_containers)"
+    COPY_FAIL_STATE_SSH_STATE="$(copy_fail_ssh_service_state)"
+    COPY_FAIL_STATE_STATUS="unknown"
+    COPY_FAIL_STATE_STATUS_REASON=""
+    COPY_FAIL_STATE_RISK_LEVEL="中"
+    COPY_FAIL_STATE_RISK_REASON="信息不足，建议先升级到供应商明确修复的内核。"
+
+    if [[ "$COPY_FAIL_STATE_AEAD_CONFIG" == "n" || "$COPY_FAIL_STATE_AUTHENC_CONFIG" == "n" ]]; then
+        COPY_FAIL_STATE_STATUS="not-affected"
+        COPY_FAIL_STATE_STATUS_REASON="当前内核未启用触发此漏洞所需的 AF_ALG AEAD 或 authencesn 组件。"
+        COPY_FAIL_STATE_RISK_LEVEL="低"
+        COPY_FAIL_STATE_RISK_REASON="关键组件未启用，此漏洞路径通常不可达。"
+        return 0
+    fi
+
+    if [[ -n "$COPY_FAIL_STATE_FIX_EVIDENCE" ]]; then
+        COPY_FAIL_STATE_STATUS="fixed"
+        COPY_FAIL_STATE_STATUS_REASON="在内核包 changelog 中找到了 $COPY_FAIL_CVE_ID / upstream 修复提交的证据。"
+        COPY_FAIL_STATE_RISK_LEVEL="低"
+        COPY_FAIL_STATE_RISK_REASON="当前运行内核大概率已包含修复。"
+        return 0
+    fi
+
+    if [[ "$COPY_FAIL_STATE_UPSTREAM_STATUS" == "fixed" ]]; then
+        COPY_FAIL_STATE_STATUS="fixed"
+        COPY_FAIL_STATE_STATUS_REASON="当前运行内核版本已达到公开的 upstream 修复线。"
+        COPY_FAIL_STATE_RISK_LEVEL="低"
+        COPY_FAIL_STATE_RISK_REASON="版本号已落在公开 fixed 版本及以上。"
+        return 0
+    fi
+
+    if [[ "$COPY_FAIL_STATE_ALGIF_MITIGATION" == "effective" || "$COPY_FAIL_STATE_AUTHENC_MITIGATION" == "effective" ]]; then
+        COPY_FAIL_STATE_STATUS="mitigated"
+        COPY_FAIL_STATE_STATUS_REASON="尚未确认已经打补丁，但至少存在一项模块级临时缓解处于生效状态。"
+        COPY_FAIL_STATE_RISK_LEVEL="中"
+        COPY_FAIL_STATE_RISK_REASON="临时缓解能降低风险，但不等同于官方修复。"
+        return 0
+    fi
+
+    if [[ "$COPY_FAIL_STATE_UPSTREAM_STATUS" == "pre-introduced" ]]; then
+        COPY_FAIL_STATE_STATUS="not-affected"
+        COPY_FAIL_STATE_STATUS_REASON="当前内核版本早于公开的引入版本 4.14。"
+        COPY_FAIL_STATE_RISK_LEVEL="低"
+        COPY_FAIL_STATE_RISK_REASON="版本落在公开引入点之前。"
+        return 0
+    fi
+
+    if [[ "$COPY_FAIL_STATE_UPSTREAM_STATUS" == "vulnerable" ]]; then
+        COPY_FAIL_STATE_STATUS="vulnerable"
+        COPY_FAIL_STATE_STATUS_REASON="版本号仍落在公开 vulnerable 区间，且未发现本地 backport 修复证据。"
+        if (( COPY_FAIL_STATE_LXC_RUNNING > 0 || COPY_FAIL_STATE_INTERACTIVE_USERS > 0 )); then
+            COPY_FAIL_STATE_RISK_LEVEL="高"
+            COPY_FAIL_STATE_RISK_REASON="存在本地交互用户或正在运行的 LXC，满足典型本地提权 / 容器逃逸前置条件。"
+        elif [[ "$COPY_FAIL_STATE_SSH_STATE" == "active" || "$COPY_FAIL_STATE_LXC_TOTAL" -gt 0 ]]; then
+            COPY_FAIL_STATE_RISK_LEVEL="高"
+            COPY_FAIL_STATE_RISK_REASON="当前主机暴露 SSH 或承载 LXC，建议立即缓解并跟进供应商内核修复。"
+        else
+            COPY_FAIL_STATE_RISK_LEVEL="中"
+            COPY_FAIL_STATE_RISK_REASON="当前看不到明显本地入口，但一旦攻击者取得普通账号或容器 foothold，风险会迅速升级。"
+        fi
+        return 0
+    fi
+}
+
+copy_fail_show_status_report() {
+    copy_fail_refresh_state
+
+    clear
+    show_menu_header "Copy Fail 检测结果"
+    echo -e "${CYAN}漏洞:${NC} ${COPY_FAIL_CVE_ID} / Copy Fail"
+    echo -e "${CYAN}公开日期:${NC} ${COPY_FAIL_DISCLOSURE_DATE}"
+    echo -e "${CYAN}当前内核:${NC} ${GREEN}${COPY_FAIL_STATE_KERNEL_RELEASE:-unknown}${NC}"
+    echo -e "${CYAN}解析版本:${NC} ${GREEN}${COPY_FAIL_STATE_KERNEL_BASE:-unknown}${NC}"
+    echo -e "${CYAN}内核包:${NC} ${GREEN}${COPY_FAIL_STATE_KERNEL_PACKAGE:-unknown}${NC}"
+    echo -e "${CYAN}upstream 判断:${NC} ${GREEN}${COPY_FAIL_STATE_UPSTREAM_STATUS}${NC}"
+    if [[ -n "$COPY_FAIL_STATE_FIX_EVIDENCE" ]]; then
+        echo -e "${CYAN}修复证据:${NC} ${GREEN}${COPY_FAIL_STATE_FIX_EVIDENCE}${NC}"
+    else
+        echo -e "${CYAN}修复证据:${NC} ${YELLOW}未在本地 changelog 中发现明确 backport 标记${NC}"
+    fi
+    echo -e "${CYAN}CONFIG_CRYPTO_USER_API_AEAD:${NC} ${GREEN}${COPY_FAIL_STATE_AEAD_CONFIG}${NC}"
+    echo -e "${CYAN}CONFIG_CRYPTO_AUTHENCESN:${NC} ${GREEN}${COPY_FAIL_STATE_AUTHENC_CONFIG}${NC}"
+    echo -e "${CYAN}algif_aead:${NC} 策略=${GREEN}$(copy_fail_describe_policy "$COPY_FAIL_STATE_ALGIF_POLICY")${NC} / 已加载=${GREEN}${COPY_FAIL_STATE_ALGIF_LOADED}${NC} / 缓解状态=${GREEN}${COPY_FAIL_STATE_ALGIF_MITIGATION}${NC}"
+    echo -e "${CYAN}authencesn:${NC} 策略=${GREEN}$(copy_fail_describe_policy "$COPY_FAIL_STATE_AUTHENC_POLICY")${NC} / 已加载=${GREEN}${COPY_FAIL_STATE_AUTHENC_LOADED}${NC} / 缓解状态=${GREEN}${COPY_FAIL_STATE_AUTHENC_MITIGATION}${NC}"
+    echo -e "${CYAN}交互用户数:${NC} ${GREEN}${COPY_FAIL_STATE_INTERACTIVE_USERS}${NC}"
+    echo -e "${CYAN}LXC 总数/运行中:${NC} ${GREEN}${COPY_FAIL_STATE_LXC_TOTAL}/${COPY_FAIL_STATE_LXC_RUNNING}${NC}"
+    echo -e "${CYAN}SSH 服务:${NC} ${GREEN}${COPY_FAIL_STATE_SSH_STATE}${NC}"
+    echo "${UI_DIVIDER}"
+
+    case "$COPY_FAIL_STATE_STATUS" in
+        fixed)
+            echo -e "${GREEN}结论: 当前系统大概率已修复 ${COPY_FAIL_CVE_ID}${NC}"
+            ;;
+        mitigated)
+            echo -e "${YELLOW}结论: 当前系统尚未确认已修复，但已进入临时缓解状态${NC}"
+            ;;
+        vulnerable)
+            echo -e "${RED}结论: 当前系统仍有较高概率受 ${COPY_FAIL_CVE_ID} 影响${NC}"
+            ;;
+        not-affected)
+            echo -e "${GREEN}结论: 当前系统通常不暴露该漏洞路径${NC}"
+            ;;
+        *)
+            echo -e "${YELLOW}结论: 当前系统状态无法完全确认，请按高标准处理${NC}"
+            ;;
+    esac
+
+    echo -e "${CYAN}判断依据:${NC} ${COPY_FAIL_STATE_STATUS_REASON}"
+    echo -e "${CYAN}受攻击危险:${NC} ${COPY_FAIL_STATE_RISK_LEVEL}"
+    echo -e "${CYAN}风险说明:${NC} ${COPY_FAIL_STATE_RISK_REASON}"
+    echo
+
+    if [[ "$COPY_FAIL_STATE_STATUS" == "vulnerable" || "$COPY_FAIL_STATE_STATUS" == "unknown" ]]; then
+        echo -e "${YELLOW}建议:${NC} 先执行临时缓解，再升级到供应商明确声明已包含 ${COPY_FAIL_CVE_ID} 修复的内核，并重启到新内核。"
+    elif [[ "$COPY_FAIL_STATE_STATUS" == "mitigated" ]]; then
+        echo -e "${YELLOW}建议:${NC} 保留临时缓解，继续跟进 PVE / Debian / 内核供应商的正式修复包。"
+    else
+        echo -e "${YELLOW}建议:${NC} 仍建议保留一次检测记录，后续内核变更后再复查。"
+    fi
+}
+
+copy_fail_show_manual_guidance() {
+    copy_fail_refresh_state
+
+    clear
+    show_menu_header "Copy Fail 手动处理建议"
+    echo -e "${CYAN}优先级 1:${NC} 安装供应商明确声明已修复 ${COPY_FAIL_CVE_ID} 的内核包，并重启到该内核。"
+    echo -e "${CYAN}优先级 2:${NC} 如果尚无可用修复包，先做临时缓解，再继续跟进正式修复。"
+    echo
+    echo -e "${CYAN}手动方式 A - 禁用 algif_aead（copy.fail 官方建议）${NC}"
+    echo '  1. echo "install algif_aead /bin/false" > /etc/modprobe.d/disable-algif.conf'
+    echo '  2. echo "blacklist algif_aead" >> /etc/modprobe.d/disable-algif.conf'
+    echo '  3. rmmod algif_aead 2>/dev/null || true'
+    echo '  4. 重启后再次检测'
+    echo
+    echo -e "${CYAN}手动方式 B - 禁用 authencesn（Gentoo 临时 workaround 思路）${NC}"
+    echo '  1. echo "install authencesn /bin/false" > /etc/modprobe.d/disable-authencesn.conf'
+    echo '  2. echo "blacklist authencesn" >> /etc/modprobe.d/disable-authencesn.conf'
+    echo '  3. rmmod authencesn 2>/dev/null || true'
+    echo '  4. 验证 IPSec / 依赖该算法的业务是否正常'
+    echo
+    echo -e "${CYAN}重要提醒:${NC}"
+    echo "  - 如果 CONFIG_CRYPTO_USER_API_AEAD=y，algif_aead 为内建，单纯 modprobe 黑名单不会完全生效。"
+    echo "  - 禁用 algif_aead 可能影响 bluez、cryptsetup、iwd、stress-ng、libkcapi 及部分依赖 AEAD 的程序。"
+    echo "  - 禁用 authencesn 可能让部分 IPSec 场景退化为更慢路径。"
+    echo "  - 本脚本的“自动升级最新内核”只负责拉取仓库最新可见内核，不等同于供应商已明确修复。"
+    echo
+
+    if [[ "$COPY_FAIL_STATE_STATUS" == "fixed" ]]; then
+        echo -e "${GREEN}当前系统检测到修复迹象，临时缓解通常不是必需项。${NC}"
+    elif [[ "$COPY_FAIL_STATE_STATUS" == "mitigated" ]]; then
+        echo -e "${YELLOW}当前系统看起来是“已缓解但未确认已打补丁”，建议继续等正式修复内核。${NC}"
+    else
+        echo -e "${RED}当前系统未确认修复，建议优先处理。${NC}"
+    fi
+}
+
+copy_fail_write_module_block_conf() {
+    local conf_path="$1"
+    local module_name="$2"
+    local title="$3"
+
+    mkdir -p /etc/modprobe.d || {
+        log_error "无法创建 /etc/modprobe.d 目录"
+        return 1
+    }
+
+    backup_file "$conf_path" >/dev/null 2>&1 || true
+
+    cat > "$conf_path" <<EOF
+# $title
+# Generated by PVE-Tools for ${COPY_FAIL_CVE_ID}
+install $module_name /bin/false
+blacklist $module_name
+EOF
+}
+
+copy_fail_apply_algif_mitigation() {
+    copy_fail_refresh_state
+    echo -e "${YELLOW}将写入 ${COPY_FAIL_ALGIF_CONF} 并尝试卸载 algif_aead 模块。${NC}"
+    echo -e "${YELLOW}若当前内核将 CONFIG_CRYPTO_USER_API_AEAD 编译为内建(y)，此方法只能写策略，不能彻底阻断当前运行内核。${NC}"
+    if ! confirm_action "应用 Copy Fail 临时缓解（禁用 algif_aead）？"; then
+        return 0
+    fi
+
+    if ! copy_fail_write_module_block_conf "$COPY_FAIL_ALGIF_CONF" "algif_aead" "Temporary mitigation for Copy Fail"; then
+        log_error "写入 ${COPY_FAIL_ALGIF_CONF} 失败"
+        return 1
+    fi
+
+    if [[ "$COPY_FAIL_STATE_AEAD_CONFIG" == "m" ]]; then
+        if modprobe -r algif_aead >/dev/null 2>&1; then
+            log_success "algif_aead 已卸载，临时缓解已立即生效"
+        else
+            log_warn "algif_aead 卸载失败，可能正在被占用；建议尽快重启宿主机"
+        fi
+    elif [[ "$COPY_FAIL_STATE_AEAD_CONFIG" == "y" ]]; then
+        log_warn "CONFIG_CRYPTO_USER_API_AEAD=y，algif_aead 为内建；策略已写入，但当前会话通常仍需更换内核才能彻底清除风险"
+    else
+        log_warn "未能确认 algif_aead 的内核配置状态，请在重启后重新检测"
+    fi
+
+    log_success "algif_aead 临时缓解策略已写入: ${COPY_FAIL_ALGIF_CONF}"
+}
+
+copy_fail_apply_authencesn_mitigation() {
+    copy_fail_refresh_state
+    echo -e "${YELLOW}将写入 ${COPY_FAIL_AUTHENC_CONF} 并尝试卸载 authencesn 模块。${NC}"
+    echo -e "${YELLOW}该方式参考发行版临时 workaround，可能影响部分 IPSec / AEAD 相关路径。${NC}"
+    if ! confirm_action "应用 Copy Fail 临时缓解（禁用 authencesn）？"; then
+        return 0
+    fi
+
+    if ! copy_fail_write_module_block_conf "$COPY_FAIL_AUTHENC_CONF" "authencesn" "Temporary workaround for Copy Fail"; then
+        log_error "写入 ${COPY_FAIL_AUTHENC_CONF} 失败"
+        return 1
+    fi
+
+    if [[ "$COPY_FAIL_STATE_AUTHENC_CONFIG" == "m" ]]; then
+        if modprobe -r authencesn >/dev/null 2>&1; then
+            log_success "authencesn 已卸载，临时 workaround 已立即生效"
+        else
+            log_warn "authencesn 卸载失败，可能正在被占用；建议验证业务后安排重启"
+        fi
+    elif [[ "$COPY_FAIL_STATE_AUTHENC_CONFIG" == "y" ]]; then
+        log_warn "CONFIG_CRYPTO_AUTHENCESN=y，authencesn 为内建；当前方法主要用于落地持久策略，不能保证立即见效"
+    else
+        log_warn "未能确认 authencesn 的内核配置状态，请在重启后重新检测"
+    fi
+
+    log_success "authencesn 临时缓解策略已写入: ${COPY_FAIL_AUTHENC_CONF}"
+}
+
+copy_fail_remove_mitigations() {
+    local changed=0
+
+    echo -e "${YELLOW}将删除 Copy Fail 相关临时缓解配置，并尝试重新加载模块。${NC}"
+    if ! confirm_action "回滚 Copy Fail 临时缓解？"; then
+        return 0
+    fi
+
+    if [[ -f "$COPY_FAIL_ALGIF_CONF" ]]; then
+        backup_file "$COPY_FAIL_ALGIF_CONF" >/dev/null 2>&1 || true
+        rm -f "$COPY_FAIL_ALGIF_CONF"
+        changed=1
+    fi
+
+    if [[ -f "$COPY_FAIL_AUTHENC_CONF" ]]; then
+        backup_file "$COPY_FAIL_AUTHENC_CONF" >/dev/null 2>&1 || true
+        rm -f "$COPY_FAIL_AUTHENC_CONF"
+        changed=1
+    fi
+
+    if [[ "$changed" -eq 0 ]]; then
+        log_info "未发现本脚本创建的 Copy Fail 缓解配置"
+        return 0
+    fi
+
+    modprobe algif_aead >/dev/null 2>&1 || true
+    modprobe authencesn >/dev/null 2>&1 || true
+    log_success "已删除 Copy Fail 临时缓解配置；若模块未恢复，请重启后再检查"
+}
+
+copy_fail_upgrade_kernel_guidance() {
+    echo -e "${YELLOW}将调用现有“同步更新内核”流程。请注意：${NC}"
+    echo -e "${YELLOW}只有当仓库中最新可见内核已经包含 ${COPY_FAIL_CVE_ID} 修复时，这一步才算真正清除漏洞。${NC}"
+    if ! confirm_action "继续尝试更新到仓库最新内核？"; then
+        return 0
+    fi
+    sync_kernel_update
+}
+
+copy_fail_management_menu() {
+    while true; do
+        clear
+        show_menu_header "Copy Fail 漏洞处置"
+        echo -e "${RED}${COPY_FAIL_CVE_ID}${NC} / Copy Fail  (公开: ${COPY_FAIL_DISCLOSURE_DATE})"
+        echo -e "${YELLOW}upstream fixed: 6.18.22 / 6.19.12 / 7.0；低于这些线且未见 backport 证据时，应按高风险处理。${NC}"
+        echo -e "${UI_DIVIDER}"
+        show_menu_option "1" "检测漏洞 / 判断是否已修复 / 评估受攻击风险"
+        show_menu_option "2" "查看手动处理建议"
+        show_menu_option "3" "自动缓解 A：禁用 algif_aead ${CYAN}(copy.fail 建议)${NC}"
+        show_menu_option "4" "自动缓解 B：禁用 authencesn ${CYAN}(发行版 workaround 思路)${NC}"
+        show_menu_option "5" "回滚临时缓解配置"
+        show_menu_option "6" "自动尝试升级到仓库最新内核"
+        show_menu_option "0" "返回上级菜单"
+        show_menu_footer
+
+        read -p "请选择操作 [0-6]: " copy_fail_choice
+        case "$copy_fail_choice" in
+            1) copy_fail_show_status_report ;;
+            2) copy_fail_show_manual_guidance ;;
+            3) copy_fail_apply_algif_mitigation ;;
+            4) copy_fail_apply_authencesn_mitigation ;;
+            5) copy_fail_remove_mitigations ;;
+            6) copy_fail_upgrade_kernel_guidance ;;
+            0) return ;;
+            *) log_error "无效选择，请重新输入" ;;
+        esac
+        pause_function
+    done
 }
 
 # 备份函数统一定义于顶部配置文件安全管理区域，避免后续重复覆盖。
