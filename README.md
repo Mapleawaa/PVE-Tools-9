@@ -11,9 +11,13 @@
 [![Proxmox VE](https://img.shields.io/badge/Proxmox-VE%209.x-E57000?logo=proxmox&logoColor=white)](https://www.proxmox.com/)
 [![Debian](https://img.shields.io/badge/Debian-13%20(Trixie)-A81D33?logo=debian&logoColor=white)](https://www.debian.org/)
 
-![产品截图](./images/main-v7.png)
+![产品截图](./images/main-logo.png)
 
 </div>
+
+>[!warning]
+> CVE-2026-31431 处置功能已经加入正式发布版本，推荐大家升级并处置漏洞
+> 漏洞来源：[CVE-2026-31431](https://nvd.nist.gov/vuln/detail/CVE-2026-31431)
 
 ## 项目定位
 
