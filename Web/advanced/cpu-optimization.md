@@ -1,6 +1,6 @@
 ---
 title: CPU 性能调优
-description: 了解 Proxmox VE 9 中 CPU 调速器、intel_pstate、性能模式、节能模式与 PVE-Tools-9 持久化调优方案。
+description: 了解 Proxmox VE 9 中 CPU 调速器、intel_pstate、性能模式、节能模式与 PVE Tools Pro 持久化调优方案。
 ---
 
 # CPU 性能调优：让 PVE 跑得更丝滑
@@ -23,9 +23,9 @@ description: 了解 Proxmox VE 9 中 CPU 调速器、intel_pstate、性能模式
 **原因**：现代 Intel CPU（尤其是 12 代及以后）使用了 `intel_pstate` 驱动。
 - 在 `intel_pstate` 驱动下，通常只有 `performance` 和 `powersave` 两种模式。
 - 如果你强行选择 `ondemand`，系统会自动回退到默认设置。
-- **脚本提示**：PVE-Tools 会读取 `/sys/devices/system/cpu/cpu0/cpufreq/scaling_available_governors`，请根据输出的列表进行选择。
+- **脚本提示**：PVE Tools Pro 会读取 `/sys/devices/system/cpu/cpu0/cpufreq/scaling_available_governors`，请根据输出的列表进行选择。
 
-## PVE-Tools 的优化方案
+## PVE Tools Pro 的优化方案
 
 1. **一键切换**：脚本提供了可视化菜单，直接写入系统策略。
 2. **持久化配置**：通过安装 `cpupower-gui` 或修改系统服务，确保重启后设置不丢失。

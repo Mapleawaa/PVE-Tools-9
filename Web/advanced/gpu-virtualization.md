@@ -1,6 +1,6 @@
 ---
 title: 核显虚拟化 SR-IOV 与 GVT-g
-description: 比较 Intel 核显 SR-IOV 与 GVT-g 的适用范围，整理 PVE-Tools-9 的虚拟核显配置、自检、排障和回滚建议。
+description: 比较 Intel 核显 SR-IOV 与 GVT-g 的适用范围，整理 PVE Tools Pro 的虚拟核显配置、自检、排障和回滚建议。
 ---
 
 # 核显虚拟化：SR-IOV 与 GVT-g 的抉择

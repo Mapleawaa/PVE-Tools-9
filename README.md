@@ -1,4 +1,4 @@
-# PVE-Tools-9
+# PVE Tools Pro(原 PVE-Tools-9)
 
 <div align="center">
 
@@ -51,7 +51,7 @@ sudo ./PVE-Tools.sh
 ```
 ## 项目定位
 
-PVE-Tools-9 是一个面向 Proxmox VE 9.x 的交互式 Bash 工具。
+PVE Tools Pro 是一个面向 Proxmox VE 9.x 的交互式 Bash 工具。
 它不会替代 PVE 原生命令，而是把高频、易错、需要大量人工检查的运维动作收口为更清晰的菜单、更强的校验和更明确的高风险提示。
 
 | 功能模块 | 支持能力 |

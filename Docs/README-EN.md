@@ -1,4 +1,4 @@
-# PVE Tools 9 🚀
+# PVE Tools Pro 🚀
 
 <div align="center">
 
@@ -47,7 +47,7 @@ bash <(curl -sSL https://github.com/Mapleawaa/PVE-Tools-9/blob/main/PVE-Tools.sh
 
 ### 📖 Project Description
 
-PVE Tools 9 is a one-click configuration tool specifically designed for **Proxmox VE 9.0**, based on the **Debian 13 (Trixie)** system. This tool aims to simplify the initial configuration of PVE, offering a user-friendly interface and a secure operational experience.
+PVE Tools Pro is a one-click configuration tool specifically designed for **Proxmox VE 9.0**, based on the **Debian 13 (Trixie)** system. This tool aims to simplify the initial configuration of PVE, offering a user-friendly interface and a secure operational experience.
 
 <div align="center">
 

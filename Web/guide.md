@@ -1,6 +1,6 @@
 ---
 title: 使用指南
-description: 查看 PVE-Tools-9 的安装命令、运行要求、高风险功能说明和 Proxmox VE 9 运维推荐流程。
+description: 查看 PVE Tools Pro 的安装命令、运行要求、高风险功能说明和 Proxmox VE 9 运维推荐流程。
 ---
 
 # 使用指南

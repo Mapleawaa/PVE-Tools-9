@@ -1,4 +1,4 @@
-# PVE-Tools-9
+# PVE Tools Pro
 
 <div align="center">
 
@@ -10,7 +10,7 @@ An all-in-one operations script for Proxmox VE 9.x, covering VM lifecycle workfl
 
 ## Overview
 
-PVE-Tools-9 is an interactive Bash toolkit for Proxmox VE 9.x. It does not try to replace native PVE commands. Instead, it wraps high-frequency and error-prone operational workflows with clearer menus, stronger validation, and more explicit risk warnings.
+PVE Tools Pro is an interactive Bash toolkit for Proxmox VE 9.x. It does not try to replace native PVE commands. Instead, it wraps high-frequency and error-prone operational workflows with clearer menus, stronger validation, and more explicit risk warnings.
 
 Key capabilities:
 

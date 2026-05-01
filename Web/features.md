@@ -1,11 +1,11 @@
 ---
 title: 功能特性
-description: 了解 PVE-Tools-9 支持的软件源管理、VM 运维、网络防火墙、IPv6、GPU 直通、系统维护与安全确认机制。
+description: 了解 PVE Tools Pro 支持的软件源管理、VM 运维、网络防火墙、IPv6、GPU 直通、系统维护与安全确认机制。
 ---
 
 # 功能特性
 
-PVE-Tools 围绕 Proxmox VE 9.x 的高频运维场景做了集中封装，重点覆盖源管理、系统维护、虚拟机生命周期、宿主机网络、防火墙、IPv6 与 GPU / PCI 直通等模块。
+PVE Tools Pro 围绕 Proxmox VE 9.x 的高频运维场景做了集中封装，重点覆盖源管理、系统维护、虚拟机生命周期、宿主机网络、防火墙、IPv6 与 GPU / PCI 直通等模块。
 
 ## 1. 软件源与系统维护
 

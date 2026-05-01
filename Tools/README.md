@@ -41,7 +41,7 @@
 ### 使用方式
 
 > [!IMPORTANT]
-> PVE-Tools 主菜单已经不再提供自动下载/执行这些脚本的入口，如需继续使用请手动运行。
+> PVE Tools Pro 主菜单已经不再提供自动下载/执行这些脚本的入口，如需继续使用请手动运行。
 
 #### 直接运行工具
 
@@ -54,7 +54,7 @@ bash post-pve-install.sh
 
 ⚠️ **重要提示**:
 
-1. 这些工具由第三方社区维护，非 PVE-Tools-9 项目原创
+1. 这些工具由第三方社区维护，非 PVE Tools Pro 项目原创
 2. 工具执行前会显示确认提示，请仔细阅读
 3. 某些工具会修改系统配置，建议先了解工具功能
 4. 所有工具执行都会记录到 `/var/log/pve-tools.log`
@@ -68,5 +68,5 @@ https://github.com/tteck/Proxmox
 
 ---
 
-**PVE-Tools-9 项目**
+**PVE Tools Pro 项目**
 项目地址: https://github.com/Mapleawaa/PVE-Tools-9

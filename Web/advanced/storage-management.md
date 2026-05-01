@@ -1,6 +1,6 @@
 ---
 title: 存储管理
-description: 解释 Proxmox VE 中 local 与 local-lvm 的区别，介绍 PVE-Tools-9 的合并存储、硬盘休眠与存储安全建议。
+description: 解释 Proxmox VE 中 local 与 local-lvm 的区别，介绍 PVE Tools Pro 的合并存储、硬盘休眠与存储安全建议。
 ---
 
 # 存储管理：local 与 local-lvm 的爱恨情仇
@@ -18,7 +18,7 @@ description: 解释 Proxmox VE 中 local 与 local-lvm 的区别，介绍 PVE-To
 
 很多玩家只有一个小容量 SSD（比如 128G/256G），这种切分会导致空间分配非常僵硬。合并后，你可以自由地在同一个分区里放 ISO、放镜像、放备份。
 
-### 合并的原理（PVE-Tools 实现逻辑）
+### 合并的原理（PVE Tools Pro 实现逻辑）
 
 1. **备份数据**：脚本会提醒你清空 `local-lvm` 上的所有虚拟机。
 2. **删除 LVM-Thin 卷**：释放 `data` 卷的空间。

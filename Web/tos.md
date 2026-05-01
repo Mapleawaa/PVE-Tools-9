@@ -4,7 +4,7 @@ description: 服务条款（Terms of Service / TOS）
 ---
 
 # 服务条款（TOS）
-**项目：PVE-Tools-9**
+**项目：PVE Tools Pro**
 **版本：1.2**
 **生效日期：2026-03-01**
 

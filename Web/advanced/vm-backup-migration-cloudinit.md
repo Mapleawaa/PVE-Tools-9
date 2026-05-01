@@ -1,6 +1,6 @@
 ---
 title: VM 备份、迁移与 Cloud-Init
-description: 学习 PVE-Tools-9 的 VM 备份恢复、模板克隆、Cloud-Init、磁盘快照、网络管理与集群内迁移工作流。
+description: 学习 PVE Tools Pro 的 VM 备份恢复、模板克隆、Cloud-Init、磁盘快照、网络管理与集群内迁移工作流。
 ---
 
 # VM 备份 / 迁移 / Cloud-Init

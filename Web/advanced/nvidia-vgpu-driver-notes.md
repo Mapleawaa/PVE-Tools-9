@@ -1,11 +1,11 @@
 ---
 title: NVIDIA vGPU 驱动安装说明
-description: 解释 PVE-Tools-9 不默认自动安装 NVIDIA vGPU 驱动的原因，以及 Proxmox VE 内核、驱动版本和 DKMS 匹配风险。
+description: 解释 PVE Tools Pro 不默认自动安装 NVIDIA vGPU 驱动的原因，以及 Proxmox VE 内核、驱动版本和 DKMS 匹配风险。
 ---
 
 # NVIDIA vGPU 驱动安装说明：为何不建议脚本自动化安装
 
-本文用于解释：为什么 PVE-Tools 当前不再提供 NVIDIA vGPU 驱动“一键自动安装”，而是建议用户采用手工流程并按版本匹配后再安装。
+本文用于解释：为什么 PVE Tools Pro 当前不再提供 NVIDIA vGPU 驱动"一键自动安装"，而是建议用户采用手工流程并按版本匹配后再安装。
 
 ## 结论先说
 
@@ -55,7 +55,7 @@ vGPU 驱动及补丁常来自社区资源，不同来源的维护节奏与可信
 ## 资源说明
 
 - vGPU 驱动下载网盘：<https://alist.homelabproject.cc/foxipan>
-- 资源提供者说明：该资源为第三方提供（佛西博客相关来源），与 PVE-Tools 项目维护方非同一主体。
+- 资源提供者说明：该资源为第三方提供（佛西博客相关来源），与 PVE Tools Pro 项目维护方非同一主体。
 - 研究教程推荐（适合有经验用户深入折腾）：<https://foxi.buduanwang.vip/virtualization/pve/3417.html/>
 
 ## 关于 20 系及以上显卡
@@ -68,7 +68,7 @@ vGPU 驱动及补丁常来自社区资源，不同来源的维护节奏与可信
 
 ## 脚本能力边界
 
-PVE-Tools 在 NVIDIA 方向目前聚焦于：
+PVE Tools Pro 在 NVIDIA 方向目前聚焦于：
 
 - 宿主机预配置（IOMMU/VFIO/黑名单）
 - vGPU Unlock 外部库部署

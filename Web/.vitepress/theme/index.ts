@@ -4,6 +4,7 @@ import { useData } from 'vitepress'
 import CopyCodeBox from './components/CopyCodeBox.vue'
 import Announcement from './components/Announcement.vue'
 import Giscus from './components/Giscus.vue'
+import CookieConsent from './components/CookieConsent.vue'
 import './custom.css'
 
 export default {
@@ -43,7 +44,8 @@ export default {
     return h(DefaultTheme.Layout, null, {
       'home-hero-after': () => h(CopyCodeBox),
       'layout-top': () => h(Announcement),
-      'doc-after': () => h(Giscus)
+      'doc-after': () => h(Giscus),
+      'layout-bottom': () => h(CookieConsent)
     })
   }
 }

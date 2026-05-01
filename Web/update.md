@@ -1,9 +1,9 @@
 ---
 title: 更新日志
-description: PVE-Tools-9 官方更新日志，按版本记录脚本的重要演进与安全边界调整。
+description: PVE Tools Pro 官方更新日志，按版本记录脚本的重要演进与安全边界调整。
 ---
 
-# 更新日志（PVE-Tools-9）
+# 更新日志（PVE Tools Pro）
 
 > 本页用于同步脚本正式发布版本。v7.0.0 为一次覆盖 CLI、安全边界、虚拟机运维、宿主机网络与 GPU 直通体系的史诗级重构。
 

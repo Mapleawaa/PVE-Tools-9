@@ -4,7 +4,7 @@
 
 ## 模块职责
 
-为 PVE-Tools-9 项目提供官方文档网站。使用 VitePress 构建，部署于 Cloudflare Pages（域名 `pve.oowo.cc`）。包含使用指南、功能特性、FAQ、更新日志、高级教程、法律条款等内容，同时集成了 Giscus 评论系统和 Umami 分析。
+为 PVE Tools Pro 项目提供官方文档网站。使用 VitePress 构建，部署于 Cloudflare Pages（域名 `pve.oowo.cc`）。包含使用指南、功能特性、FAQ、更新日志、高级教程、法律条款等内容，同时集成了 Giscus 评论系统和 Umami 分析。
 
 ## 入口与启动
 

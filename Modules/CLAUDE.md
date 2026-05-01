@@ -4,7 +4,7 @@
 
 ## 模块职责
 
-提供 PVE-Tools-9 的第三方插件/模块市场。主脚本通过 GitHub API 自动扫描本目录中的 `.sh` 脚本，根据脚本头部元信息（name/author/version/github）展示并允许用户选择执行。同时存放附加二进制资源（如 NVIDIA vGPU Unlock .so 文件）。
+提供 PVE Tools Pro 的第三方插件/模块市场。主脚本通过 GitHub API 自动扫描本目录中的 `.sh` 脚本，根据脚本头部元信息（name/author/version/github）展示并允许用户选择执行。同时存放附加二进制资源（如 NVIDIA vGPU Unlock .so 文件）。
 
 ## 入口与启动
 
