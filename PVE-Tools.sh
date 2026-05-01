@@ -8743,13 +8743,13 @@ host_network_select_from_text() {
         return 1
     fi
 
-    echo -e "${CYAN}${title}${NC}"
+    echo -e "${CYAN}${title}${NC}" >&2
     local i=1
     for item in "${items[@]}"; do
-        printf '  [%d] %s\n' "$i" "$item"
+        printf '  [%d] %s\n' "$i" "$item" >&2
         i=$((i + 1))
     done
-    echo "$UI_DIVIDER"
+    echo "$UI_DIVIDER" >&2
 
     local pick
     read -p "请选择序号 (0 返回): " pick
@@ -8809,9 +8809,9 @@ host_network_collect_family_config() {
 
     if [[ "$family" == "inet" ]]; then
         if [[ "$phase" == "update" ]]; then
-            echo "  [1] 保持当前 IPv4"
-            echo "  [2] 静态 IPv4"
-            echo "  [3] DHCPv4"
+            echo "  [1] 保持当前 IPv4" >&2
+            echo "  [2] 静态 IPv4" >&2
+            echo "  [3] DHCPv4" >&2
             read -p "请选择 IPv4 模式 [1-3]: " choice
             case "$choice" in
                 1|"") echo "keep|||"; return 0 ;;
@@ -8820,9 +8820,9 @@ host_network_collect_family_config() {
                 *) return 1 ;;
             esac
         else
-            echo "  [1] 静态 IPv4"
-            echo "  [2] DHCPv4"
-            echo "  [3] 不配置 IPv4"
+            echo "  [1] 静态 IPv4" >&2
+            echo "  [2] DHCPv4" >&2
+            echo "  [3] 不配置 IPv4" >&2
             read -p "请选择 IPv4 模式 [1-3]: " choice
             case "$choice" in
                 1) method="static" ;;
@@ -8833,11 +8833,11 @@ host_network_collect_family_config() {
         fi
     else
         if [[ "$phase" == "update" ]]; then
-            echo "  [1] 保持当前 IPv6"
-            echo "  [2] 静态 IPv6"
-            echo "  [3] DHCPv6"
-            echo "  [4] SLAAC"
-            echo "  [5] 移除 IPv6 stanza"
+            echo "  [1] 保持当前 IPv6" >&2
+            echo "  [2] 静态 IPv6" >&2
+            echo "  [3] DHCPv6" >&2
+            echo "  [4] SLAAC" >&2
+            echo "  [5] 移除 IPv6 stanza" >&2
             read -p "请选择 IPv6 模式 [1-5]: " choice
             case "$choice" in
                 1|"") echo "keep|||"; return 0 ;;
@@ -8848,10 +8848,10 @@ host_network_collect_family_config() {
                 *) return 1 ;;
             esac
         else
-            echo "  [1] 静态 IPv6"
-            echo "  [2] DHCPv6"
-            echo "  [3] SLAAC"
-            echo "  [4] 不配置 IPv6"
+            echo "  [1] 静态 IPv6" >&2
+            echo "  [2] DHCPv6" >&2
+            echo "  [3] SLAAC" >&2
+            echo "  [4] 不配置 IPv6" >&2
             read -p "请选择 IPv6 模式 [1-4]: " choice
             case "$choice" in
                 1) method="static" ;;
@@ -9520,16 +9520,16 @@ host_firewall_select_guest() {
     fi
     mapfile -t items < <(printf '%s\n' "$list_text" | awk 'NF')
     (( ${#items[@]} > 0 )) || return 1
-    echo -e "${CYAN}请选择${kind^^}：${NC}"
+    echo -e "${CYAN}请选择${kind^^}：${NC}" >&2
     local idx=1
     local item id name
     for item in "${items[@]}"; do
         id="${item%%|*}"
         name="${item#*|}"
-        printf '  [%d] %s (%s)\n' "$idx" "$id" "$name"
+        printf '  [%d] %s (%s)\n' "$idx" "$id" "$name" >&2
         idx=$((idx + 1))
     done
-    echo "$UI_DIVIDER"
+    echo "$UI_DIVIDER" >&2
     local pick
     read -p "请选择序号 (0 返回): " pick
     pick="${pick:-0}"
