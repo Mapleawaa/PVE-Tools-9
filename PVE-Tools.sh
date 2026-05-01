@@ -8914,7 +8914,7 @@ host_network_collect_preserved_family_options() {
         /^[[:space:]]+/ {
             line=$0
             sub(/^[[:space:]]+/, "", line)
-            if (line ~ /^(address|gateway|netmask|broadcast|pointopoint|accept-ra|dns-nameservers|dns-search)\b/) next
+            if (line ~ /^(address|gateway|netmask|broadcast|pointopoint|accept-ra|dns-nameservers|dns-search)([[:space:]]|$)/) next
             if (line ~ /MASQUERADE/) next
             if (line ~ /net\.ipv6\.conf\.all\.forwarding/) next
             print line
@@ -8932,7 +8932,7 @@ host_network_remove_iface_family_from_candidate() {
         BEGIN { skip=0 }
         {
             if (skip) {
-                if ($0 !~ /^[[:space:]]/ && $0 ~ /^(iface|auto|allow-)/) {
+                if ($0 !~ /^[[:space:]]/ && $0 !~ /^$/) {
                     skip=0
                 } else {
                     next
@@ -8968,7 +8968,7 @@ host_network_remove_iface_from_candidate() {
         }
         {
             if (skip) {
-                if ($0 !~ /^[[:space:]]/ && $0 ~ /^(iface|auto|allow-)/) {
+                if ($0 !~ /^[[:space:]]/ && $0 !~ /^$/) {
                     skip=0
                 } else {
                     next
