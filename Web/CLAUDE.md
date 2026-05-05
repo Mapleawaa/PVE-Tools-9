@@ -49,7 +49,7 @@ bun run preview   # 预览构建结果
 | `/guide` | `guide.md` | 使用指南，高风险功能提醒 |
 | `/features` | `features.md` | 功能特性列表 |
 | `/faq` | `faq.md` | 常见问题 |
-| `/update` | `update.md` | 完整更新日志（v1.x - v7.4.0） |
+| `/update` | `update.md` | 完整更新日志（v1.x - v7.5.0） |
 | `/todo` | `todo.md` | 开发计划（渲染 TodoList 组件） |
 | `/sponsor` | `sponsor.md` | 赞助页面 |
 | `/pay` | `pay.md` | 付费技术支持 |

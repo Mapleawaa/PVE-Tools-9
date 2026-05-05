@@ -12,7 +12,7 @@
 
 
 # 版本信息
-CURRENT_VERSION="7.4.0"
+CURRENT_VERSION="7.5.0"
 BUILD_NICKNAME="Ania"
 VERSION_FILE_URL="https://raw.githubusercontent.com/Mapleawaa/PVE-Tools-9/main/VERSION"
 UPDATE_FILE_URL="https://raw.githubusercontent.com/Mapleawaa/PVE-Tools-9/main/UPDATE"
@@ -1482,7 +1482,7 @@ kernel_management_menu() {
         show_menu_option "3" "安装新内核"
         show_menu_option "4" "设置默认启动内核"
         show_menu_option "5" "${RED}清理旧内核${NC}"
-        show_menu_option "6" "Copy Fail 漏洞检测/缓解 ${CYAN}(${COPY_FAIL_CVE_ID})${NC}"
+        show_menu_option "6" "Copy Fail 修复复查 / 清理 ${CYAN}(${COPY_FAIL_CVE_ID})${NC}"
         show_menu_option "7" "${YELLOW}重启系统应用新内核${NC}"
         echo "${UI_DIVIDER}"
         show_menu_option "0" "返回主菜单"
@@ -2007,9 +2007,9 @@ copy_fail_show_status_report() {
     echo
 
     if [[ "$COPY_FAIL_STATE_STATUS" == "vulnerable" || "$COPY_FAIL_STATE_STATUS" == "unknown" ]]; then
-        echo -e "${YELLOW}建议:${NC} 先执行临时缓解，再升级到供应商明确声明已包含 ${COPY_FAIL_CVE_ID} 修复的内核，并重启到新内核。"
+        echo -e "${YELLOW}建议:${NC} 先升级到供应商明确声明已包含 ${COPY_FAIL_CVE_ID} 修复的内核，再重启并复查；如果之前写入过临时阻断配置，升级后请及时清理。"
     elif [[ "$COPY_FAIL_STATE_STATUS" == "mitigated" ]]; then
-        echo -e "${YELLOW}建议:${NC} 保留临时缓解，继续跟进 PVE / Debian / 内核供应商的正式修复包。"
+        echo -e "${YELLOW}建议:${NC} 继续保留临时阻断，直到切换到已修复内核；完成升级后记得清理残留配置。"
     else
         echo -e "${YELLOW}建议:${NC} 仍建议保留一次检测记录，后续内核变更后再复查。"
     fi
@@ -2019,35 +2019,42 @@ copy_fail_show_manual_guidance() {
     copy_fail_refresh_state
 
     clear
-    show_menu_header "Copy Fail 手动处理建议"
+    show_menu_header "Copy Fail 手动复查与清理"
     echo -e "${CYAN}优先级 1:${NC} 安装供应商明确声明已修复 ${COPY_FAIL_CVE_ID} 的内核包，并重启到该内核。"
-    echo -e "${CYAN}优先级 2:${NC} 如果尚无可用修复包，先做临时缓解，再继续跟进正式修复。"
+    echo -e "${CYAN}优先级 2:${NC} 如果历史上写入过临时阻断策略，升级完成后先清理再复查。"
     echo
-    echo -e "${CYAN}手动方式 A - 禁用 algif_aead（copy.fail 官方建议）${NC}"
+    echo -e "${CYAN}修复后清理${NC}"
+    echo '  1. rm -f /etc/modprobe.d/disable-algif.conf /etc/modprobe.d/disable-authencesn.conf'
+    echo '  2. modprobe algif_aead 2>/dev/null || true'
+    echo '  3. modprobe authencesn 2>/dev/null || true'
+    echo '  4. 重启后再次执行“检测漏洞 / 判断是否已修复”'
+    echo
+    echo -e "${CYAN}若暂时还不能升级，可临时阻断${NC}"
+    echo -e "${CYAN}手动方式 A - 临时阻断 algif_aead（copy.fail 官方建议）${NC}"
     echo '  1. echo "install algif_aead /bin/false" > /etc/modprobe.d/disable-algif.conf'
     echo '  2. echo "blacklist algif_aead" >> /etc/modprobe.d/disable-algif.conf'
     echo '  3. rmmod algif_aead 2>/dev/null || true'
-    echo '  4. 重启后再次检测'
+    echo '  4. 升级后重新检测并清理'
     echo
-    echo -e "${CYAN}手动方式 B - 禁用 authencesn（Gentoo 临时 workaround 思路）${NC}"
+    echo -e "${CYAN}手动方式 B - 临时阻断 authencesn（Gentoo 临时 workaround 思路）${NC}"
     echo '  1. echo "install authencesn /bin/false" > /etc/modprobe.d/disable-authencesn.conf'
     echo '  2. echo "blacklist authencesn" >> /etc/modprobe.d/disable-authencesn.conf'
     echo '  3. rmmod authencesn 2>/dev/null || true'
     echo '  4. 验证 IPSec / 依赖该算法的业务是否正常'
     echo
     echo -e "${CYAN}重要提醒:${NC}"
-    echo "  - 如果 CONFIG_CRYPTO_USER_API_AEAD=y，algif_aead 为内建，单纯 modprobe 黑名单不会完全生效。"
-    echo "  - 禁用 algif_aead 可能影响 bluez、cryptsetup、iwd、stress-ng、libkcapi 及部分依赖 AEAD 的程序。"
-    echo "  - 禁用 authencesn 可能让部分 IPSec 场景退化为更慢路径。"
-    echo "  - 本脚本的“自动升级最新内核”只负责拉取仓库最新可见内核，不等同于供应商已明确修复。"
+    echo "  - 如果 CONFIG_CRYPTO_USER_API_AEAD=y，algif_aead 为内建，阻断策略不会改变当前运行内核的编译方式。"
+    echo "  - 临时阻断可能影响 bluez、cryptsetup、iwd、stress-ng、libkcapi 及部分依赖 AEAD 的程序。"
+    echo "  - 临时阻断 authencesn 可能让部分 IPSec 场景退化为更慢路径。"
+    echo "  - 本脚本的“自动同步最新内核”只负责拉取仓库最新可见内核，更新后仍需重新检测是否已包含 ${COPY_FAIL_CVE_ID} 修复。"
     echo
 
     if [[ "$COPY_FAIL_STATE_STATUS" == "fixed" ]]; then
-        echo -e "${GREEN}当前系统检测到修复迹象，临时缓解通常不是必需项。${NC}"
+        echo -e "${GREEN}当前系统已检测到修复迹象，建议优先清理历史临时阻断配置。${NC}"
     elif [[ "$COPY_FAIL_STATE_STATUS" == "mitigated" ]]; then
-        echo -e "${YELLOW}当前系统看起来是“已缓解但未确认已打补丁”，建议继续等正式修复内核。${NC}"
+        echo -e "${YELLOW}当前系统仍处于临时阻断状态，建议尽快切换到正式修复内核后再清理。${NC}"
     else
-        echo -e "${RED}当前系统未确认修复，建议优先处理。${NC}"
+        echo -e "${RED}当前系统未确认修复，若暂时不能升级，可先使用临时阻断方案。${NC}"
     fi
 }
 
@@ -2074,8 +2081,8 @@ EOF
 copy_fail_apply_algif_mitigation() {
     copy_fail_refresh_state
     echo -e "${YELLOW}将写入 ${COPY_FAIL_ALGIF_CONF} 并尝试卸载 algif_aead 模块。${NC}"
-    echo -e "${YELLOW}若当前内核将 CONFIG_CRYPTO_USER_API_AEAD 编译为内建(y)，此方法只能写策略，不能彻底阻断当前运行内核。${NC}"
-    if ! confirm_action "应用 Copy Fail 临时缓解（禁用 algif_aead）？"; then
+    echo -e "${YELLOW}若当前内核将 CONFIG_CRYPTO_USER_API_AEAD 编译为内建(y)，此方法只能写阻断策略，不能彻底阻断当前运行内核。${NC}"
+    if ! confirm_action "应用 Copy Fail 临时阻断（禁用 algif_aead）？"; then
         return 0
     fi
 
@@ -2086,7 +2093,7 @@ copy_fail_apply_algif_mitigation() {
 
     if [[ "$COPY_FAIL_STATE_AEAD_CONFIG" == "m" ]]; then
         if modprobe -r algif_aead >/dev/null 2>&1; then
-            log_success "algif_aead 已卸载，临时缓解已立即生效"
+            log_success "algif_aead 已卸载，临时阻断已立即生效"
         else
             log_warn "algif_aead 卸载失败，可能正在被占用；建议尽快重启宿主机"
         fi
@@ -2096,14 +2103,14 @@ copy_fail_apply_algif_mitigation() {
         log_warn "未能确认 algif_aead 的内核配置状态，请在重启后重新检测"
     fi
 
-    log_success "algif_aead 临时缓解策略已写入: ${COPY_FAIL_ALGIF_CONF}"
+    log_success "algif_aead 临时阻断策略已写入: ${COPY_FAIL_ALGIF_CONF}"
 }
 
 copy_fail_apply_authencesn_mitigation() {
     copy_fail_refresh_state
     echo -e "${YELLOW}将写入 ${COPY_FAIL_AUTHENC_CONF} 并尝试卸载 authencesn 模块。${NC}"
     echo -e "${YELLOW}该方式参考发行版临时 workaround，可能影响部分 IPSec / AEAD 相关路径。${NC}"
-    if ! confirm_action "应用 Copy Fail 临时缓解（禁用 authencesn）？"; then
+    if ! confirm_action "应用 Copy Fail 临时阻断（禁用 authencesn）？"; then
         return 0
     fi
 
@@ -2114,7 +2121,7 @@ copy_fail_apply_authencesn_mitigation() {
 
     if [[ "$COPY_FAIL_STATE_AUTHENC_CONFIG" == "m" ]]; then
         if modprobe -r authencesn >/dev/null 2>&1; then
-            log_success "authencesn 已卸载，临时 workaround 已立即生效"
+            log_success "authencesn 已卸载，临时阻断已立即生效"
         else
             log_warn "authencesn 卸载失败，可能正在被占用；建议验证业务后安排重启"
         fi
@@ -2124,14 +2131,14 @@ copy_fail_apply_authencesn_mitigation() {
         log_warn "未能确认 authencesn 的内核配置状态，请在重启后重新检测"
     fi
 
-    log_success "authencesn 临时缓解策略已写入: ${COPY_FAIL_AUTHENC_CONF}"
+    log_success "authencesn 临时阻断策略已写入: ${COPY_FAIL_AUTHENC_CONF}"
 }
 
 copy_fail_remove_mitigations() {
     local changed=0
 
-    echo -e "${YELLOW}将删除 Copy Fail 相关临时缓解配置，并尝试重新加载模块。${NC}"
-    if ! confirm_action "回滚 Copy Fail 临时缓解？"; then
+    echo -e "${YELLOW}将删除 Copy Fail 相关临时阻断配置，并尝试重新加载模块。${NC}"
+    if ! confirm_action "清理 Copy Fail 临时阻断并恢复模块？"; then
         return 0
     fi
 
@@ -2148,19 +2155,19 @@ copy_fail_remove_mitigations() {
     fi
 
     if [[ "$changed" -eq 0 ]]; then
-        log_info "未发现本脚本创建的 Copy Fail 缓解配置"
+        log_info "未发现本脚本创建的 Copy Fail 临时阻断配置"
         return 0
     fi
 
     modprobe algif_aead >/dev/null 2>&1 || true
     modprobe authencesn >/dev/null 2>&1 || true
-    log_success "已删除 Copy Fail 临时缓解配置；若模块未恢复，请重启后再检查"
+    log_success "已删除 Copy Fail 临时阻断配置；若模块未恢复，请重启后再检查"
 }
 
 copy_fail_upgrade_kernel_guidance() {
-    echo -e "${YELLOW}将调用现有“同步更新内核”流程。请注意：${NC}"
+    echo -e "${YELLOW}将调用现有“同步更新内核”流程。更新完成后请再次检测 Copy Fail 状态。${NC}"
     echo -e "${YELLOW}只有当仓库中最新可见内核已经包含 ${COPY_FAIL_CVE_ID} 修复时，这一步才算真正清除漏洞。${NC}"
-    if ! confirm_action "继续尝试更新到仓库最新内核？"; then
+    if ! confirm_action "继续尝试更新到仓库最新内核并复查？"; then
         return 0
     fi
     sync_kernel_update
@@ -2169,16 +2176,16 @@ copy_fail_upgrade_kernel_guidance() {
 copy_fail_management_menu() {
     while true; do
         clear
-        show_menu_header "Copy Fail 漏洞处置"
+        show_menu_header "Copy Fail 修复复查与清理"
         echo -e "${RED}${COPY_FAIL_CVE_ID}${NC} / Copy Fail  (公开: ${COPY_FAIL_DISCLOSURE_DATE})"
-        echo -e "${YELLOW}upstream fixed: 6.18.22 / 6.19.12 / 7.0；低于这些线且未见 backport 证据时，应按高风险处理。${NC}"
+        echo -e "${YELLOW}当前优先事项: 先确认是否已进入修复内核，再清理历史临时阻断配置。${NC}"
         echo -e "${UI_DIVIDER}"
         show_menu_option "1" "检测漏洞 / 判断是否已修复 / 评估受攻击风险"
-        show_menu_option "2" "查看手动处理建议"
-        show_menu_option "3" "自动缓解 A：禁用 algif_aead ${CYAN}(copy.fail 建议)${NC}"
-        show_menu_option "4" "自动缓解 B：禁用 authencesn ${CYAN}(发行版 workaround 思路)${NC}"
-        show_menu_option "5" "回滚临时缓解配置"
-        show_menu_option "6" "自动尝试升级到仓库最新内核"
+        show_menu_option "2" "查看手动复查与清理建议"
+        show_menu_option "3" "自动处理 A：临时阻断 algif_aead ${CYAN}(未修复时使用)${NC}"
+        show_menu_option "4" "自动处理 B：临时阻断 authencesn ${CYAN}(未修复时使用)${NC}"
+        show_menu_option "5" "清理临时阻断配置"
+        show_menu_option "6" "同步仓库最新内核并复查"
         show_menu_option "0" "返回上级菜单"
         show_menu_footer
 
@@ -6177,14 +6184,15 @@ show_menu() {
     show_menu_option "6" "宿主机网络与防火墙 ${CYAN}( bridge / Bond / VLAN / IPv6 )${NC}"
     show_menu_option "7" "存储与磁盘维护 ${CYAN}( Local合并 / Ceph / 休眠 / Swap )${NC}"
     show_menu_option "8" "诊断工具与项目信息 ${CYAN}( 系统信息 / 救砖 / 项目链接 )${NC}"
-    show_menu_option "9" "Copy Fail 安全处置 ${CYAN}( ${COPY_FAIL_CVE_ID} / 检测 / 缓解 / 回滚 )${NC}"
+    show_menu_option "9" "Copy Fail 修复复查与清理 ${CYAN}( ${COPY_FAIL_CVE_ID} / 检测 / 清理 / 回滚 / 升级 )${NC}"
     echo "$UI_DIVIDER"
     show_menu_option "0" "${RED}退出脚本${NC}"
     show_menu_footer
     echo
     echo -e "  ${YELLOW}Tips: ${SESSION_TIP:-一言获取失败，本次会话不再重试。}${NC}"
+    echo -e "  ${YELLOW}提示: 如果已完成内核升级，请进入 9 进行 Copy Fail 复查与清理。${NC}"
     echo
-    echo -ne "  ${PRIMARY}请输入您的选择 [0-8]: ${NC}"
+    echo -ne "  ${PRIMARY}请输入您的选择 [0-9]: ${NC}"
 }
 # 应急救砖工具箱菜单
 show_menu_rescue() {
