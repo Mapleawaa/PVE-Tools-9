@@ -2,8 +2,8 @@
   "upcoming_features": [
     {
       "title": "支持按 MAC 地址绑定网卡到 Bridge",
-      "status": "in-progress",
-      "description": "通过 MAC 地址而不是 PCIe 地址来识别网卡，避免重启或硬件变更后网卡顺序变化，导致网络配置失效甚至失联。"
+      "status": "completed",
+      "description": "通过 systemd .link 按 MAC 地址固定网卡命名，避免重启或硬件变更后网卡顺序变化，导致网络配置失效甚至失联。"
     },
     {
       "title": "提供 Intel 核显 ROM 自动编译与下载服务",

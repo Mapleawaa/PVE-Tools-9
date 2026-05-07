@@ -11,7 +11,7 @@
 [![Proxmox VE](https://img.shields.io/badge/Proxmox-VE%209.x-E57000?logo=proxmox&logoColor=white)](https://www.proxmox.com/)
 [![Debian](https://img.shields.io/badge/Debian-13%20(Trixie)-A81D33?logo=debian&logoColor=white)](https://www.debian.org/)
 
-![产品截图](./images/main-cover.png)
+![产品截图](./images/main.png)
 
 </div>
 
