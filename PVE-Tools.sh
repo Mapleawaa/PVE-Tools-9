@@ -12,8 +12,8 @@
 
 
 # 版本信息
-CURRENT_VERSION="7.5.0"
-BUILD_NICKNAME="Ania"
+CURRENT_VERSION="7.6.0"
+BUILD_NICKNAME="Funa"
 VERSION_FILE_URL="https://raw.githubusercontent.com/Mapleawaa/PVE-Tools-9/main/VERSION"
 UPDATE_FILE_URL="https://raw.githubusercontent.com/Mapleawaa/PVE-Tools-9/main/UPDATE"
 PVE_VERSION_DETECTED=""
@@ -60,18 +60,26 @@ setup_colors
 # 镜像源配置
 MIRROR_USTC="https://mirrors.ustc.edu.cn/proxmox/debian/pve"
 MIRROR_TUNA="https://mirrors.tuna.tsinghua.edu.cn/proxmox/debian/pve"
+MIRROR_TENCENT="https://mirrors.cloud.tencent.com/debian"
+MIRROR_ALIYUN="https://mirrors.aliyun.com/debian"
 MIRROR_DEBIAN="https://deb.debian.org/debian"
 SELECTED_MIRROR=""
 
 # ceph 模板源配置
 CEPH_MIRROR_USTC="https://mirrors.ustc.edu.cn/proxmox/debian/ceph-squid"
 CEPH_MIRROR_TUNA="https://mirrors.tuna.tsinghua.edu.cn/proxmox/debian/ceph-squid"
+CEPH_MIRROR_ALIYUN="https://mirrors.aliyun.com/ceph/debian-squid"
 CEPH_MIRROR_OFFICIAL="http://download.proxmox.com/debian/ceph-squid"
 
 # CT 模板源配置
 CT_MIRROR_USTC="https://mirrors.ustc.edu.cn/proxmox"
 CT_MIRROR_TUNA="https://mirrors.tuna.tsinghua.edu.cn/proxmox"
 CT_MIRROR_OFFICIAL="http://download.proxmox.com"
+PVE_MIRROR_OFFICIAL="http://download.proxmox.com/debian/pve"
+
+# Debian 公网镜像配置
+DEBIAN_SECURITY_MIRROR_TENCENT="https://mirrors.cloud.tencent.com/debian-security"
+DEBIAN_SECURITY_MIRROR_ALIYUN="https://mirrors.aliyun.com/debian-security"
 
 # 自动更新网络检测配置
 CF_TRACE_URL="https://www.cloudflare.com/cdn-cgi/trace"
@@ -2229,14 +2237,42 @@ change_sources() {
             ceph_mirror="$CEPH_MIRROR_TUNA"
             ct_mirror="$CT_MIRROR_TUNA"
             ;;
+        $MIRROR_TENCENT)
+            debian_mirror="$MIRROR_TENCENT"
+            debian_security_mirror="$DEBIAN_SECURITY_MIRROR_TENCENT"
+            pve_mirror="$PVE_MIRROR_OFFICIAL"
+            ceph_mirror="$CEPH_MIRROR_OFFICIAL"
+            ct_mirror="$CT_MIRROR_OFFICIAL"
+            ;;
+        $MIRROR_ALIYUN)
+            debian_mirror="$MIRROR_ALIYUN"
+            debian_security_mirror="$DEBIAN_SECURITY_MIRROR_ALIYUN"
+            pve_mirror="$PVE_MIRROR_OFFICIAL"
+            ceph_mirror="$CEPH_MIRROR_ALIYUN"
+            ct_mirror="$CT_MIRROR_OFFICIAL"
+            ;;
         $MIRROR_DEBIAN)
-            debian_mirror="https://deb.debian.org/debian"
+            debian_mirror="$MIRROR_DEBIAN"
             debian_security_mirror="https://security.debian.org/debian-security"
-            pve_mirror="https://ftp.debian.org/debian"
+            pve_mirror="$PVE_MIRROR_OFFICIAL"
             ceph_mirror="$CEPH_MIRROR_OFFICIAL"
             ct_mirror="$CT_MIRROR_OFFICIAL"
             ;;
     esac
+
+    case $SELECTED_MIRROR in
+        $MIRROR_TENCENT)
+            log_info "腾讯云公网源当前仅用于 Debian / 安全更新，PVE / CT / Ceph 继续沿用官方回退源"
+            ;;
+        $MIRROR_ALIYUN)
+            log_info "阿里云公网源已用于 Debian / 安全 / Ceph，PVE / CT 继续沿用官方回退源"
+            ;;
+    esac
+
+    if [[ -z "$debian_mirror" || -z "$debian_security_mirror" || -z "$pve_mirror" || -z "$ceph_mirror" || -z "$ct_mirror" ]]; then
+        log_error "未能解析所选镜像源，请重新选择后再试"
+        return 1
+    fi
     
     # 询问用户是否要更换安全更新源
     log_info "安全更新源选择"
@@ -2257,6 +2293,12 @@ change_sources() {
                 ;;
             $MIRROR_TUNA)
                 debian_security_mirror="https://mirrors.tuna.tsinghua.edu.cn/debian-security"
+                ;;
+            $MIRROR_TENCENT)
+                debian_security_mirror="$DEBIAN_SECURITY_MIRROR_TENCENT"
+                ;;
+            $MIRROR_ALIYUN)
+                debian_security_mirror="$DEBIAN_SECURITY_MIRROR_ALIYUN"
                 ;;
             $MIRROR_DEBIAN)
                 debian_security_mirror="https://security.debian.org/debian-security"
@@ -2346,7 +2388,7 @@ EOF
         sed -i "s|http://download.proxmox.com|$ct_mirror|g" /usr/share/perl5/PVE/APLInfo.pm
     fi
     
-    log_success "太棒了！所有源都换成飞速版本啦"
+    log_success "软件源配置已完成"
 }
 
 # 删除订阅弹窗
@@ -11146,12 +11188,14 @@ select_mirror() {
         show_menu_option "1" "中科大镜像源"
         show_menu_option "2" "清华Tuna镜像源" 
         show_menu_option "3" "Debian默认源"
+        show_menu_option "4" "腾讯云公网镜像源（Debian/安全）"
+        show_menu_option "5" "阿里云公网镜像源（Debian/安全/Ceph）"
         echo -e "${UI_DIVIDER}"
         echo "注意：选择后将作为后续所有软件源操作的基础"
         echo -e "${UI_DIVIDER}"
         echo
         
-        read -p "请选择 [1-3]: " mirror_choice
+        read -p "请选择 [1-5]: " mirror_choice
         
         case $mirror_choice in
             1)
@@ -11167,6 +11211,16 @@ select_mirror() {
             3)
                 SELECTED_MIRROR=$MIRROR_DEBIAN
                 log_success "已选择Debian默认源"
+                break
+                ;;
+            4)
+                SELECTED_MIRROR=$MIRROR_TENCENT
+                log_success "已选择腾讯云公网镜像源"
+                break
+                ;;
+            5)
+                SELECTED_MIRROR=$MIRROR_ALIYUN
+                log_success "已选择阿里云公网镜像源"
                 break
                 ;;
             *)
