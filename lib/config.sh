@@ -3,7 +3,7 @@
 # Copyright (C) 2026 Ciriu Networks
 
 # 版本信息
-CURRENT_VERSION="10.2.0"
+CURRENT_VERSION="10.2.1"
 BUILD_NICKNAME="Evanescia"
 VERSION_FILE_URL="https://raw.githubusercontent.com/PVE-Tools/PVE-Tools-9/main/VERSION"
 UPDATE_FILE_URL="https://raw.githubusercontent.com/PVE-Tools/PVE-Tools-9/main/UPDATE"
@@ -242,6 +242,9 @@ THIRD_PARTY_MODULES_RAW_BASE_URL="https://raw.githubusercontent.com/PVE-Tools/PV
 COOLERCONTROL_PROJECT_URL="https://gitlab.com/coolercontrol/coolercontrol"
 COOLERCONTROL_DOCS_URL="https://docs.coolercontrol.org/getting-started.html"
 COOLERCONTROL_DEB_SETUP_URL="https://dl.cloudsmith.io/public/coolercontrol/coolercontrol/setup.deb.sh"
+IT87_REPO_URL="https://github.com/shauno8/it87.git"
+IT87_REPO_REF="81ae4a610ea763fa7f8cd195e712c41f33207264"  # 已验证的 PGP 签名提交
+IT87_DKMS_NAME="it87"
 NVIDIA_ASSETS_BASE_URL="https://raw.githubusercontent.com/PVE-Tools/PVE-Tools-9/main/Modules/NVIDIA"
 NVIDIA_VGPU_UNLOCK_SO_URL="${NVIDIA_ASSETS_BASE_URL}/libvgpu_unlock_rs.so"
 VM_CONFIG_EXPORT_DIR="/var/lib/pve-tools/vm-config-exports"
