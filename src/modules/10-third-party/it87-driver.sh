@@ -305,10 +305,20 @@ it87_install_dkms() {
     local src_dir="/usr/src/${IT87_DKMS_NAME:-it87}"
     log_step "克隆源码到 ${src_dir}..."
     if [[ -n "${IT87_REPO_REF}" ]]; then
-        if ! git clone --depth 1 --branch "${IT87_REPO_REF}" "${IT87_REPO_URL:-https://github.com/shauno8/it87.git}" "$src_dir"; then
+        # git init + fetch 比 git clone --branch 更可靠地支持任意 commit SHA
+        git init "$src_dir" >/dev/null 2>&1 || {
             display_error "源码克隆失败" "请检查网络连接和 git 可用性"
             return 1
-        fi
+        }
+        (
+            cd "$src_dir" || exit 1
+            git remote add origin "${IT87_REPO_URL:-https://github.com/shauno8/it87.git}" || exit 1
+            git fetch --depth 1 origin "${IT87_REPO_REF}" || exit 1
+            git checkout FETCH_HEAD || exit 1
+        ) || {
+            display_error "源码克隆失败" "请检查网络连接和 git 可用性"
+            return 1
+        }
     else
         if ! git clone --depth 1 "${IT87_REPO_URL:-https://github.com/shauno8/it87.git}" "$src_dir"; then
             display_error "源码克隆失败" "请检查网络连接和 git 可用性"
@@ -403,11 +413,22 @@ it87_install_direct() {
     # 克隆到临时目录
     log_step "克隆源码..."
     if [[ -n "${IT87_REPO_REF}" ]]; then
-        if ! git clone --depth 1 --branch "${IT87_REPO_REF}" "${IT87_REPO_URL:-https://github.com/shauno8/it87.git}" "$build_dir"; then
+        # git init + fetch 比 git clone --branch 更可靠地支持任意 commit SHA
+        git init "$build_dir" >/dev/null 2>&1 || {
             display_error "源码克隆失败" "请检查网络连接"
             rm -rf "$build_dir"
             return 1
-        fi
+        }
+        (
+            cd "$build_dir" || exit 1
+            git remote add origin "${IT87_REPO_URL:-https://github.com/shauno8/it87.git}" || exit 1
+            git fetch --depth 1 origin "${IT87_REPO_REF}" || exit 1
+            git checkout FETCH_HEAD || exit 1
+        ) || {
+            display_error "源码克隆失败" "请检查网络连接"
+            rm -rf "$build_dir"
+            return 1
+        }
     else
         if ! git clone --depth 1 "${IT87_REPO_URL:-https://github.com/shauno8/it87.git}" "$build_dir"; then
             display_error "源码克隆失败" "请检查网络连接"
