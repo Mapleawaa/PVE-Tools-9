@@ -4,8 +4,7 @@ node_modules/
 bun.lockb
 
 # Ignore build outputs
-dist/*
-!dist/PVE-Tools.sh
+dist/
 **/dist/
 build/
 out/
