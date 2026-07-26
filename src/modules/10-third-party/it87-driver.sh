@@ -38,7 +38,7 @@ it87_find_hwmon_path() {
 # 从 hwmon 路径读取风扇 RPM
 it87_read_fan_rpm() {
     local hwmon_path="$1"
-    local fan rpm_str="" count=0
+    local fan rpm rpm_str="" count=0
 
     for fan in "$hwmon_path"/fan*_input; do
         [[ -f "$fan" ]] || continue
@@ -47,7 +47,7 @@ it87_read_fan_rpm() {
             local label
             label=$(basename "$fan" _input)
             rpm_str+="${label}=${rpm}RPM "
-            ((count++))
+            ((++count))
         fi
     done
 
@@ -125,7 +125,7 @@ it87_detect_version() {
     local dkms_ver mod_ver src_ver
 
     if command -v dkms >/dev/null 2>&1; then
-        dkms_ver=$(dkms status 2>/dev/null | grep "^${IT87_DKMS_NAME:-it87}," | head -1 | awk -F'[, ]' '{print $2}')
+        dkms_ver=$(dkms status 2>/dev/null | grep "^${IT87_DKMS_NAME:-it87}[/ ,]" | head -1 | awk -F'[,/ ]' '{print $2}')
     fi
 
     if command -v modinfo >/dev/null 2>&1; then
@@ -213,7 +213,7 @@ it87_force_id_menu() {
         show_menu_footer
 
         local choice id_value=""
-        read -p "请选择芯片型号 [0-11]: " choice
+        read -r -p "请选择芯片型号 [0-11]: " choice
         case "$choice" in
             1)  id_value="0x8613" ;;
             2)  id_value="0x8620" ;;
@@ -226,7 +226,7 @@ it87_force_id_menu() {
             9)  id_value="0x8689" ;;
             10) id_value="0x8720" ;;
             11)
-                read -p "请输入自定义 force_id (如 0x8620): " id_value
+                read -r -p "请输入自定义 force_id (如 0x8620): " id_value
                 if [[ ! "$id_value" =~ ^0x[0-9a-fA-F]{4}$ ]]; then
                     display_error "无效的 ID 格式" "请输入 0x 开头的 4 位十六进制数"
                     continue
@@ -242,7 +242,7 @@ it87_force_id_menu() {
 
             # 询问是否立即重载模块
             local reload_now
-            read -p "是否立即重新加载驱动模块？[yes]: " reload_now
+            read -r -p "是否立即重新加载驱动模块？[yes]: " reload_now
             reload_now="${reload_now:-yes}"
             if [[ "$reload_now" =~ ^[Yy][Ee][Ss]?$ ]]; then
                 log_step "重新加载 it87 模块..."
@@ -298,15 +298,22 @@ it87_install_dkms() {
     # 安装依赖
     it87_install_deps || return 1
 
-    # 清理旧源码目录
-    rm -rf /usr/src/${IT87_DKMS_NAME:-it87}-*
+    # 清理旧源码目录（包括精确克隆目标和带版本后缀的目录）
+    rm -rf "/usr/src/${IT87_DKMS_NAME:-it87}" /usr/src/"${IT87_DKMS_NAME:-it87}"-*
 
     # 克隆仓库
     local src_dir="/usr/src/${IT87_DKMS_NAME:-it87}"
     log_step "克隆源码到 ${src_dir}..."
-    if ! git clone --depth 1 "${IT87_REPO_URL:-https://github.com/shauno8/it87.git}" "$src_dir"; then
-        display_error "源码克隆失败" "请检查网络连接和 git 可用性"
-        return 1
+    if [[ -n "${IT87_REPO_REF}" ]]; then
+        if ! git clone --depth 1 --branch "${IT87_REPO_REF}" "${IT87_REPO_URL:-https://github.com/shauno8/it87.git}" "$src_dir"; then
+            display_error "源码克隆失败" "请检查网络连接和 git 可用性"
+            return 1
+        fi
+    else
+        if ! git clone --depth 1 "${IT87_REPO_URL:-https://github.com/shauno8/it87.git}" "$src_dir"; then
+            display_error "源码克隆失败" "请检查网络连接和 git 可用性"
+            return 1
+        fi
     fi
 
     # DKMS 编译安装（在子 shell 中运行，不影响父 shell 工作目录）
@@ -330,7 +337,7 @@ it87_install_dkms() {
 
     # 询问是否查看传感器
     local run_sensors
-    read -p "是否立即查看传感器输出？[yes]: " run_sensors
+    read -r -p "是否立即查看传感器输出？[yes]: " run_sensors
     run_sensors="${run_sensors:-yes}"
     if [[ "$run_sensors" =~ ^[Yy][Ee][Ss]?$ ]]; then
         sensors 2>/dev/null || log_warn "sensors 命令执行失败"
@@ -386,22 +393,37 @@ it87_install_direct() {
         apt-get install -y "${pkgs[@]}" || { display_error "依赖安装失败" ""; return 1; }
     fi
 
-    # 克隆到临时目录
-    rm -rf /tmp/it87-build
-    log_step "克隆源码..."
-    if ! git clone --depth 1 "${IT87_REPO_URL:-https://github.com/shauno8/it87.git}" /tmp/it87-build; then
-        display_error "源码克隆失败" "请检查网络连接"
+    # 创建临时构建目录
+    local build_dir
+    build_dir=$(mktemp -d) || {
+        display_error "创建临时目录失败" ""
         return 1
+    }
+
+    # 克隆到临时目录
+    log_step "克隆源码..."
+    if [[ -n "${IT87_REPO_REF}" ]]; then
+        if ! git clone --depth 1 --branch "${IT87_REPO_REF}" "${IT87_REPO_URL:-https://github.com/shauno8/it87.git}" "$build_dir"; then
+            display_error "源码克隆失败" "请检查网络连接"
+            rm -rf "$build_dir"
+            return 1
+        fi
+    else
+        if ! git clone --depth 1 "${IT87_REPO_URL:-https://github.com/shauno8/it87.git}" "$build_dir"; then
+            display_error "源码克隆失败" "请检查网络连接"
+            rm -rf "$build_dir"
+            return 1
+        fi
     fi
 
     # 编译安装（子 shell）
     log_step "编译安装..."
-    if ! (cd /tmp/it87-build && make && make install); then
+    if ! (cd "$build_dir" && make && make install); then
         display_error "编译安装失败" "请检查 make 输出和 pve-headers 安装情况"
-        rm -rf /tmp/it87-build
+        rm -rf "$build_dir"
         return 1
     fi
-    rm -rf /tmp/it87-build
+    rm -rf "$build_dir"
 
     # 配置开机加载
     it87_configure_boot
@@ -493,6 +515,10 @@ it87_disable_autostart() {
 
     log_step "禁用 IT87 开机自启..."
 
+    # 备份系统配置文件
+    backup_file "/etc/modprobe.d/it87.conf" >/dev/null 2>&1 || true
+    [[ -f /etc/modules ]] && backup_file "/etc/modules" >/dev/null 2>&1 || true
+
     # 移除 modprobe.d 配置
     remove_block "/etc/modprobe.d/it87.conf" "IT87_OPTIONS"
 
@@ -540,7 +566,7 @@ it87_uninstall() {
     if command -v dkms >/dev/null 2>&1; then
         log_step "移除 DKMS 注册..."
         local entries
-        entries=$(dkms status 2>/dev/null | grep "^${IT87_DKMS_NAME:-it87}," | awk -F'[,/ ]' '{print $1"/"$2}' || true)
+        entries=$(dkms status 2>/dev/null | grep "^${IT87_DKMS_NAME:-it87}[/ ,]" | awk -F'[,/ ]' '{print $1"/"$2}' || true)
         local entry
         for entry in $entries; do
             [[ -n "$entry" ]] && dkms remove "$entry" --all 2>/dev/null || true
@@ -551,12 +577,14 @@ it87_uninstall() {
     log_step "清理源码目录..."
     rm -rf /usr/src/${IT87_DKMS_NAME:-it87}-*
 
-    # 清理配置文件
-    log_step "清理配置文件..."
+    # 备份并清理配置文件
+    log_step "备份并清理配置文件..."
+    backup_file "/etc/modprobe.d/it87.conf" >/dev/null 2>&1 || true
     rm -f /etc/modprobe.d/it87.conf
 
-    # 从 /etc/modules 移除
+    # 备份并从 /etc/modules 移除
     if [[ -f /etc/modules ]]; then
+        backup_file "/etc/modules" >/dev/null 2>&1 || true
         sed -i '/^it87/d' /etc/modules
     fi
 
@@ -610,7 +638,7 @@ it87_manager_menu() {
         show_menu_footer
 
         local choice
-        read -p "请选择操作 [0-7]: " choice
+        read -r -p "请选择操作 [0-7]: " choice
         case "$choice" in
             1) it87_install_dkms ;;
             2) it87_install_direct ;;

@@ -243,6 +243,7 @@ COOLERCONTROL_PROJECT_URL="https://gitlab.com/coolercontrol/coolercontrol"
 COOLERCONTROL_DOCS_URL="https://docs.coolercontrol.org/getting-started.html"
 COOLERCONTROL_DEB_SETUP_URL="https://dl.cloudsmith.io/public/coolercontrol/coolercontrol/setup.deb.sh"
 IT87_REPO_URL="https://github.com/shauno8/it87.git"
+IT87_REPO_REF=""  # 留空使用默认分支最新提交；建议固定到已验证的版本标签
 IT87_DKMS_NAME="it87"
 NVIDIA_ASSETS_BASE_URL="https://raw.githubusercontent.com/PVE-Tools/PVE-Tools-9/main/Modules/NVIDIA"
 NVIDIA_VGPU_UNLOCK_SO_URL="${NVIDIA_ASSETS_BASE_URL}/libvgpu_unlock_rs.so"
