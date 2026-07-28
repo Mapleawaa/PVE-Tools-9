@@ -326,7 +326,7 @@ EOF
     # NVME 硬盘变量 (动态检测，参考 PVE 8 实现)
     log_info "检测系统中的 NVME 硬盘"
     nvi=0
-    for nvme in $(ls /dev/nvme[0-9] 2> /dev/null); do
+    for nvme in /dev/nvme[0-9]; do
         chmod +s /usr/sbin/smartctl 2>/dev/null
 
         cat >> $tmpf << EOF
@@ -341,7 +341,7 @@ EOF
     # SATA 硬盘变量 (动态检测，参考 PVE 8 实现)
     log_info "检测系统中的 SATA 固态和机械硬盘"
     sdi=0
-    for sd in $(ls /dev/sd[a-z] 2> /dev/null); do
+    for sd in /dev/sd[a-z]; do
         chmod +s /usr/sbin/smartctl 2>/dev/null
         chmod +s /usr/sbin/hdparm 2>/dev/null
 
