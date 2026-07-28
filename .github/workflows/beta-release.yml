@@ -53,10 +53,27 @@ jobs:
             ⚠️ 这是测试版本，可能存在不稳定因素，请勿在生产环境使用
             
             ## 安装方式
-            
-            **直接运行脚本 (推荐)**
+
+            **Cloudflare 短域名（推荐）**
             ```bash
             bash <(curl -sSL https://pve.u3u.icu/PVE-Tools.sh)
+            ```
+
+            **中国大陆网络**
+            ```bash
+            bash <(curl -sSL https://ghfast.top/https://github.com/PVE-Tools/PVE-Tools-9/releases/latest/download/PVE-Tools.sh)
+            ```
+
+            **国际网络**
+            ```bash
+            bash <(curl -sSL https://github.com/PVE-Tools/PVE-Tools-9/releases/latest/download/PVE-Tools.sh)
+            ```
+
+            **本地下载运行**
+            ```bash
+            wget https://github.com/PVE-Tools/PVE-Tools-9/releases/latest/download/PVE-Tools.sh
+            chmod +x PVE-Tools.sh
+            sudo ./PVE-Tools.sh
             ```
           files: |
             dist/PVE-Tools.sh

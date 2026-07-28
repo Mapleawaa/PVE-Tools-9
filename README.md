@@ -25,24 +25,24 @@
 > 本项目完全免费开源，维护全凭个人热情。提交 Issue 或提问前，请确认已完整阅读文档、页面告示及已有 Issue。
 > 不提供复现步骤、日志等有效信息的反馈，将被直接关闭。开源不等于当孙子，尊重是相互的。
 
-### cloudflare 短域名
+### Cloudflare 短域名（推荐）
 ```bash
 bash <(curl -sSL https://pve.u3u.icu/PVE-Tools.sh)
 ```
 
 ### 中国大陆网络
 ```bash
-bash <(curl -sSL https://ghfast.top/raw.githubusercontent.com/PVE-Tools/PVE-Tools-9/main/PVE-Tools.sh)
+bash <(curl -sSL https://ghfast.top/https://github.com/PVE-Tools/PVE-Tools-9/releases/latest/download/PVE-Tools.sh)
 ```
 
 ### 国际网络
 ```bash
-bash <(curl -sSL https://raw.githubusercontent.com/PVE-Tools/PVE-Tools-9/main/PVE-Tools.sh)
+bash <(curl -sSL https://github.com/PVE-Tools/PVE-Tools-9/releases/latest/download/PVE-Tools.sh)
 ```
 
 ### 本地下载运行
 ```bash
-wget https://raw.githubusercontent.com/PVE-Tools/PVE-Tools-9/main/PVE-Tools.sh
+wget https://github.com/PVE-Tools/PVE-Tools-9/releases/latest/download/PVE-Tools.sh
 chmod +x PVE-Tools.sh
 sudo ./PVE-Tools.sh
 ```
