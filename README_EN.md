@@ -4,7 +4,7 @@
 
 An all-in-one operations script for Proxmox VE 9.x, covering VM lifecycle workflows, host networking / firewall / IPv6, GPU / PCI passthrough, day-to-day maintenance, and third-party integrations.
 
-[Docs](https://pve.u3u.icu) | [Changelog](https://pve.u3u.icu/update) | [FAQ](https://pve.u3u.icu/faq) | [中文](./README.md) | [日本語](./REAMDE-JP.md)
+[Docs](https://pve.u3u.icu) | [Changelog](https://pve.u3u.icu/update) | [FAQ](https://pve.u3u.icu/faq) | [中文](./README.md) | [日本語](./README-JP.md)
 
 </div>
 
@@ -14,7 +14,7 @@ An all-in-one operations script for Proxmox VE 9.x, covering VM lifecycle workfl
 > This project is free and open source, maintained solely by personal passion. Before opening an issue or asking a question, please make sure you have read the documentation, on-screen notices, and existing issues thoroughly.
 > Feedback without reproduction steps, logs, or other useful information will be closed directly. Open source does not make anyone your servant. Respect is a two-way street.
 >
-> **The `main` branch (Shell version) will stop receiving updates after v8.8.8. Future development will move to the Go rewrite ([beta-go](https://github.com/PVE-Tools/PVE-Tools-9/tree/beta-go) branch), which will remain free and open source.**
+> **Update (2026-07): the Shell version has resumed active maintenance. The earlier plan to freeze `main` after v8.8.8 and migrate to a Go rewrite has been withdrawn — see [why the Go version stalled](https://pve.u3u.icu/blog/why-go-version-is-not-updating/).**
 
 ## Overview
 
@@ -65,7 +65,7 @@ If you need one-on-one remote support, emergency recovery, passthrough troublesh
 ## Other Languages
 
 - 中文: [README.md](./README.md)
-- 日本語: [REAMDE-JP.md](./REAMDE-JP.md)
+- 日本語: [README-JP.md](./README-JP.md)
 
 ## Disclaimer
 

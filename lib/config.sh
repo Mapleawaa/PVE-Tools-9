@@ -3,11 +3,13 @@
 # Copyright (C) 2026 Ciriu Networks
 
 # 版本信息
-CURRENT_VERSION="10.2.2"
-BUILD_NICKNAME="Evanescia"
+CURRENT_VERSION="11.0.0"
+BUILD_NICKNAME="Liino"
 VERSION_FILE_URL="https://raw.githubusercontent.com/PVE-Tools/PVE-Tools-9/main/VERSION"
 UPDATE_FILE_URL="https://raw.githubusercontent.com/PVE-Tools/PVE-Tools-9/main/UPDATE"
-PVE_TOOLS_SCRIPT_URL="https://raw.githubusercontent.com/PVE-Tools/PVE-Tools-9/main/PVE-Tools.sh"
+# 自更新必须下载 Release 资产（构建产物单文件完整版）。
+# raw main 上的 PVE-Tools.sh 只是 300 行引导入口，不含 CURRENT_VERSION，用它自更新永远过不了校验。
+PVE_TOOLS_SCRIPT_URL="https://github.com/PVE-Tools/PVE-Tools-9/releases/latest/download/PVE-Tools.sh"
 PVE_VERSION_DETECTED=""
 PVE_MAJOR_VERSION=""
 RISK_ACK_BYPASS=false
@@ -245,8 +247,9 @@ COOLERCONTROL_DEB_SETUP_URL="https://dl.cloudsmith.io/public/coolercontrol/coole
 IT87_REPO_URL="https://github.com/shauno8/it87.git"
 IT87_REPO_REF="81ae4a610ea763fa7f8cd195e712c41f33207264"  # 已验证的 PGP 签名提交
 IT87_DKMS_NAME="it87"
-NVIDIA_ASSETS_BASE_URL="https://raw.githubusercontent.com/PVE-Tools/PVE-Tools-9/main/Modules/NVIDIA"
-NVIDIA_VGPU_UNLOCK_SO_URL="${NVIDIA_ASSETS_BASE_URL}/libvgpu_unlock_rs.so"
+# 仓库中实际跟踪的路径是 Modules/VGPU/（带版本号文件名），Modules/NVIDIA/ 不存在
+NVIDIA_ASSETS_BASE_URL="https://raw.githubusercontent.com/PVE-Tools/PVE-Tools-9/main/Modules/VGPU"
+NVIDIA_VGPU_UNLOCK_SO_URL="${NVIDIA_ASSETS_BASE_URL}/libvgpu_unlock_rs_20230207_44d5bb3.so"
 VM_CONFIG_EXPORT_DIR="/var/lib/pve-tools/vm-config-exports"
 VM_BACKUP_CRON_FILE="/etc/cron.d/pve-tools-vm-backup"
 VM_DEFAULT_CLOUDINIT_BRIDGE="vmbr0"

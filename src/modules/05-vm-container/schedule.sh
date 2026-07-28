@@ -74,6 +74,10 @@ manage_vm_schedule() {
                 fi
                 
                 if [[ -n "$cron_content" ]]; then
+                    if ! confirm_action "将定时开关机任务写入 /etc/cron.d/pve-tools-schedule（以 root 身份定时执行）"; then
+                        log_info "已取消写入"
+                        continue
+                    fi
                     apply_block "/etc/cron.d/pve-tools-schedule" "SCHEDULE_$target_id" "$(echo -e "$cron_content")"
                     log_success "ID $target_id 的定时任务已更新"
                     systemctl restart cron 2>/dev/null || service cron restart 2>/dev/null

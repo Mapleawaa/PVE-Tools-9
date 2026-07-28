@@ -208,34 +208,31 @@ coolercontrol_uninstall() {
     fi
 }
 coolercontrol_manager_menu() {
-    while true; do
-        clear
-        show_menu_header "Cooler Control 管理器"
-        echo -e "当前状态 ： $(coolercontrol_detect_status)"
-        echo -e "当前版本 ： $(coolercontrol_detect_version)"
-        echo "$UI_DIVIDER"
-        show_menu_option "1" "安装"
-        show_menu_option "2" "更新"
-        show_menu_option "3" "手动安装"
-        show_menu_option "4" "卸载"
-        echo "$UI_DIVIDER"
-        echo "注意：本功能仅作为安装服务和服务管理，如需反馈问题请前往项目官方开源仓库反馈！"
-        echo "$UI_DIVIDER"
-        echo "项目官网：$COOLERCONTROL_PROJECT_URL"
-        echo "开源协议：GNU General Public License v3.0 or later."
-        show_menu_option "0" "返回"
-        show_menu_footer
+    run_menu "Cooler Control 管理器" coolercontrol_manager_menu_render coolercontrol_manager_menu_dispatch "0-4"
+}
 
-        local choice
-        read -p "请选择操作 [0-4]: " choice
-        case "$choice" in
-            1) coolercontrol_install ;;
-            2) coolercontrol_update ;;
-            3) coolercontrol_print_manual_install ;;
-            4) coolercontrol_uninstall ;;
-            0) return ;;
-            *) log_error "无效选择" ;;
-        esac
-        pause_function
-    done
+coolercontrol_manager_menu_render() {
+    echo -e "当前状态 ： $(coolercontrol_detect_status)"
+    echo -e "当前版本 ： $(coolercontrol_detect_version)"
+    echo "$UI_DIVIDER"
+    show_menu_option "1" "安装"
+    show_menu_option "2" "更新"
+    show_menu_option "3" "手动安装"
+    show_menu_option "4" "卸载"
+    echo "$UI_DIVIDER"
+    echo "注意：本功能仅作为安装服务和服务管理，如需反馈问题请前往项目官方开源仓库反馈！"
+    echo "$UI_DIVIDER"
+    echo "项目官网：$COOLERCONTROL_PROJECT_URL"
+    echo "开源协议：GNU General Public License v3.0 or later."
+}
+
+coolercontrol_manager_menu_dispatch() {
+    case "$1" in
+        1) coolercontrol_install ;;
+        2) coolercontrol_update ;;
+        3) coolercontrol_print_manual_install ;;
+        4) coolercontrol_uninstall ;;
+        *) return 1 ;;
+    esac
+    return 0
 }

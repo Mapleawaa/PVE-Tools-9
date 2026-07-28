@@ -18,23 +18,29 @@ vm_select_export_file() {
         return 0
     fi
 
+    local count manual_idx
+    count="$(echo "$files" | awk 'NF{c++} END{print c+0}')"
+    manual_idx=$((count + 1))
+
     {
         echo -e "${CYAN}已发现 VM 配置导出文件：${NC}"
         echo "$files" | awk -F'|' '{printf "  [%d] %-10s %-16s %s\n", NR, $2, $3, $1}'
+        printf '  [%d] 手动输入配置文件路径\n' "$manual_idx"
         echo -e "${UI_DIVIDER}"
     } >&2
 
     local pick line path
-    read -p "请选择配置文件序号 (0 手动输入): " pick
+    read -p "请选择配置文件序号 (0 返回): " pick
     pick="${pick:-0}"
-    if [[ "$pick" == "0" ]]; then
+    [[ "$pick" == "0" ]] && return 2
+    [[ "$pick" =~ ^[0-9]+$ ]] || return 1
+    if [[ "$pick" -eq "$manual_idx" ]]; then
         local manual
         read -p "请输入配置文件完整路径: " manual
         [[ -n "$manual" && -f "$manual" ]] || return 1
         echo "$manual"
         return 0
     fi
-    [[ "$pick" =~ ^[0-9]+$ ]] || return 1
     line="$(echo "$files" | awk -F'|' -v n="$pick" 'NR==n{print $0}')"
     path="$(echo "$line" | awk -F'|' '{print $1}')"
     [[ -n "$path" && -f "$path" ]] || return 1
@@ -191,23 +197,20 @@ vm_import_config() {
     display_success "VM 配置导入完成" "新 VMID: $new_vmid"
 }
 vm_config_io_menu() {
-    while true; do
-        clear
-        show_menu_header "VM 配置导入/导出"
-        vm_show_data_risk_banner
-        show_menu_option "1" "导出 VM 配置"
-        show_menu_option "2" "导入 VM 配置"
-        show_menu_option "0" "返回"
-        show_menu_footer
+    run_menu "VM 配置导入/导出" vm_config_io_menu_render vm_config_io_menu_dispatch "0-2"
+}
 
-        local choice
-        read -p "请选择操作 [0-2]: " choice
-        case "$choice" in
-            1) vm_export_config ;;
-            2) vm_import_config ;;
-            0) return ;;
-            *) log_error "无效选择" ;;
-        esac
-        pause_function
-    done
+vm_config_io_menu_render() {
+    vm_show_data_risk_banner
+    show_menu_option "1" "导出 VM 配置"
+    show_menu_option "2" "导入 VM 配置"
+}
+
+vm_config_io_menu_dispatch() {
+    case "$1" in
+        1) vm_export_config ;;
+        2) vm_import_config ;;
+        *) return 1 ;;
+    esac
+    return 0
 }

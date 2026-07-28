@@ -104,28 +104,27 @@ netdiag_quick_stack_check() {
     echo "$UI_DIVIDER"
 }
 netdiag_toolbox_menu() {
-    while true; do
-        clear
-        show_menu_header "网络诊断工具箱"
-        show_menu_option "1" "网络摘要与监听端口"
-        show_menu_option "2" "traceroute"
-        show_menu_option "3" "mtr"
-        show_menu_option "4" "nmap"
-        show_menu_option "5" "tcpdump"
-        show_menu_option "6" "端口连通性检查（宿主机 / VM / 自定义）"
-        show_menu_option "0" "返回"
-        show_menu_footer
-        read -p "请选择操作 [0-6]: " choice
-        case "$choice" in
-            1) netdiag_quick_stack_check ;;
-            2) netdiag_run_traceroute ;;
-            3) netdiag_run_mtr ;;
-            4) netdiag_run_nmap ;;
-            5) netdiag_run_tcpdump ;;
-            6) netdiag_check_port_connectivity ;;
-            0) return ;;
-            *) log_error "无效选择" ;;
-        esac
-        pause_function
-    done
+    run_menu "网络诊断工具箱" netdiag_toolbox_menu_render netdiag_toolbox_menu_dispatch "0-6"
+}
+
+netdiag_toolbox_menu_render() {
+    show_menu_option "1" "网络摘要与监听端口"
+    show_menu_option "2" "traceroute"
+    show_menu_option "3" "mtr"
+    show_menu_option "4" "nmap"
+    show_menu_option "5" "tcpdump"
+    show_menu_option "6" "端口连通性检查（宿主机 / VM / 自定义）"
+}
+
+netdiag_toolbox_menu_dispatch() {
+    case "$1" in
+        1) netdiag_quick_stack_check ;;
+        2) netdiag_run_traceroute ;;
+        3) netdiag_run_mtr ;;
+        4) netdiag_run_nmap ;;
+        5) netdiag_run_tcpdump ;;
+        6) netdiag_check_port_connectivity ;;
+        *) return 1 ;;
+    esac
+    return 0
 }

@@ -248,28 +248,25 @@ amd_igpu_passthrough_vm() {
     return 0
 }
 amd_igpu_management_menu() {
-    while true; do
-        clear
-        show_menu_header "AMD 核显直通"
-        echo -e "${RED}注意：AMD 核显直通通常需要用户自备 ROM / vBIOS 文件，本脚本不负责提取。${NC}"
-        echo -e "${UI_DIVIDER}"
-        show_menu_option "1" "配置 AMD 核显直通"
-        show_menu_option "2" "检查 ROM / vBIOS 文件"
-        show_menu_option "3" "查看 AMD 核显直通说明"
-        show_menu_option "4" "AMD 宿主机预配置 ( IOMMU / VFIO / 黑名单 )"
-        show_menu_option "0" "返回"
-        show_menu_footer
-        read -p "请选择操作 [0-4]: " choice
-        case "$choice" in
-            1) amd_igpu_passthrough_vm ;;
-            2) amd_igpu_check_romfile ;;
-            3) amd_igpu_show_guidance ;;
-            4) amd_host_prepare_for_passthrough ;;
-            0) return ;;
-            *) log_error "无效选择" ;;
-        esac
-        pause_function
-    done
+    run_menu "AMD 核显直通" amd_igpu_management_menu_render amd_igpu_management_menu_dispatch "0-4"
+}
+amd_igpu_management_menu_render() {
+    echo -e "${RED}注意：AMD 核显直通通常需要用户自备 ROM / vBIOS 文件，本脚本不负责提取。${NC}"
+    echo -e "${UI_DIVIDER}"
+    show_menu_option "1" "配置 AMD 核显直通"
+    show_menu_option "2" "检查 ROM / vBIOS 文件"
+    show_menu_option "3" "查看 AMD 核显直通说明"
+    show_menu_option "4" "AMD 宿主机预配置 ( IOMMU / VFIO / 黑名单 )"
+}
+amd_igpu_management_menu_dispatch() {
+    case "$1" in
+        1) amd_igpu_passthrough_vm ;;
+        2) amd_igpu_check_romfile ;;
+        3) amd_igpu_show_guidance ;;
+        4) amd_host_prepare_for_passthrough ;;
+        *) return 1 ;;
+    esac
+    return 0
 }
 
 # 主程序

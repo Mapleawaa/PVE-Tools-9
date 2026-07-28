@@ -123,27 +123,24 @@ vm_rollback_snapshot() {
     display_success "快照回滚完成" "$snapshot_name"
 }
 vm_snapshot_menu() {
-    while true; do
-        clear
-        show_menu_header "快照管理"
-        vm_show_data_risk_banner
-        show_menu_option "1" "创建快照（支持批量）"
-        show_menu_option "2" "列出 VM 快照"
-        show_menu_option "3" "删除快照"
-        show_menu_option "4" "回滚到快照"
-        show_menu_option "0" "返回"
-        show_menu_footer
+    run_menu "快照管理" vm_snapshot_menu_render vm_snapshot_menu_dispatch "0-4"
+}
 
-        local choice
-        read -p "请选择操作 [0-4]: " choice
-        case "$choice" in
-            1) vm_create_snapshot ;;
-            2) vm_list_snapshots ;;
-            3) vm_delete_snapshot ;;
-            4) vm_rollback_snapshot ;;
-            0) return ;;
-            *) log_error "无效选择" ;;
-        esac
-        pause_function
-    done
+vm_snapshot_menu_render() {
+    vm_show_data_risk_banner
+    show_menu_option "1" "创建快照（支持批量）"
+    show_menu_option "2" "列出 VM 快照"
+    show_menu_option "3" "删除快照"
+    show_menu_option "4" "回滚到快照"
+}
+
+vm_snapshot_menu_dispatch() {
+    case "$1" in
+        1) vm_create_snapshot ;;
+        2) vm_list_snapshots ;;
+        3) vm_delete_snapshot ;;
+        4) vm_rollback_snapshot ;;
+        *) return 1 ;;
+    esac
+    return 0
 }

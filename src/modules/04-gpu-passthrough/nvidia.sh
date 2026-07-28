@@ -377,22 +377,19 @@ nvidia_driver_export_report() {
     return 0
 }
 nvidia_driver_info_menu() {
-    while true; do
-        clear
-        show_menu_header "$(nvidia_t OPT_DRV_INFO)"
-        show_menu_option "1" "查看驱动与监控面板"
-        show_menu_option "2" "导出驱动诊断报告"
-        show_menu_option "0" "$(nvidia_t OPT_BACK)"
-        show_menu_footer
-        read -p "$(nvidia_t INPUT_CHOICE) [0-2]: " choice
-        case "$choice" in
-            1) nvidia_driver_info ;;
-            2) nvidia_driver_export_report ;;
-            0) return ;;
-            *) log_error "无效选择" ;;
-        esac
-        pause_function
-    done
+    run_menu "$(nvidia_t OPT_DRV_INFO)" nvidia_driver_info_menu_render nvidia_driver_info_menu_dispatch "0-2"
+}
+nvidia_driver_info_menu_render() {
+    show_menu_option "1" "查看驱动与监控面板"
+    show_menu_option "2" "导出驱动诊断报告"
+}
+nvidia_driver_info_menu_dispatch() {
+    case "$1" in
+        1) nvidia_driver_info ;;
+        2) nvidia_driver_export_report ;;
+        *) return 1 ;;
+    esac
+    return 0
 }
 nvidia_apt_has_pkg() {
     local pkg="$1"
@@ -495,26 +492,23 @@ nvidia_driver_rollback() {
     return 0
 }
 nvidia_driver_switch_menu() {
-    while true; do
-        clear
-        show_menu_header "$(nvidia_t OPT_DRV_SWITCH)"
-        echo -e "${YELLOW}$(nvidia_t WARN_HIGH_RISK)${NC}"
-        echo -e "${UI_DIVIDER}"
-        show_menu_option "1" "切换到闭源驱动（官方 NVIDIA）"
-        show_menu_option "2" "切换到开源驱动（nouveau）"
-        show_menu_option "3" "回滚最近一次备份"
-        show_menu_option "0" "$(nvidia_t OPT_BACK)"
-        show_menu_footer
-        read -p "$(nvidia_t INPUT_CHOICE) [0-3]: " choice
-        case "$choice" in
-            1) nvidia_driver_switch_to_proprietary ;;
-            2) nvidia_driver_switch_to_open ;;
-            3) nvidia_driver_rollback ;;
-            0) return ;;
-            *) log_error "无效选择" ;;
-        esac
-        pause_function
-    done
+    run_menu "$(nvidia_t OPT_DRV_SWITCH)" nvidia_driver_switch_menu_render nvidia_driver_switch_menu_dispatch "0-3"
+}
+nvidia_driver_switch_menu_render() {
+    echo -e "${YELLOW}$(nvidia_t WARN_HIGH_RISK)${NC}"
+    echo -e "${UI_DIVIDER}"
+    show_menu_option "1" "切换到闭源驱动（官方 NVIDIA）"
+    show_menu_option "2" "切换到开源驱动（nouveau）"
+    show_menu_option "3" "回滚最近一次备份"
+}
+nvidia_driver_switch_menu_dispatch() {
+    case "$1" in
+        1) nvidia_driver_switch_to_proprietary ;;
+        2) nvidia_driver_switch_to_open ;;
+        3) nvidia_driver_rollback ;;
+        *) return 1 ;;
+    esac
+    return 0
 }
 nvidia_host_prepare_for_passthrough() {
     echo -e "${YELLOW}将执行以下操作：${NC}"
@@ -524,7 +518,14 @@ nvidia_host_prepare_for_passthrough() {
     echo "  4) 执行 update-grub 与 update-initramfs"
     echo
 
-    if ! confirm_action "确认执行宿主机预配置？"; then
+    gpu_warn_active_stacks
+
+    if ! confirm_high_risk_action \
+        "NVIDIA 宿主机直通预配置" \
+        "将修改 GRUB 内核参数、/etc/modules 与显卡驱动黑名单，并重建 initramfs。" \
+        "配置错误可能导致宿主机本地显示输出丢失或无法进入图形环境。" \
+        "操作前请确认已有带外管理（IPMI/iKVM）或 SSH 通道，必要时先备份 /etc/default/grub。" \
+        "NVIDIA-HOST"; then
         return 0
     fi
 
@@ -587,10 +588,7 @@ nvidia_setup_vgpu_unlock() {
     echo -e "${CYAN}推荐先阅读 Wiki：${NC}"
     echo "  对应文章: https://pve.u3u.icu/advanced/nvidia-vgpu-driver-notes"
     echo "${UI_DIVIDER}"
-    read -p "请输入 '确认' 或 'Sure' 继续: " response
-    response=$(echo "$response" | xargs)
-    if [[ "$response" != "确认" && "$response" != "Sure" && "${response,,}" != "sure" ]]; then
-        echo "取消"
+    if ! confirm_action "已阅读文档并了解 vGPU Unlock 风险，继续部署流程"; then
         return 0
     fi
 
@@ -658,28 +656,25 @@ EOF
     return 0
 }
 nvidia_gpu_management_menu() {
-    while true; do
-        clear
-        show_menu_header "$(nvidia_t MENU_TITLE)"
-        echo -e "${CYAN}$(nvidia_t MENU_DESC)${NC}"
-        echo -e "${UI_DIVIDER}"
-        show_menu_option "1" "$(nvidia_t OPT_PT)"
-        show_menu_option "2" "$(nvidia_t OPT_DRV_INFO)"
-        show_menu_option "3" "$(nvidia_t OPT_DRV_SWITCH)"
-        show_menu_option "4" "$(nvidia_t OPT_HOST_PREP)"
-        show_menu_option "5" "$(nvidia_t OPT_UNLOCK)"
-        show_menu_option "0" "$(nvidia_t OPT_BACK)"
-        show_menu_footer
-        read -p "$(nvidia_t INPUT_CHOICE) [0-5]: " choice
-        case "$choice" in
-            1) nvidia_gpu_passthrough_vm ;;
-            2) nvidia_driver_info_menu ;;
-            3) nvidia_driver_switch_menu ;;
-            4) nvidia_host_prepare_for_passthrough ;;
-            5) nvidia_setup_vgpu_unlock ;;
-            0) return ;;
-            *) log_error "无效选择" ;;
-        esac
-        pause_function
-    done
+    run_menu "$(nvidia_t MENU_TITLE)" nvidia_gpu_management_menu_render nvidia_gpu_management_menu_dispatch "0-5"
+}
+nvidia_gpu_management_menu_render() {
+    echo -e "${CYAN}$(nvidia_t MENU_DESC)${NC}"
+    echo -e "${UI_DIVIDER}"
+    show_menu_option "1" "$(nvidia_t OPT_PT)"
+    show_menu_option "2" "$(nvidia_t OPT_DRV_INFO)"
+    show_menu_option "3" "$(nvidia_t OPT_DRV_SWITCH)"
+    show_menu_option "4" "$(nvidia_t OPT_HOST_PREP)"
+    show_menu_option "5" "$(nvidia_t OPT_UNLOCK)"
+}
+nvidia_gpu_management_menu_dispatch() {
+    case "$1" in
+        1) nvidia_gpu_passthrough_vm ;;
+        2) nvidia_driver_info_menu ;;
+        3) nvidia_driver_switch_menu ;;
+        4) nvidia_host_prepare_for_passthrough ;;
+        5) nvidia_setup_vgpu_unlock ;;
+        *) return 1 ;;
+    esac
+    return 0
 }

@@ -345,7 +345,7 @@ select_mirror_for_source() {
         show_menu_option "0" "返回"
         show_menu_footer
 
-        read -p "请选择 $label [0-${#candidates[@]}]: " pick
+        read -p "请选择操作 [0-${#candidates[@]}]: " pick
         pick="${pick:-0}"
         [[ "$pick" == "0" ]] && return 1
         if [[ ! "$pick" =~ ^[0-9]+$ ]] || (( pick < 1 || pick > ${#candidates[@]} )); then
@@ -385,7 +385,7 @@ select_mirror_unified() {
         show_menu_option "0" "返回"
         show_menu_footer
 
-        read -p "请选择统一镜像 [0-${#candidates[@]}]: " pick
+        read -p "请选择操作 [0-${#candidates[@]}]: " pick
         pick="${pick:-0}"
         [[ "$pick" == "0" ]] && return 1
         if [[ ! "$pick" =~ ^[0-9]+$ ]] || (( pick < 1 || pick > ${#candidates[@]} )); then
@@ -431,7 +431,7 @@ select_mirror() {
         show_menu_footer
 
         local choice
-        read -p "请选择 [1-3]: " choice
+        read -p "请选择操作 [1-3]: " choice
         case "$choice" in
             1) select_mirror_unified && return 0 ;;
             2) select_mirror_per_source && return 0 ;;

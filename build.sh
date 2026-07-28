@@ -19,7 +19,7 @@ mkdir -p "$(dirname "$OUTPUT")"
     echo "# Copyright (C) 2026 Ciriu Networks"
     echo
 
-    for lib_name in config.sh core.sh network.sh runtime.sh; do
+    for lib_name in config.sh core.sh menu.sh network.sh runtime.sh; do
         lib_file="$ROOT/lib/$lib_name"
         if [[ ! -f "$lib_file" ]]; then
             echo "Missing lib file: $lib_file" >&2

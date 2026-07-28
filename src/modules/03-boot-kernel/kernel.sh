@@ -236,8 +236,18 @@ set_default_kernel() {
         return 1
     fi
     
-    # 使用 grub-set-default 设置默认内核
-    if command -v grub-set-default &> /dev/null; then
+    # 首选 proxmox-boot-tool kernel pin：PVE 官方机制，GRUB 与 systemd-boot（UEFI/ZFS）环境均适用
+    if command -v proxmox-boot-tool >/dev/null 2>&1; then
+        if proxmox-boot-tool kernel pin "$kernel_version"; then
+            log_success "默认启动内核已通过 proxmox-boot-tool 固定 (pin)"
+            log_tips "如需恢复自动选择最新内核，可执行: proxmox-boot-tool kernel unpin"
+            return 0
+        fi
+        log_warn "proxmox-boot-tool kernel pin 执行失败，尝试 GRUB 备用方法"
+    fi
+
+    # 备用：grub-set-default（仅适用于直接由 GRUB 引导且存在 grub.cfg 的环境）
+    if command -v grub-set-default &> /dev/null && [[ -f /boot/grub/grub.cfg ]]; then
         # 查找内核在 GRUB 菜单中的位置
         local menu_entry=$(grep -n "$kernel_version" /boot/grub/grub.cfg | head -1 | cut -d: -f1)
         if [[ -n "$menu_entry" ]]; then
@@ -317,76 +327,63 @@ remove_old_kernels() {
 
 # 内核管理主菜单
 kernel_management_menu() {
-    while true; do
-        clear
-        show_menu_header "内核管理菜单"
-        show_menu_option "1" "显示当前内核信息"
-        show_menu_option "2" "查看可用内核列表"
-        show_menu_option "3" "安装新内核"
-        show_menu_option "4" "设置默认启动内核"
-        show_menu_option "5" "${RED}清理旧内核${NC}"
-        show_menu_option "6" "${YELLOW}重启系统应用新内核${NC}"
-        echo "${UI_DIVIDER}"
-        show_menu_option "0" "返回主菜单"
-        show_menu_footer
-        
-        read -p "请选择操作 [0-6]: " choice
-        
-        case $choice in
-            1)
-                check_kernel_version
-                ;;
-            2)
-                get_available_kernels
-                ;;
-            3)
-                echo "请输入要安装的内核版本："
-                echo "  - 完整包名格式 (推荐): 如 proxmox-kernel-6.14.8-2-pve"
-                echo "  - 简化版本格式: 如 6.8.8-1 (将自动补全为 proxmox-kernel-6.8.8-1-pve)"
-                read -p "请输入内核标识: " kernel_ver
-                if [[ -n "$kernel_ver" ]]; then
-                    install_kernel "$kernel_ver"
-                else
-                    log_error "请输入有效的内核版本"
-                fi
-                ;;
-            4)
-                read -p "请输入要设置为默认的内核版本 (例如: 6.8.8-1-pve): " kernel_ver
-                if [[ -n "$kernel_ver" ]]; then
-                    set_default_kernel "$kernel_ver"
-                else
-                    log_error "请输入有效的内核版本"
-                fi
-                ;;
-            5)
-                remove_old_kernels
-                ;;
-            6)
-                if confirm_high_risk_action \
-                    "重启宿主机" \
-                    "将立即重启当前 Proxmox VE 宿主机，所有运行中的 VM/CT 将被中断。" \
-                    "重启过程中管理面不可用，请确保维护窗口内执行。" \
-                    "请先正常关机或迁移所有 VM/CT。" \
-                    "REBOOT"; then
-                    log_info "系统将在5秒后重启..."
-                    echo "按 Ctrl+C 取消重启"
-                    sleep 5
-                    reboot
-                else
-                    log_info "取消重启"
-                fi
-                ;;
-            0)
-                break
-                ;;
-            *)
-                log_error "无效的选择，请重新输入"
-                ;;
-        esac
-        
-        echo
-        pause_function
-    done
+    run_menu "内核管理菜单" kernel_management_menu_render kernel_management_menu_dispatch "0-6"
+}
+
+kernel_management_menu_render() {
+    show_menu_option "1" "显示当前内核信息"
+    show_menu_option "2" "查看可用内核列表"
+    show_menu_option "3" "安装新内核"
+    show_menu_option "4" "设置默认启动内核"
+    show_menu_option "5" "${RED}清理旧内核${NC}"
+    show_menu_option "6" "${YELLOW}重启系统应用新内核${NC}"
+}
+
+kernel_management_menu_dispatch() {
+    case "$1" in
+        1) check_kernel_version ;;
+        2) get_available_kernels ;;
+        3) install_kernel_prompt ;;
+        4) set_default_kernel_prompt ;;
+        5) remove_old_kernels ;;
+        6) kernel_reboot_prompt ;;
+        *) return 1 ;;
+    esac
+    return 0
+}
+
+# 交互收集内核标识后安装
+install_kernel_prompt() {
+    local kernel_ver=""
+    echo "请输入要安装的内核版本："
+    echo "  - 完整包名格式 (推荐): 如 proxmox-kernel-6.14.8-2-pve"
+    echo "  - 简化版本格式: 如 6.8.8-1 (将自动补全为 proxmox-kernel-6.8.8-1-pve)"
+    prompt_value kernel_ver "请输入内核标识" || return 0
+    install_kernel "$kernel_ver"
+}
+
+# 交互收集内核版本后设为默认启动项
+set_default_kernel_prompt() {
+    local kernel_ver=""
+    prompt_value kernel_ver "请输入要设置为默认的内核版本 (例如: 6.8.8-1-pve)" || return 0
+    set_default_kernel "$kernel_ver"
+}
+
+# 高风险确认后重启宿主机
+kernel_reboot_prompt() {
+    if confirm_high_risk_action \
+        "重启宿主机" \
+        "将立即重启当前 Proxmox VE 宿主机，所有运行中的 VM/CT 将被中断。" \
+        "重启过程中管理面不可用，请确保维护窗口内执行。" \
+        "请先正常关机或迁移所有 VM/CT。" \
+        "REBOOT"; then
+        log_info "系统将在5秒后重启..."
+        echo "按 Ctrl+C 取消重启"
+        sleep 5
+        reboot
+    else
+        log_info "取消重启"
+    fi
 }
 
 # 内核同步更新（自动检测并更新到最新稳定版）

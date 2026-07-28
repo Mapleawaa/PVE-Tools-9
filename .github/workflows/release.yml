@@ -6,6 +6,14 @@ on:
       - '*.*.*'
       - 'v*.*.*-stable'
       - '*.*.*-stable'
+      # 排除预发布标签，否则 v*.*.* 会同时命中 beta/alpha/rc，
+      # 导致预发布被当成正式版发布并与 beta-release.yml 竞争同一 tag
+      - '!v*.*.*-beta*'
+      - '!*.*.*-beta*'
+      - '!v*.*.*-alpha*'
+      - '!*.*.*-alpha*'
+      - '!v*.*.*-rc*'
+      - '!*.*.*-rc*'
 
 permissions:
   contents: write
@@ -28,6 +36,33 @@ jobs:
 
       - name: Build single script from modules
         run: bash build.sh
+
+      - name: Validate build output before release
+        run: |
+          # 发版前置校验：打 tag 直发不再绕过 PR 的质量闸门
+          bash -n dist/PVE-Tools.sh
+          shellcheck --severity=error -f gcc dist/PVE-Tools.sh
+          # 函数集合一致性（源码 vs 产物 双向）
+          diff <(grep -rhoE '^[a-zA-Z_][a-zA-Z0-9_]*\(\)' lib src/modules --include='*.sh' | sort -u) \
+               <(grep -hoE '^[a-zA-Z_][a-zA-Z0-9_]*\(\)' dist/PVE-Tools.sh | sort -u) \
+            || { echo "构建产物与源码函数集合不一致，中止发布"; exit 1; }
+          # 版本三方一致：tag == lib/config.sh == VERSION，防止打错标签发出版本混乱的 Release
+          SCRIPT_VERSION=$(grep "CURRENT_VERSION=" lib/config.sh | cut -d'"' -f2)
+          VERSION_FILE_VERSION=$(cat VERSION)
+          TAG_VERSION="${{ steps.get_version.outputs.VERSION }}"
+          TAG_VERSION="${TAG_VERSION%-stable}"
+          if [ "$SCRIPT_VERSION" != "$VERSION_FILE_VERSION" ]; then
+            echo "版本不一致: config($SCRIPT_VERSION) != VERSION($VERSION_FILE_VERSION)，中止发布"
+            exit 1
+          fi
+          if [ "$TAG_VERSION" != "$SCRIPT_VERSION" ]; then
+            echo "标签版本($TAG_VERSION)与脚本版本($SCRIPT_VERSION)不一致，中止发布"
+            exit 1
+          fi
+
+      - name: Generate checksums
+        run: |
+          cd dist && sha256sum PVE-Tools.sh > SHA256SUMS.txt && cat SHA256SUMS.txt
 
       - name: Generate release notes
         id: release_notes
@@ -66,6 +101,7 @@ jobs:
             ```
           files: |
             dist/PVE-Tools.sh
+            dist/SHA256SUMS.txt
           draft: false
           prerelease: false
         env:

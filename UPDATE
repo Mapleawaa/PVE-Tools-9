@@ -1,13 +1,29 @@
-v8.8.8
-- 换源功能新增 debian-security 镜像源支持（中科大、清华源自动配置安全更新镜像）
-- 主菜单新增"尝鲜 Go 版本"入口，为后续 Go 语言重写版本预留体验通道
-- 系统优化菜单调整：将"一键优化"提前至第二项，并在菜单顶部添加 SSH 环境使用提示
-- 腾讯云源提示文案优化，明确说明 PVE / CT / Ceph 沿用官方源的原因
-- 版本号同步提升到 8.8.8，代号更新为 Coluccis
-- Shell将无限期停止维护，正式版将使用Go重构。查看详细：https://github.com/PVE-Tools/PVE-Tools-9/tree/beta-go
+v11.0.0
+- 交互层框架化：新增 lib/menu.sh，全部菜单迁移 run_menu，统一 EOF/Ctrl+C 守卫与 pause 节奏
+- 确认体系两档成文：轻档 confirm_action / 重档 confirm_high_risk_action（指定确认词）
+- GPU 直通加固：marker 统一写入、多方案互斥检测、IOMMU 开/关强制确认；去掉写死 PCI ID 与默认核显黑名单
+- GRUB 参数数组化精确增删，新增 grub_has_param；默认内核优先 proxmox-boot-tool kernel pin
+- 远程安装与自更新改走 GitHub Releases 完整单文件；修正 vGPU so 真实路径
+- CI 护栏补全：源码 shellcheck、构建函数一致性、UPDATE 新鲜度、dist 安全扫描、发版前校验与 SHA256SUMS
+- 文档与仓库卫生：按现实重写 CLAUDE/AGENTS；修正 README-JP 文件名；清理历史截图与无关大文件
+- Build 代号更新为 Liino
 
-v7.7.0
-- 修复阿里云换源时 Ceph 镜像指向不存在地址（404）的 BUG，改为使用官方 Ceph 源
-- 优化换源功能的日志提示，明确告知用户哪些源使用了镜像站、哪些沿用官方源
-- 版本号同步提升到 7.7.0
+v10.2.2
+- IT87 传感器驱动安装加固：仓库引用锁定为 PGP 签名提交 SHA，防止上游变更引入未审计代码
+- IT87 安装流程补齐 backup_file 备份、mktemp 临时目录、DKMS 版本格式兼容与 read -r 修正
 
+v10.2.1
+- 仓库不再跟踪 dist/ 构建产物，发布文件统一由 CI 构建并上传至 GitHub Releases
+- 远程引导下载增强：重试/超时/限速守护、GitHub 与加速源自动切换、下载校验与原子落盘
+
+v10.1.0
+- 新增 CVE 漏洞修补中心（Januscape / Dirty Frag / Copy Fail 本地提权漏洞缓解）
+- 远程引导简化为下载单文件构建产物；本地模式显式优先加载各模块 init.sh
+- 版本比较剥离预发布后缀，beta 版本不再被误判为可更新的新版
+
+v9.0.0
+- 项目模块化重构：14000+ 行单文件拆分为 lib/ 基础设施层 + src/modules/ 10 个功能模块
+- 新增 build.sh 构建系统与 dev.sh 开发入口；发布仍为单文件，用户侧零感知
+- Shell 版本恢复持续维护，此前"停更转 Go"的计划已撤回
+
+更早期版本历史请见 GitHub Releases 与 git log。

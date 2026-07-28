@@ -92,26 +92,25 @@ host_network_delete_vlan() {
     rm -f "$tmp"
 }
 host_network_vlan_menu() {
-    while true; do
-        clear
-        show_menu_header "VLAN 子接口管理"
-        host_network_show_risk_banner
-        echo -e "${CYAN}当前 VLAN 子接口：${NC}"
-        if host_network_get_configured_vlans | awk 'NF{print "  - "$0}'; then :; fi
-        echo "$UI_DIVIDER"
-        show_menu_option "1" "列出 VLAN 子接口"
-        show_menu_option "2" "创建 VLAN 子接口"
-        show_menu_option "3" "删除 VLAN 子接口"
-        show_menu_option "0" "返回"
-        show_menu_footer
-        read -p "请选择操作 [0-3]: " choice
-        case "$choice" in
-            1) host_network_show_current_overview ;;
-            2) host_network_create_vlan ;;
-            3) host_network_delete_vlan ;;
-            0) return ;;
-            *) log_error "无效选择" ;;
-        esac
-        pause_function
-    done
+    run_menu "VLAN 子接口管理" host_network_vlan_menu_render host_network_vlan_menu_dispatch "0-3"
+}
+
+host_network_vlan_menu_render() {
+    host_network_show_risk_banner
+    echo -e "${CYAN}当前 VLAN 子接口：${NC}"
+    if host_network_get_configured_vlans | awk 'NF{print "  - "$0}'; then :; fi
+    echo "$UI_DIVIDER"
+    show_menu_option "1" "列出 VLAN 子接口"
+    show_menu_option "2" "创建 VLAN 子接口"
+    show_menu_option "3" "删除 VLAN 子接口"
+}
+
+host_network_vlan_menu_dispatch() {
+    case "$1" in
+        1) host_network_show_current_overview ;;
+        2) host_network_create_vlan ;;
+        3) host_network_delete_vlan ;;
+        *) return 1 ;;
+    esac
+    return 0
 }

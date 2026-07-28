@@ -11,15 +11,17 @@
 
 # 模块化入口：本地开发 source 源码；远程 curl 运行时下载 dist 单文件执行。
 
-PVE_TOOLS_REMOTE_BASE="${PVE_TOOLS_REMOTE_BASE:-https://raw.githubusercontent.com/PVE-Tools/PVE-Tools-9/main}"
+# 远程模式从 GitHub Release 资产下载构建产物（单文件完整版）。
+# 仓库 main 分支不跟踪 dist/，raw.githubusercontent.com 上没有 dist/PVE-Tools.sh，不要改回 raw 路径。
+PVE_TOOLS_RELEASE_BASE_URL="${PVE_TOOLS_RELEASE_BASE_URL:-https://github.com/PVE-Tools/PVE-Tools-9/releases}"
 PVE_TOOLS_REMOTE_MIRROR_PREFIX="${PVE_TOOLS_REMOTE_MIRROR_PREFIX:-https://ghfast.top/}"
-PVE_TOOLS_REMOTE_DIST_URL="${PVE_TOOLS_REMOTE_DIST_URL:-$PVE_TOOLS_REMOTE_BASE/dist/PVE-Tools.sh}"
+PVE_TOOLS_REMOTE_DIST_URL="${PVE_TOOLS_REMOTE_DIST_URL:-$PVE_TOOLS_RELEASE_BASE_URL/latest/download/PVE-Tools.sh}"
 PVE_TOOLS_CONNECT_TIMEOUT="${PVE_TOOLS_CONNECT_TIMEOUT:-10}"
 PVE_TOOLS_DOWNLOAD_TIMEOUT="${PVE_TOOLS_DOWNLOAD_TIMEOUT:-120}"
 PVE_TOOLS_DOWNLOAD_RETRIES="${PVE_TOOLS_DOWNLOAD_RETRIES:-2}"
 
-PVE_TOOLS_RELEASE_PAGE_URL="https://github.com/PVE-Tools/PVE-Tools-9/releases/tag/v10.2.0"
-PVE_TOOLS_RELEASE_ASSET_URL="https://github.com/PVE-Tools/PVE-Tools-9/releases/download/v10.2.0/PVE-Tools.sh"
+PVE_TOOLS_RELEASE_PAGE_URL="$PVE_TOOLS_RELEASE_BASE_URL/latest"
+PVE_TOOLS_RELEASE_ASSET_URL="$PVE_TOOLS_RELEASE_BASE_URL/latest/download/PVE-Tools.sh"
 PVE_TOOLS_ENTRY_LAST_ERROR=""
 
 pve_tools_entry_normalize_positive_integer() {
@@ -285,6 +287,7 @@ if [[ -f "$SCRIPT_DIR/lib/config.sh" && -d "$SCRIPT_DIR/src/modules" ]]; then
     for lib_file in \
         "$SCRIPT_DIR/lib/config.sh" \
         "$SCRIPT_DIR/lib/core.sh" \
+        "$SCRIPT_DIR/lib/menu.sh" \
         "$SCRIPT_DIR/lib/network.sh" \
         "$SCRIPT_DIR/lib/runtime.sh"; do
         if [[ ! -f "$lib_file" ]]; then

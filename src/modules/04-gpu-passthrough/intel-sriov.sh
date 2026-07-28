@@ -59,6 +59,8 @@ igpu_sriov_setup() {
     echo -e "  ${CYAN}提示 3:${NC} 准备好通过 SSH 或物理访问恢复系统"
     echo
 
+    gpu_warn_active_stacks
+
     # 询问是否要备份
     if confirm_action "是否先备份当前 GRUB 配置（强烈推荐）"; then
         echo
@@ -132,22 +134,21 @@ igpu_sriov_setup() {
     echo "清理可能存在的 i915 及音视频相关黑名单..."
     for f in /etc/modprobe.d/blacklist.conf /etc/modprobe.d/pve-blacklist.conf; do
         if [ -f "$f" ]; then
+            remove_block "$f" "HARDWARE_PASSTHROUGH"
+            remove_block "$f" "INTEL_LEGACY_BLACKLIST"
             sed -i '/blacklist i915/d' "$f"
             sed -i '/blacklist snd_hda_intel/d' "$f"
             sed -i '/blacklist snd_hda_codec_hdmi/d' "$f"
         fi
     done
 
-    # 添加 VFIO 模块（如果未添加）
-    for module in vfio vfio_iommu_type1 vfio_pci vfio_virqfd; do
-        if ! grep -q "^$module$" /etc/modules; then
-            echo "$module" >> /etc/modules
-            echo "已添加模块: $module"
-        fi
-    done
-
-    # 移除 kvmgt 模块（如果有 GVT-g 配置）
-    sed -i '/^kvmgt$/d' /etc/modules
+    # 添加 VFIO 模块（marker 配置块写入，自动备份并幂等；同时清掉 GVT-g 的模块块、kvmgt 与旧版裸行）
+    remove_block "/etc/modules" "INTEL_GVTG_MODULES"
+    sed -i -E '/^(vfio|vfio_iommu_type1|vfio_pci|vfio_virqfd|kvmgt)[[:space:]]*$/d' /etc/modules
+    apply_block "/etc/modules" "INTEL_SRIOV_MODULES" "vfio
+vfio_iommu_type1
+vfio_pci
+vfio_virqfd"
 
     echo -e "✓ 内核模块配置完成"
 

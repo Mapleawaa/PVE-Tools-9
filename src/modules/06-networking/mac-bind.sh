@@ -479,25 +479,24 @@ host_network_delete_mac_binding() {
     display_success "MAC 地址固定命名已删除: ${mac} → ${link_name}" "如需恢复，请重新创建对应 .link 文件。"
 }
 host_network_mac_binding_menu() {
-    while true; do
-        clear
-        show_menu_header "MAC 地址绑定管理"
-        echo -e "${YELLOW}说明：通过 MAC 地址而不是接口名来固定网卡命名，避免重启或硬件变更后网卡顺序变化导致网络配置失效。${NC}"
-        echo -e "${YELLOW}绑定后会在 /etc/systemd/network/ 中生成 .link 规则；若系统残留旧式 udev 规则，脚本会尝试同步清理。${NC}"
-        echo "$UI_DIVIDER"
-        host_network_show_mac_bindings
-        echo "$UI_DIVIDER"
-        show_menu_option "1" "创建 MAC 地址绑定"
-        show_menu_option "2" "删除 MAC 地址绑定"
-        show_menu_option "0" "返回"
-        show_menu_footer
-        read -p "请选择操作 [0-2]: " choice
-        case "$choice" in
-            1) host_network_create_mac_binding ;;
-            2) host_network_delete_mac_binding ;;
-            0) return ;;
-            *) log_error "无效选择" ;;
-        esac
-        pause_function
-    done
+    run_menu "MAC 地址绑定管理" host_network_mac_binding_menu_render host_network_mac_binding_menu_dispatch "0-2"
+}
+
+host_network_mac_binding_menu_render() {
+    echo -e "${YELLOW}说明：通过 MAC 地址而不是接口名来固定网卡命名，避免重启或硬件变更后网卡顺序变化导致网络配置失效。${NC}"
+    echo -e "${YELLOW}绑定后会在 /etc/systemd/network/ 中生成 .link 规则；若系统残留旧式 udev 规则，脚本会尝试同步清理。${NC}"
+    echo "$UI_DIVIDER"
+    host_network_show_mac_bindings
+    echo "$UI_DIVIDER"
+    show_menu_option "1" "创建 MAC 地址绑定"
+    show_menu_option "2" "删除 MAC 地址绑定"
+}
+
+host_network_mac_binding_menu_dispatch() {
+    case "$1" in
+        1) host_network_create_mac_binding ;;
+        2) host_network_delete_mac_binding ;;
+        *) return 1 ;;
+    esac
+    return 0
 }

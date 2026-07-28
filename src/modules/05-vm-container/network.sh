@@ -112,27 +112,24 @@ vm_modify_network() {
     display_success "网卡参数已更新" "$slot = $updated"
 }
 vm_startup_network_menu() {
-    while true; do
-        clear
-        show_menu_header "启动顺序与网络管理"
-        vm_show_data_risk_banner
-        show_menu_option "1" "设置开机自启 / 启动顺序 / 启动延迟"
-        show_menu_option "2" "添加网卡"
-        show_menu_option "3" "移除网卡"
-        show_menu_option "4" "修改 bridge / VLAN"
-        show_menu_option "0" "返回"
-        show_menu_footer
+    run_menu "启动顺序与网络管理" vm_startup_network_menu_render vm_startup_network_menu_dispatch "0-4"
+}
 
-        local choice
-        read -p "请选择操作 [0-4]: " choice
-        case "$choice" in
-            1) vm_configure_startup_policy ;;
-            2) vm_add_network ;;
-            3) vm_remove_network ;;
-            4) vm_modify_network ;;
-            0) return ;;
-            *) log_error "无效选择" ;;
-        esac
-        pause_function
-    done
+vm_startup_network_menu_render() {
+    vm_show_data_risk_banner
+    show_menu_option "1" "设置开机自启 / 启动顺序 / 启动延迟"
+    show_menu_option "2" "添加网卡"
+    show_menu_option "3" "移除网卡"
+    show_menu_option "4" "修改 bridge / VLAN"
+}
+
+vm_startup_network_menu_dispatch() {
+    case "$1" in
+        1) vm_configure_startup_policy ;;
+        2) vm_add_network ;;
+        3) vm_remove_network ;;
+        4) vm_modify_network ;;
+        *) return 1 ;;
+    esac
+    return 0
 }

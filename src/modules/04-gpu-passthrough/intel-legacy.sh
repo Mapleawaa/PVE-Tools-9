@@ -31,6 +31,7 @@ restore_qemu_kvm() {
     # 3. 清理黑名单 (可选)
     if confirm_action "是否同时清理 Intel 核显相关的驱动黑名单？"; then
         log_info "正在清理黑名单配置..."
+        remove_block "/etc/modprobe.d/pve-blacklist.conf" "INTEL_LEGACY_BLACKLIST"
         sed -i '/blacklist i915/d' /etc/modprobe.d/pve-blacklist.conf
         sed -i '/blacklist snd_hda_intel/d' /etc/modprobe.d/pve-blacklist.conf
         sed -i '/blacklist snd_hda_codec_hdmi/d' /etc/modprobe.d/pve-blacklist.conf
@@ -93,12 +94,23 @@ intel_gpu_passthrough() {
             ;;
     esac
 
-    # 1. 配置黑名单
+    gpu_warn_active_stacks
+
+    if ! confirm_high_risk_action \
+        "安装第三方修改版 QEMU 并配置核显直通" \
+        "将屏蔽宿主机 i915 驱动（本地控制台会黑屏），并安装来自 AICodo 仓库的非官方 pve-qemu-kvm" \
+        "第三方 deb 包无官方签名校验，且会被 apt-mark hold 锁定版本、无法收到官方安全更新" \
+        "请确认已有可用的 SSH/Web 管理通道；出问题可用本菜单的救砖模式恢复官方 QEMU" \
+        "QEMU-MOD"; then
+        return 1
+    fi
+
+    # 1. 配置黑名单（marker 配置块写入，apply_block 自动备份并幂等）
     log_step "配置驱动黑名单 (屏蔽宿主机占用核显)"
     if ! grep -q "blacklist i915" /etc/modprobe.d/pve-blacklist.conf; then
-        echo "blacklist i915" >> /etc/modprobe.d/pve-blacklist.conf
-        echo "blacklist snd_hda_intel" >> /etc/modprobe.d/pve-blacklist.conf
-        echo "blacklist snd_hda_codec_hdmi" >> /etc/modprobe.d/pve-blacklist.conf
+        apply_block "/etc/modprobe.d/pve-blacklist.conf" "INTEL_LEGACY_BLACKLIST" "blacklist i915
+blacklist snd_hda_intel
+blacklist snd_hda_codec_hdmi"
         log_success "已添加黑名单配置"
         
         log_info "正在更新 initramfs..."
@@ -118,8 +130,9 @@ intel_gpu_passthrough() {
     # 为方便起见，这里演示自动获取逻辑
     
     local qemu_releases_url="https://api.github.com/repos/AICodo/pve-anti-detection/releases/latest"
-    local qemu_deb_url=$(curl -s $qemu_releases_url | grep "browser_download_url.*deb" | cut -d '"' -f 4 | head -n 1)
-    
+    local qemu_deb_url
+    qemu_deb_url=$(curl -s "$qemu_releases_url" | grep "browser_download_url.*deb" | cut -d '"' -f 4 | head -n 1)
+
     if [ -z "$qemu_deb_url" ]; then
         log_warn "无法自动获取修改版 QEMU 下载链接，尝试使用备用链接或手动下载"
         # 备用逻辑：提示用户手动下载
@@ -128,28 +141,41 @@ intel_gpu_passthrough() {
     else
         # 加速下载
         local fast_qemu_url="https://ghfast.top/${qemu_deb_url}"
-        local qemu_deb_file
+        local qemu_deb_file qemu_deb_sha256
         qemu_deb_file="$(mktemp --suffix=.deb)"
         log_info "正在下载: $fast_qemu_url"
-        wget -O "$qemu_deb_file" "$fast_qemu_url"
-
-        if [[ -s "$qemu_deb_file" ]]; then
-            log_info "正在安装修改版 QEMU..."
-            if dpkg -i "$qemu_deb_file"; then
+        if ! wget -O "$qemu_deb_file" "$fast_qemu_url"; then
+            log_warn "加速源下载失败，改用 GitHub 原始地址重试..."
+            if ! wget -O "$qemu_deb_file" "$qemu_deb_url"; then
                 rm -f "$qemu_deb_file"
-                log_success "安装完成"
-
-                # 阻止更新
-                apt-mark hold pve-qemu-kvm
-                log_info "已锁定 pve-qemu-kvm 防止自动更新"
-            else
-                rm -f "$qemu_deb_file"
-                log_error "安装修改版 QEMU 失败，请检查 deb 包完整性"
+                log_error "下载失败，已中止配置（未修改 QEMU）"
                 return 1
             fi
+        fi
+
+        if [[ ! -s "$qemu_deb_file" ]]; then
+            rm -f "$qemu_deb_file"
+            log_error "下载结果为空，已中止配置（未修改 QEMU）"
+            return 1
+        fi
+
+        # 上游无官方签名可验，至少展示摘要与来源，供用户与 release 页核对及事后追溯
+        qemu_deb_sha256="$(sha256sum "$qemu_deb_file" | awk '{print $1}')"
+        log_info "deb 包 SHA256: ${qemu_deb_sha256}"
+        log_info "下载来源: ${qemu_deb_url}"
+
+        log_info "正在安装修改版 QEMU..."
+        if dpkg -i "$qemu_deb_file"; then
+            rm -f "$qemu_deb_file"
+            log_success "安装完成"
+
+            # 阻止更新
+            apt-mark hold pve-qemu-kvm
+            log_info "已锁定 pve-qemu-kvm 防止自动更新（救砖模式可解除）"
         else
             rm -f "$qemu_deb_file"
-            log_error "下载失败"
+            log_error "安装修改版 QEMU 失败，请检查 deb 包完整性"
+            return 1
         fi
     fi
 
@@ -307,25 +333,29 @@ intel_gpu_passthrough() {
         args_line="$args_line -set device.hostpci1.bus=pcie.0 -set device.hostpci1.addr=0x03.0"
     fi
     
-    # 写入 args (保留用户已有的 args 参数)
+    # 通过 qm set 写入：直接追加/就地 sed 会绕过 pmxcfs 加锁，
+    # 且在带快照的 conf 上会把配置行写进快照段导致配置损坏
     if grep -q '^args:' "/etc/pve/qemu-server/$vmid.conf"; then
         log_warn "检测到 VM $vmid 已有 args 配置，将被新 args 覆盖"
         log_warn "原 args 内容: $(grep '^args:' "/etc/pve/qemu-server/$vmid.conf")"
-        sed -i '/^args:/d' "/etc/pve/qemu-server/$vmid.conf"
     fi
-    echo "args: $args_line" >> "/etc/pve/qemu-server/$vmid.conf"
-    
-    # 写入 hostpci0 (核显)
-    # 先删除旧的 hostpci0
-    sed -i '/^hostpci0:/d' "/etc/pve/qemu-server/$vmid.conf"
-    # 格式: hostpci0: 0000:00:02.0,romfile=xxx.rom
-    # 注意：这里 PCI ID 使用 lspci 获取到的真实 ID，通常是 0000:00:02.0
-    echo "hostpci0: $igpu_pci,romfile=$rom_filename" >> "/etc/pve/qemu-server/$vmid.conf"
-    
+    if ! qm set "$vmid" --args "$args_line"; then
+        log_error "写入 args 失败，虚拟机配置未完成"
+        return 1
+    fi
+
+    # 写入 hostpci0 (核显)，格式: 0000:00:02.0,romfile=xxx.rom
+    if ! qm set "$vmid" --hostpci0 "$igpu_pci,romfile=$rom_filename"; then
+        log_error "写入 hostpci0 失败，虚拟机配置未完成"
+        return 1
+    fi
+
     # 写入 hostpci1 (声卡)
     if [ -n "$audio_pci" ]; then
-        sed -i '/^hostpci1:/d' "/etc/pve/qemu-server/$vmid.conf"
-        echo "hostpci1: $audio_pci" >> "/etc/pve/qemu-server/$vmid.conf"
+        if ! qm set "$vmid" --hostpci1 "$audio_pci"; then
+            log_error "写入 hostpci1 失败，请手动检查虚拟机配置"
+            return 1
+        fi
     fi
     
     log_success "虚拟机 $vmid 配置完成"

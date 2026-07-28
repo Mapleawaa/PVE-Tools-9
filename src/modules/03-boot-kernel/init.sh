@@ -3,48 +3,48 @@
 # Copyright (C) 2026 Ciriu Networks
 
 menu_boot_kernel() {
-    while true; do
-        clear
-        show_menu_header "启动与内核"
-        show_menu_option "1" "内核管理 ${CYAN}(内核切换/更新/清理)${NC}"
-        show_menu_option "2" "查看/备份 GRUB 配置"
-        echo "$UI_DIVIDER"
-        show_menu_option "0" "返回主菜单"
-        show_menu_footer
-        read -p "请选择操作 [0-2]: " choice
-        case $choice in
-            1) kernel_management_menu ;;
-            2) 
-                while true; do
-                    clear
-                    show_menu_header "GRUB 配置管理"
-                    show_menu_option "1" "查看当前 GRUB 配置"
-                    show_menu_option "2" "备份 GRUB 配置"
-                    show_menu_option "3" "查看备份列表"
-                    show_menu_option "4" "恢复 GRUB 备份"
-                    show_menu_option "0" "返回上级菜单"
-                    show_menu_footer
-                    read -p "请选择操作 [0-4]: " grub_choice
-                    case $grub_choice in
-                        1) show_grub_config; pause_function ;;
-                        2) 
-                            echo "请输入备份备注："
-                            read -p "> " note
-                            backup_grub_with_note "${note:-手动备份}"
-                            pause_function
-                            ;;
-                        3) list_grub_backups; pause_function ;;
-                        4) restore_grub_backup ;;
-                        0) break ;;
-                        *) log_error "无效选择" ;;
-                    esac
-                done
-                ;;
-            0) return ;;
-            *) log_error "无效选择" ;;
-        esac
-        pause_function
-    done
+    run_menu "启动与内核" menu_boot_kernel_render menu_boot_kernel_dispatch "0-2"
 }
 
-# 二级菜单：直通与显卡
+menu_boot_kernel_render() {
+    show_menu_option "1" "内核管理 ${CYAN}(内核切换/更新/清理)${NC}"
+    show_menu_option "2" "查看/备份 GRUB 配置"
+}
+
+menu_boot_kernel_dispatch() {
+    case "$1" in
+        1) kernel_management_menu ;;
+        2) grub_config_menu ;;
+        *) return 1 ;;
+    esac
+    return 0
+}
+
+# GRUB 配置管理子菜单（查看/备份/恢复，底层函数在 01-optimization/cpupower.sh）
+grub_config_menu() {
+    run_menu "GRUB 配置管理" grub_config_menu_render grub_config_menu_dispatch "0-4"
+}
+
+grub_config_menu_render() {
+    show_menu_option "1" "查看当前 GRUB 配置"
+    show_menu_option "2" "备份 GRUB 配置"
+    show_menu_option "3" "查看备份列表"
+    show_menu_option "4" "恢复 GRUB 备份"
+}
+
+grub_config_menu_dispatch() {
+    case "$1" in
+        1) show_grub_config ;;
+        2) grub_backup_with_note_prompt ;;
+        3) list_grub_backups ;;
+        4) restore_grub_backup ;;
+        *) return 1 ;;
+    esac
+    return 0
+}
+
+grub_backup_with_note_prompt() {
+    local note=""
+    prompt_value note "请输入备份备注" "手动备份" || return 0
+    backup_grub_with_note "$note"
+}

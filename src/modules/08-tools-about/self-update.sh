@@ -108,7 +108,7 @@ check_update() {
 pve_tools_local_update() {
     local current_script="${BASH_SOURCE[0]}"
     local resolved_script backup_dir backup_path tmp_script update_urls prefer_mirror version_url update_url script_url
-    local remote_content remote_version detailed_changelog fallback_script_url
+    local remote_content remote_version detailed_changelog fallback_script_url downloaded_version
 
     if [[ -z "$current_script" || ! -f "$current_script" ]]; then
         display_error "无法定位当前脚本文件" "请使用本地文件方式运行脚本后再执行更新。"
@@ -216,6 +216,12 @@ pve_tools_local_update() {
         cp -a "$backup_path" "$resolved_script" >/dev/null 2>&1 || true
         display_error "下载的新脚本校验失败，已自动回滚" "请稍后重试或手动检查下载源。"
         return 1
+    fi
+
+    # VERSION 文件跟随 main 分支，Release 资产可能尚未同步发版，两者不一致时提示但不阻断
+    downloaded_version="$(grep -m1 '^CURRENT_VERSION=' "$tmp_script" | cut -d'"' -f2)"
+    if [[ -n "$downloaded_version" && "$downloaded_version" != "$remote_version" ]]; then
+        log_warn "下载脚本版本为 ${downloaded_version}，与远程 VERSION (${remote_version}) 不一致，可能 Release 尚未同步发布。"
     fi
 
     if ! cp -a "$tmp_script" "$resolved_script"; then

@@ -272,7 +272,12 @@ rdm_single_disk_detach() {
         backup_file "$conf_path" >/dev/null 2>&1 || true
     fi
 
-    if ! confirm_action "从 VM $vmid 删除磁盘插槽（--delete $slot）"; then
+    if ! confirm_high_risk_action \
+        "从 VM $vmid 删除磁盘插槽 $slot" \
+        "上方列表包含该 VM 的全部磁盘插槽（不仅是直通盘），删错会移除系统盘/数据盘的引用。" \
+        "qm set --delete 只解除引用不删除数据，但 VM 可能因缺盘无法启动。" \
+        "请再次核对插槽内容确为要取消直通的磁盘：$line" \
+        "DETACH"; then
         return 0
     fi
 

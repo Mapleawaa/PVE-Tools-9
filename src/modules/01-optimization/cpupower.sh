@@ -77,6 +77,10 @@ cpupower_add() {
     echo "查看当前CPU模式"
     cat /sys/devices/system/cpu/cpu0/cpufreq/scaling_governor
 
+    if ! confirm_action "写入 @reboot 计划任务（开机自动应用 CPU 模式 ${GOVERNOR}）"; then
+        log_info "已跳过开机任务写入，本次修改仅当前开机周期生效"
+        return 0
+    fi
     echo "正在添加开机任务"
     NEW_CRONTAB_COMMAND="sleep 10 && echo "${GOVERNOR}" | tee /sys/devices/system/cpu/cpu*/cpufreq/scaling_governor >/dev/null #CPU Power Mode"
     EXISTING_CRONTAB=$(crontab -l 2>/dev/null)

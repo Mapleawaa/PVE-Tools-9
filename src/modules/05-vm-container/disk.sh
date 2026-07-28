@@ -132,27 +132,24 @@ vm_move_disk() {
     display_success "磁盘迁移完成" "$slot -> $target_store"
 }
 vm_disk_management_menu() {
-    while true; do
-        clear
-        show_menu_header "虚拟机磁盘管理"
-        vm_show_data_risk_banner
-        show_menu_option "1" "磁盘扩容"
-        show_menu_option "2" "添加磁盘"
-        show_menu_option "3" "移除磁盘"
-        show_menu_option "4" "迁移磁盘到其他存储"
-        show_menu_option "0" "返回"
-        show_menu_footer
+    run_menu "虚拟机磁盘管理" vm_disk_management_menu_render vm_disk_management_menu_dispatch "0-4"
+}
 
-        local choice
-        read -p "请选择操作 [0-4]: " choice
-        case "$choice" in
-            1) vm_resize_disk ;;
-            2) vm_add_disk ;;
-            3) vm_remove_disk ;;
-            4) vm_move_disk ;;
-            0) return ;;
-            *) log_error "无效选择" ;;
-        esac
-        pause_function
-    done
+vm_disk_management_menu_render() {
+    vm_show_data_risk_banner
+    show_menu_option "1" "磁盘扩容"
+    show_menu_option "2" "添加磁盘"
+    show_menu_option "3" "移除磁盘"
+    show_menu_option "4" "迁移磁盘到其他存储"
+}
+
+vm_disk_management_menu_dispatch() {
+    case "$1" in
+        1) vm_resize_disk ;;
+        2) vm_add_disk ;;
+        3) vm_remove_disk ;;
+        4) vm_move_disk ;;
+        *) return 1 ;;
+    esac
+    return 0
 }

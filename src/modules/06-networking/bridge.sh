@@ -101,28 +101,27 @@ host_network_delete_bridge() {
     rm -f "$tmp"
 }
 host_network_bridge_menu() {
-    while true; do
-        clear
-        show_menu_header "桥接管理"
-        host_network_show_risk_banner
-        echo -e "${CYAN}当前 bridge：${NC}"
-        if host_network_get_configured_bridges | awk 'NF{print "  - "$0}'; then :; fi
-        echo "$UI_DIVIDER"
-        show_menu_option "1" "列出当前网卡与桥接"
-        show_menu_option "2" "创建桥接"
-        show_menu_option "3" "删除桥接"
-        show_menu_option "4" "MAC 地址绑定管理（防网卡顺序变化）"
-        show_menu_option "0" "返回"
-        show_menu_footer
-        read -p "请选择操作 [0-4]: " choice
-        case "$choice" in
-            1) host_network_show_current_overview ;;
-            2) host_network_create_bridge ;;
-            3) host_network_delete_bridge ;;
-            4) host_network_mac_binding_menu ;;
-            0) return ;;
-            *) log_error "无效选择" ;;
-        esac
-        pause_function
-    done
+    run_menu "桥接管理" host_network_bridge_menu_render host_network_bridge_menu_dispatch "0-4"
+}
+
+host_network_bridge_menu_render() {
+    host_network_show_risk_banner
+    echo -e "${CYAN}当前 bridge：${NC}"
+    if host_network_get_configured_bridges | awk 'NF{print "  - "$0}'; then :; fi
+    echo "$UI_DIVIDER"
+    show_menu_option "1" "列出当前网卡与桥接"
+    show_menu_option "2" "创建桥接"
+    show_menu_option "3" "删除桥接"
+    show_menu_option "4" "MAC 地址绑定管理（防网卡顺序变化）"
+}
+
+host_network_bridge_menu_dispatch() {
+    case "$1" in
+        1) host_network_show_current_overview ;;
+        2) host_network_create_bridge ;;
+        3) host_network_delete_bridge ;;
+        4) host_network_mac_binding_menu ;;
+        *) return 1 ;;
+    esac
+    return 0
 }

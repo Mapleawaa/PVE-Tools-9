@@ -7,6 +7,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 for lib_file in \
     "$SCRIPT_DIR/lib/config.sh" \
     "$SCRIPT_DIR/lib/core.sh" \
+    "$SCRIPT_DIR/lib/menu.sh" \
     "$SCRIPT_DIR/lib/network.sh" \
     "$SCRIPT_DIR/lib/runtime.sh"; do
     # shellcheck source=/dev/null

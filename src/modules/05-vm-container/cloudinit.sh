@@ -188,31 +188,28 @@ vm_cloud_image_to_template() {
     display_success "云镜像模板准备完成" "VMID: $vmid"
 }
 vm_template_cloudinit_menu() {
-    while true; do
-        clear
-        show_menu_header "模板 / 克隆 / Cloud-Init"
-        vm_show_data_risk_banner
-        show_menu_option "1" "列出所有模板"
-        show_menu_option "2" "将现有 VM 转换为模板"
-        show_menu_option "3" "完整克隆 VM"
-        show_menu_option "4" "链接克隆模板"
-        show_menu_option "5" "导入云镜像并生成模板"
-        show_menu_option "6" "配置 Cloud-Init 参数"
-        show_menu_option "0" "返回"
-        show_menu_footer
+    run_menu "模板 / 克隆 / Cloud-Init" vm_template_cloudinit_menu_render vm_template_cloudinit_menu_dispatch "0-6"
+}
 
-        local choice
-        read -p "请选择操作 [0-6]: " choice
-        case "$choice" in
-            1) vm_show_template_records ;;
-            2) vm_convert_to_template ;;
-            3) vm_clone_vm full ;;
-            4) vm_clone_vm linked ;;
-            5) vm_cloud_image_to_template ;;
-            6) vm_cloudinit_configure ;;
-            0) return ;;
-            *) log_error "无效选择" ;;
-        esac
-        pause_function
-    done
+vm_template_cloudinit_menu_render() {
+    vm_show_data_risk_banner
+    show_menu_option "1" "列出所有模板"
+    show_menu_option "2" "将现有 VM 转换为模板"
+    show_menu_option "3" "完整克隆 VM"
+    show_menu_option "4" "链接克隆模板"
+    show_menu_option "5" "导入云镜像并生成模板"
+    show_menu_option "6" "配置 Cloud-Init 参数"
+}
+
+vm_template_cloudinit_menu_dispatch() {
+    case "$1" in
+        1) vm_show_template_records ;;
+        2) vm_convert_to_template ;;
+        3) vm_clone_vm full ;;
+        4) vm_clone_vm linked ;;
+        5) vm_cloud_image_to_template ;;
+        6) vm_cloudinit_configure ;;
+        *) return 1 ;;
+    esac
+    return 0
 }

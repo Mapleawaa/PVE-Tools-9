@@ -3,7 +3,8 @@
 # Copyright (C) 2026 Ciriu Networks
 
 setup_colors() {
-    if [[ -t 1 && -z "${NO_COLOR}" ]]; then
+    # NO_COLOR 遵循 no-color.org 规范：只要设置了该变量（即使为空值）即禁用颜色
+    if [[ -t 1 && -z "${NO_COLOR+x}" ]]; then
         # 使用 printf 确保变量包含真实的转义字符，提高不同 shell 间的兼容性
         RED=$(printf '\033[0;31m')
         GREEN=$(printf '\033[0;32m')
@@ -22,7 +23,7 @@ setup_colors() {
         H1=$(printf '\033[1;36m')
         H2=$(printf '\033[1;37m')
     else
-        RED='' GREEN='' YELLOW='' BLUE='' CYAN='' MAGENTA='' WHITE='' ORANGE='' NC=''
+        RED='' GREEN='' YELLOW='' BLUE='' PINK='' CYAN='' MAGENTA='' WHITE='' ORANGE='' NC=''
         PRIMARY='' H1='' H2=''
     fi
 
@@ -73,7 +74,6 @@ display_error() {
     
     log_error "$error_msg"
     echo -e "${YELLOW}提示: $suggestion${NC}"
-    pause_function
 }
 
 # Enhanced success feedback
@@ -125,6 +125,11 @@ confirm_high_risk_action() {
     return 1
 }
 vm_show_data_risk_banner() {
+    # 每会话仅完整展示一次，避免每次重绘菜单都整屏刷同一段风险横幅
+    if [[ "${VM_RISK_BANNER_SHOWN:-0}" -eq 1 ]]; then
+        return 0
+    fi
+    VM_RISK_BANNER_SHOWN=1
     echo -e "${RED}${UI_DIVIDER}${NC}"
     echo -e "${RED}以下操作将直接改写 VM 配置、磁盘、快照、克隆、恢复或迁移状态。${NC}"
     echo -e "${RED}本软件会执行您要求它做的事情，不会替您判断对错。${NC}"
@@ -329,6 +334,22 @@ remove_block() {
 
 # ============ GRUB 参数幂等管理函数 ============
 
+# 检查 GRUB_CMDLINE_LINUX_DEFAULT 是否已含指定参数（按 key 精确匹配，不受注释/其他行干扰）
+# 用法: grub_has_param "intel_iommu=on" 或 grub_has_param "intel_iommu"
+grub_has_param() {
+    local param_key="${1%%=*}"
+    local current_line current_params
+    current_line=$(grep '^GRUB_CMDLINE_LINUX_DEFAULT=' /etc/default/grub 2>/dev/null) || return 1
+    current_params=$(echo "$current_line" | sed 's/^GRUB_CMDLINE_LINUX_DEFAULT="\(.*\)"$/\1/')
+    local -a items=()
+    read -r -a items <<< "$current_params"
+    local item
+    for item in "${items[@]}"; do
+        [[ "${item%%=*}" == "$param_key" ]] && return 0
+    done
+    return 1
+}
+
 # 添加 GRUB 参数（幂等操作，不会重复添加）
 # 用法: grub_add_param "intel_iommu=on"
 grub_add_param() {
@@ -353,16 +374,20 @@ grub_add_param() {
     # 提取引号内的参数
     local current_params=$(echo "$current_line" | sed 's/^GRUB_CMDLINE_LINUX_DEFAULT="\(.*\)"$/\1/')
 
-    # 检查参数是否已存在（支持 key=value 和 key 两种格式）
-    local param_key=$(echo "$param" | cut -d'=' -f1)
+    # 数组化精确增删：按空格切分后逐项比对 key（'=' 前部分），
+    # 避免旧正则 \b$key[^ ]* 在 key 含 '.' 等元字符时的前缀误伤/误删
+    local param_key="${param%%=*}"
+    local -a items=() kept=()
+    read -r -a items <<< "$current_params"
+    local item
+    for item in "${items[@]}"; do
+        if [[ "${item%%=*}" != "$param_key" ]]; then
+            kept+=("$item")
+        fi
+    done
+    kept+=("$param")
 
-    if echo "$current_params" | grep -qw "$param_key"; then
-        # 参数已存在，先删除旧值
-        current_params=$(echo "$current_params" | sed "s/\b${param_key}[^ ]*\b//g")
-    fi
-
-    # 添加新参数（去除多余空格）
-    local new_params=$(echo "$current_params $param" | sed 's/  */ /g' | sed 's/^ //;s/ $//')
+    local new_params="${kept[*]}"
 
     # 写回配置文件
     sed -i "s|^GRUB_CMDLINE_LINUX_DEFAULT=.*|GRUB_CMDLINE_LINUX_DEFAULT=\"$new_params\"|" /etc/default/grub
@@ -371,7 +396,7 @@ grub_add_param() {
 }
 
 # 删除 GRUB 参数（精确删除，不影响其他参数）
-# 用法: grub_remove_param "intel_iommu=on"
+# 用法: grub_remove_param "intel_iommu=on" 或 grub_remove_param "intel_iommu"
 grub_remove_param() {
     local param="$1"
 
@@ -394,9 +419,19 @@ grub_remove_param() {
     # 提取引号内的参数
     local current_params=$(echo "$current_line" | sed 's/^GRUB_CMDLINE_LINUX_DEFAULT="\(.*\)"$/\1/')
 
-    # 删除指定参数（支持精确匹配和前缀匹配）
-    local param_key=$(echo "$param" | cut -d'=' -f1)
-    local new_params=$(echo "$current_params" | sed "s/\b${param_key}[^ ]*\b//g" | sed 's/  */ /g' | sed 's/^ //;s/ $//')
+    # 数组化精确删除：按 key 匹配（兼容传入 "key" 与 "key=value" 两种形式）
+    local param_key="${param%%=*}"
+    local -a items=() kept=()
+    read -r -a items <<< "$current_params"
+    local item
+    for item in "${items[@]}"; do
+        if [[ "${item%%=*}" == "$param_key" ]]; then
+            continue
+        fi
+        kept+=("$item")
+    done
+
+    local new_params="${kept[*]}"
 
     # 写回配置文件
     sed -i "s|^GRUB_CMDLINE_LINUX_DEFAULT=.*|GRUB_CMDLINE_LINUX_DEFAULT=\"$new_params\"|" /etc/default/grub
@@ -405,33 +440,6 @@ grub_remove_param() {
 }
 
 # ============ GRUB 参数幂等管理函数结束 ============
-
-# 进度指示函数
-show_progress() {
-    local message="$1"
-    local spinner="|/-\\"
-    local i=0
-    # Print initial message
-    echo -ne "${CYAN}[    ]${NC} $message\033[0K\r"
-    
-    # Update the spinner position in the box
-    while true; do
-        i=$(( (i + 1) % 4 ))
-        echo -ne "\b\b\b\b\b${CYAN}[${spinner:$i:1}]${NC}\033[0K\r"
-        sleep 0.1
-    done &
-    # Store the background job ID to be killed later
-    SPINNER_PID=$!
-}
-update_progress() {
-    local message="$1"
-    # Kill the spinner if running
-    if [[ -n "$SPINNER_PID" ]]; then
-        kill $SPINNER_PID 2>/dev/null
-    fi
-    echo -ne "${GREEN}[ OK ]${NC} $message\033[0K\r"
-    echo
-}
 
 # Enhanced visual feedback function
 show_status() {
@@ -461,26 +469,6 @@ show_status() {
     esac
 }
 
-# Progress bar function
-show_progress_bar() {
-    local current="$1"
-    local total="$2"
-    local message="$3"
-    local width=40
-    local percentage=$(( current * 100 / total ))
-    local filled=$(( width * current / total ))
-    
-    printf "${CYAN}[${NC}"
-    for ((i=0; i<filled; i++)); do
-        printf "█"
-    done
-    for ((i=filled; i<width; i++)); do
-        printf " "
-    done
-    printf "${CYAN}]${NC} ${percentage}%% $message\r"
-}
-
-# 通过 Cloudflare Trace 检测地区，决定是否启用镜像源
 pause_function() {
     echo -n "按任意键继续... "
     read -n 1 -s input

@@ -39,22 +39,6 @@ check_debug_mode() {
     DEBUG_MODE=false
 }
 
-# 检查是否安装依赖软件包
-check_packages() {
-    # 程序依赖的软件包: `sudo` `curl`
-    local packages=("sudo" "curl")
-    for pkg in "${packages[@]}"; do
-        if ! command -v "$pkg" &> /dev/null; then
-            log_error "哎呀！需要安装 $pkg 软件包才能运行哦"
-            echo "请使用以下命令安装：apt install -y $pkg"
-            exit 1
-        fi
-    done
- }
-    
-
-
-
 # 检查 PVE 版本
 check_pve_version() {
     # 如果在调试模式下，跳过 PVE 版本检测
@@ -151,8 +135,8 @@ show_menu() {
     show_menu_option "6" "宿主机网络与防火墙 ${CYAN}( 网桥 / VLAN / Bond / 规则 )${NC}"
     show_menu_option "7" "存储与磁盘维护 ${CYAN}( 路径 / 挂载 / 清理 / Ceph )${NC}"
     show_menu_option "8" "诊断工具与项目信息 ${CYAN}( 系统信息 / 救砖 / 脚本管理 )${NC}"
-    show_menu_option "9" "安全中心 ${CYAN}( 风险检查 / SSH加固 )${NC}"
-    show_menu_option "10" "第三方工具 ${CYAN}( CoolerControl / Modules / 社区脚本 )${NC}"
+    show_menu_option "9" "安全中心 ${CYAN}( 风险检查 / SSH加固 / CVE修补 )${NC}"
+    show_menu_option "10" "第三方工具 ${CYAN}( CoolerControl / IT87驱动 / 社区脚本 )${NC}"
     echo "$UI_DIVIDER"
     show_menu_option "0" "${RED}退出脚本${NC}"
     show_menu_footer
@@ -165,6 +149,9 @@ show_menu() {
 }
 # 应急救砖工具箱菜单
 main() {
+    # Ctrl+C 不再整体杀死脚本：中断当前输入后回到菜单流转，连续按可逐层返回
+    trap 'echo' INT
+
     check_root
     ensure_legal_acceptance
     check_debug_mode "$@"
@@ -185,9 +172,15 @@ main() {
     while true; do
 
         show_menu
-        read -r choice
+        if ! read -r choice; then
+            # EOF/输入流关闭：优雅退出，避免无效选择的无限刷屏
+            echo
+            echo "输入已结束，退出脚本。感谢使用,谢谢喵"
+            exit 0
+        fi
         echo
-        
+
+        MENU_SKIP_PAUSE=0
         case $choice in
             1)
                 menu_optimization
@@ -229,8 +222,11 @@ main() {
                 log_warn "请输入 0-10 之间的数字"
                 ;;
         esac
-        
-        echo
-        pause_function
+
+        # 从子菜单正常返回时（MENU_SKIP_PAUSE=1）直接重绘主菜单，不再多按一次键
+        if [[ "${MENU_SKIP_PAUSE:-0}" -eq 0 ]]; then
+            echo
+            pause_function
+        fi
     done
 }

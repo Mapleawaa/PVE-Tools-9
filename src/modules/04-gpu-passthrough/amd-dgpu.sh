@@ -89,6 +89,8 @@ amd_host_prepare_for_passthrough() {
     fi
     echo
 
+    gpu_warn_active_stacks
+
     if ! confirm_high_risk_action "为 AMD GPU 直通写入宿主机预配置" "会修改 GRUB、VFIO 模块和 AMD 显卡黑名单配置。" "错误配置可能导致宿主机本地输出消失、GPU 无法用于宿主机图形界面，甚至在重启后需要控制台修复。" "请确认已准备带外管理或物理控制台，并已理解回滚方式。" "AMD-HOST"; then
         return 0
     fi
@@ -278,22 +280,19 @@ amd_gpu_passthrough_vm() {
     return 0
 }
 amd_gpu_management_menu() {
-    while true; do
-        clear
-        show_menu_header "AMD 独显直通"
-        echo -e "${CYAN}提示：如宿主机仍在使用 amdgpu / radeon，占用中的 AMD 独显通常无法直接直通。${NC}"
-        echo -e "${UI_DIVIDER}"
-        show_menu_option "1" "AMD 显卡直通虚拟机"
-        show_menu_option "2" "AMD 宿主机预配置 ( IOMMU / VFIO / 黑名单 )"
-        show_menu_option "0" "返回"
-        show_menu_footer
-        read -p "请选择操作 [0-2]: " choice
-        case "$choice" in
-            1) amd_gpu_passthrough_vm ;;
-            2) amd_host_prepare_for_passthrough ;;
-            0) return ;;
-            *) log_error "无效选择" ;;
-        esac
-        pause_function
-    done
+    run_menu "AMD 独显直通" amd_gpu_management_menu_render amd_gpu_management_menu_dispatch "0-2"
+}
+amd_gpu_management_menu_render() {
+    echo -e "${CYAN}提示：如宿主机仍在使用 amdgpu / radeon，占用中的 AMD 独显通常无法直接直通。${NC}"
+    echo -e "${UI_DIVIDER}"
+    show_menu_option "1" "AMD 显卡直通虚拟机"
+    show_menu_option "2" "AMD 宿主机预配置 ( IOMMU / VFIO / 黑名单 )"
+}
+amd_gpu_management_menu_dispatch() {
+    case "$1" in
+        1) amd_gpu_passthrough_vm ;;
+        2) amd_host_prepare_for_passthrough ;;
+        *) return 1 ;;
+    esac
+    return 0
 }

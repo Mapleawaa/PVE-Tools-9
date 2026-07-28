@@ -2,7 +2,7 @@
 
 <div align="center">
 
-[官网 / Docs](https://pve.u3u.icu) | [更新日志](https://pve.u3u.icu/update) | [FAQ](https://pve.u3u.icu/faq) | [English](./README_EN.md) | [日本語](./REAMDE-JP.md)
+[官网 / Docs](https://pve.u3u.icu) | [更新日志](https://pve.u3u.icu/update) | [FAQ](https://pve.u3u.icu/faq) | [English](./README_EN.md) | [日本語](./README-JP.md)
 
 [![License: GPL-3.0](https://img.shields.io/badge/License-GPL--3.0-blue.svg)](https://www.gnu.org/licenses/gpl-3.0.html)
 [![Shell Script](https://img.shields.io/badge/Shell-Script-4EAA25?logo=gnu-bash&logoColor=white)](https://www.gnu.org/software/bash/)
@@ -112,7 +112,7 @@ PVE Tools Pro 是一个面向 Proxmox VE 9.x 的交互式 Bash 工具。
 ## 其它语言
 
 - English: [README_EN.md](./README_EN.md)
-- 日本語: [REAMDE-JP.md](./REAMDE-JP.md)
+- 日本語: [README-JP.md](./README-JP.md)
 
 ## 免责声明
 

@@ -11,7 +11,7 @@
 | 项目 | 说明 |
 |---|---|
 | 加载方式 | `find src/modules -name '*.sh' -print0 | sort -z` 递归加载 |
-| 加载顺序 | 按文件路径名排序（`sort -z`），同一子目录内 `init.sh` 通常先加载 |
+| 加载顺序 | build.sh/dev.sh 按文件路径名排序（`sort -z`，无 init.sh 特判）；PVE-Tools.sh 本地模式显式先 source 各目录 init.sh。bash 函数定义顺序不影响调用（模块文件只定义函数） |
 | 构建时 | `build.sh` 按同样顺序拼接到 `dist/PVE-Tools.sh` |
 
 ## 子模块概览
@@ -26,8 +26,8 @@
 | 6 | `06-networking/` | 宿主机网络与防火墙 | 10 | **高** |
 | 7 | `07-storage-disk/` | 存储与磁盘维护 | 6 | 中等 |
 | 8 | `08-tools-about/` | 诊断工具与项目信息 | 3 | 低 |
-| 9 | `09-security/` | 安全中心 | 3 | 中等 |
-| 10 | `10-third-party/` | 第三方工具 | 4 | 低 |
+| 9 | `09-security/` | 安全中心 | 4 | 中等 |
+| 10 | `10-third-party/` | 第三方工具 | 5 | 低 |
 
 ---
 
@@ -37,7 +37,7 @@
 
 | 文件 | 核心函数 | 功能 |
 |---|---|---|
-| `init.sh` | `menu_optimization()` | 二级菜单：弹窗/优化/温度/电源/邮件 |
+| `init.sh` | `menu_optimization()` | 二级菜单：弹窗/优化/温度/电源/邮件/UPS 诊断 |
 | `popup.sh` | `remove_subscription_popup()`, `restore_proxmoxlib()`, `reinstall_pve_webui_packages()` | 删除/恢复订阅弹窗 |
 | `tune.sh` | `quick_setup()` | 一键优化（换源+删弹窗+更新） |
 | `cpupower.sh` | `cpupower()`, `cpu_add()`, `cpu_del()`, `show_grub_config()`, `backup_grub_with_note()`, `list_grub_backups()`, `restore_grub_backup()` | CPU 电源模式 + GRUB 备份管理 |
@@ -85,11 +85,11 @@
 | 文件 | 核心函数 | 功能 |
 |---|---|---|
 | `init.sh` | `menu_gpu_passthrough()`, `menu_disk_controller_passthrough()` | 主菜单 + 磁盘/控制器子菜单 |
-| `iommu.sh` | `iommu_is_enabled()`, `enable_pass()`, `disable_pass()`, `hw_passth()`, `list_storage_controllers()` | IOMMU 基础设施与硬件直通一键配置 |
+| `iommu.sh` | `iommu_is_enabled()`, `gpu_detect_active_stacks()`, `enable_pass()`, `disable_pass()`, `hw_passth()`, `list_storage_controllers()` | IOMMU 基础设施、直通方案互斥检测与一键配置 |
 | `intel-sriov.sh` | `igpu_sriov_setup()` | Intel 核显 SR-IOV 虚拟化 |
 | `intel-gvtg.sh` | `igpu_gvtg_setup()` | Intel 核显 GVT-g 虚拟化 |
 | `intel-legacy.sh` | `intel_gpu_passthrough()`, `restore_qemu_kvm()` | Intel 核显直通（修改版 QEMU） |
-| `igpu-shared.sh` | `igpu_management_menu()`, `igpu_verify()`, `igpu_remove()`, `restore_igpu_config()` | iGPU 共享管理（被 intel-sriov/gvtg 复用） |
+| `igpu-shared.sh` | `igpu_management_menu()`, `igpu_verify()`, `igpu_remove()` | iGPU 共享管理（igpu_remove 为唯一清理路径，被 intel-sriov/gvtg 复用） |
 | `nvidia.sh` | `nvidia_gpu_management_menu()`, `nvidia_gpu_passthrough_vm()`, `nvidia_driver_switch_menu()`, `nvidia_setup_vgpu_unlock()` | NVIDIA 显卡直通/驱动管理/vGPU |
 | `amd-dgpu.sh` | `amd_gpu_management_menu()`, `amd_gpu_passthrough_vm()`, `amd_host_prepare_for_passthrough()` | AMD 独显直通 |
 | `amd-igpu.sh` | `amd_igpu_management_menu()`, `amd_igpu_passthrough_vm()`, `amd_igpu_check_romfile()` | AMD 核显直通（需 ROM/vBIOS） |
@@ -110,13 +110,14 @@
 
 | 文件 | 核心函数 | 功能 |
 |---|---|---|
-| `init.sh` | `menu_vm_container()`, `vm_advanced_operations_menu()` | 主菜单 + 高级运维子菜单 |
+| `init.sh` | `menu_vm_container()`, `vm_advanced_operations_menu()` | 主菜单（快照/备份为高频直达项）+ 高级运维子菜单 |
 | `fastpve.sh` | `fastpve_quick_download_menu()` | FastPVE 快速下载 VM |
 | `schedule.sh` | `manage_vm_schedule()` | VM 定时开关机 |
 | `img-import.sh` | `img_convert_import_menu()`, `img_convert_and_import_to_vm()` | IMG 镜像导入（转 QCOW2/RAW） |
 | `storage-helper.sh` | `vm_select_storage_by_content()`, `pve_storage_content_path()`, `vm_list_storages_by_content()` | 存储辅助函数（被多文件复用） |
-| `backup.sh` | `vm_backup_restore_menu()`, `vm_backup_create()`, `vm_schedule_backup_menu()` | VM 备份与定时备份 |
-| `restore.sh` | `vm_restore_from_backup()`, `vm_config_io_menu()`, `vm_export_config()`, `vm_import_config()` | VM 恢复与配置导入导出 |
+| `backup.sh` | `vm_backup_create()`, `vm_schedule_backup_menu()` | VM 备份与定时备份 |
+| `restore.sh` | `vm_backup_restore_menu()`, `vm_restore_from_backup()` | VM 备份恢复菜单与恢复流程 |
+| `config-io.sh` | `vm_config_io_menu()`, `vm_export_config()`, `vm_import_config()` | VM 配置导入导出 |
 | `clone.sh` | `vm_clone_vm()`, `vm_convert_to_template()` | VM 克隆与模板转换 |
 | `cloudinit.sh` | `vm_template_cloudinit_menu()`, `vm_cloudinit_configure()`, `vm_cloud_image_to_template()` | Cloud-Init 配置与云镜像模板 |
 | `snapshot.sh` | `vm_snapshot_menu()`, `vm_create_snapshot()`, `vm_rollback_snapshot()` | 快照管理（创建/删除/回滚） |
@@ -191,6 +192,7 @@
 | `init.sh` | `security_center_menu()` | 二级菜单 |
 | `audit.sh` | `security_risk_check()`, `security_list_public_listeners()` | 安全风险检查（只读报告） |
 | `ssh-hardening.sh` | `security_ssh_hardening()`, `security_install_fail2ban_if_needed()` | SSH 一键加固（端口/密钥/fail2ban） |
+| `cve-fix.sh` | `security_cve_menu()`, `security_cve_batch_mitigate()`, `security_cve_lpe_kernel_fix()` | CVE 漏洞修补中心（Januscape/DirtyFrag/CopyFail） |
 
 **依赖**: 仅依赖 `lib/`。
 
@@ -206,6 +208,7 @@
 | `marketplace.sh` | `third_party_market_menu()` | 第三方软件市场（Modules 插件） |
 | `coolercontrol.sh` | `coolercontrol_manager_menu()`, `coolercontrol_install()`, `coolercontrol_uninstall()` | CoolerControl 风扇控制管理 |
 | `community.sh` | `third_party_community_scripts_info()` | 社区脚本集合信息 |
+| `it87-driver.sh` | `it87_manager_menu()`, `it87_force_id_menu()` | IT87/IT87XX 传感器驱动管理（DKMS，PGP 签名提交锁定） |
 
 **依赖**: 仅依赖 `lib/`。
 
@@ -223,7 +226,7 @@
 ## 测试与质量
 
 - **语法检查**: `bash -n` 对每个 `src/modules/**/*.sh` 文件
-- **静态分析**: `shellcheck` 覆盖所有模块文件（CI 中强制通过）
+- **静态分析**: CI 对全部模块文件执行 `shellcheck --severity=error`（error 级强制通过）
 - **构建验证**: `bash build.sh && bash -n dist/PVE-Tools.sh` 验证拼接正确性
 - **功能测试**: 人工在 PVE 9.x 环境验证 `bash dev.sh`
 
@@ -231,7 +234,7 @@
 
 **Q: 新增功能模块如何操作？**
 1. 在 `src/modules/` 下创建新目录（如 `11-new-feature/`）
-2. 编写 `init.sh`（菜单入口函数）和功能文件
+2. 编写 `init.sh`：菜单入口用 `run_menu` 框架（`<菜单名>` + `_render` + `_dispatch` 三函数，规范见根 CLAUDE.md「交互层规范」），功能实现放独立文件
 3. 在 `lib/runtime.sh` 的 `show_menu()` 和 `main()` 的 case 中添加对应选项
 4. `build.sh` 会自动扫描并包含新文件
 
@@ -239,7 +242,7 @@
 `init.sh` 仅包含菜单入口函数，功能实现放在独立文件中。这确保了单个文件不至于过大，也便于独立维护和测试各功能模块。
 
 **Q: 跨文件函数调用如何处理 source 顺序？**
-不需要显式 source。所有模块文件在入口处一次性全部 source，且 `sort -z` 保证 `init.sh` 优先加载，因此同模块内的交叉引用天然可用。
+不需要显式 source。所有模块文件在入口处一次性全部加载；bash 中函数定义顺序与调用无关（模块文件只定义函数，执行入口是末尾的 `main "$@"`），因此交叉引用天然可用。不要编写"顶层立即执行且依赖其他模块函数"的代码。
 
 ## 相关文件清单
 
@@ -261,4 +264,5 @@ src/modules/
 
 | 日期 | 变更 |
 |---|---|
+| 2026-07-26 | 全部菜单迁移至 lib/menu.sh 框架；快照/备份提升为 05 直达项；UPS 诊断提升为 01 顶级项；CVE 菜单编号连续化；删除 igpu 死代码；文件数与函数索引按现实修正 |
 | 2026-07-08 | 初始化 src/modules 模块 CLAUDE.md（模块化重构新增模块） |

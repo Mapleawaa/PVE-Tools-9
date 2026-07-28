@@ -195,29 +195,26 @@ vm_schedule_remove_backup_job() {
     display_success "定时备份任务已删除" "$marker"
 }
 vm_schedule_backup_menu() {
-    while true; do
-        clear
-        show_menu_header "VM 定时备份"
-        echo -e "${YELLOW}当前任务：${NC}"
-        if [[ -f "$VM_BACKUP_CRON_FILE" ]]; then
-            grep -E '^[^#]' "$VM_BACKUP_CRON_FILE" 2>/dev/null | sed 's/^/  /' || true
-        else
-            echo "  暂无定时任务"
-        fi
-        echo -e "${UI_DIVIDER}"
-        show_menu_option "1" "新增定时备份任务"
-        show_menu_option "2" "删除定时备份任务"
-        show_menu_option "0" "返回"
-        show_menu_footer
+    run_menu "VM 定时备份" vm_schedule_backup_menu_render vm_schedule_backup_menu_dispatch "0-2"
+}
 
-        local choice
-        read -p "请选择操作 [0-2]: " choice
-        case "$choice" in
-            1) vm_schedule_add_backup_job ;;
-            2) vm_schedule_remove_backup_job ;;
-            0) return ;;
-            *) log_error "无效选择" ;;
-        esac
-        pause_function
-    done
+vm_schedule_backup_menu_render() {
+    echo -e "${YELLOW}当前任务：${NC}"
+    if [[ -f "$VM_BACKUP_CRON_FILE" ]]; then
+        grep -E '^[^#]' "$VM_BACKUP_CRON_FILE" 2>/dev/null | sed 's/^/  /' || true
+    else
+        echo "  暂无定时任务"
+    fi
+    echo -e "${UI_DIVIDER}"
+    show_menu_option "1" "新增定时备份任务"
+    show_menu_option "2" "删除定时备份任务"
+}
+
+vm_schedule_backup_menu_dispatch() {
+    case "$1" in
+        1) vm_schedule_add_backup_job ;;
+        2) vm_schedule_remove_backup_job ;;
+        *) return 1 ;;
+    esac
+    return 0
 }

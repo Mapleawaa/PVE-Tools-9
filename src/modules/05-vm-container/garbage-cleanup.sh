@@ -459,30 +459,27 @@ garbage_cleanup_scan_report() {
     echo "  疑似孤立磁盘请使用菜单中的只读扫描单独查看。"
 }
 garbage_cleanup_menu() {
-    while true; do
-        clear
-        show_menu_header "垃圾清理"
-        show_menu_option "1" "一键扫描报告 ${CYAN}(只读)${NC}"
-        show_menu_option "2" "清理缓存、日志与本工具旧文件"
-        show_menu_option "3" "清理过期/无主 vzdump 备份"
-        show_menu_option "4" "清理旧 VM/CT 快照"
-        show_menu_option "5" "扫描疑似孤立磁盘 ${YELLOW}(只读，不删除)${NC}"
-        echo "$UI_DIVIDER"
-        echo -e "${YELLOW}说明:${NC} 清理前会列出候选项；备份和快照删除均需要高风险确认。"
-        show_menu_option "0" "返回"
-        show_menu_footer
+    run_menu "垃圾清理" garbage_cleanup_menu_render garbage_cleanup_menu_dispatch "0-5"
+}
 
-        local choice
-        read -p "请选择操作 [0-5]: " choice
-        case "$choice" in
-            1) garbage_cleanup_scan_report ;;
-            2) garbage_cleanup_basic ;;
-            3) garbage_cleanup_prune_backups ;;
-            4) garbage_cleanup_prune_snapshots ;;
-            5) garbage_cleanup_orphan_disk_report ;;
-            0) return ;;
-            *) log_error "无效选择" ;;
-        esac
-        pause_function
-    done
+garbage_cleanup_menu_render() {
+    show_menu_option "1" "一键扫描报告 ${CYAN}(只读)${NC}"
+    show_menu_option "2" "清理缓存、日志与本工具旧文件"
+    show_menu_option "3" "清理过期/无主 vzdump 备份"
+    show_menu_option "4" "清理旧 VM/CT 快照"
+    show_menu_option "5" "扫描疑似孤立磁盘 ${YELLOW}(只读，不删除)${NC}"
+    echo "$UI_DIVIDER"
+    echo -e "${YELLOW}说明:${NC} 清理前会列出候选项；备份和快照删除均需要高风险确认。"
+}
+
+garbage_cleanup_menu_dispatch() {
+    case "$1" in
+        1) garbage_cleanup_scan_report ;;
+        2) garbage_cleanup_basic ;;
+        3) garbage_cleanup_prune_backups ;;
+        4) garbage_cleanup_prune_snapshots ;;
+        5) garbage_cleanup_orphan_disk_report ;;
+        *) return 1 ;;
+    esac
+    return 0
 }

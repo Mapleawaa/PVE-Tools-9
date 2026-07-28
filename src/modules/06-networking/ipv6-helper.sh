@@ -111,27 +111,26 @@ ipv6_helper_test_connectivity() {
     echo "$UI_DIVIDER"
 }
 ipv6_helper_menu() {
-    while true; do
-        clear
-        show_menu_header "IPv6 助手"
-        host_network_show_risk_banner
-        show_menu_option "1" "检测宿主机 IPv6 就绪度"
-        show_menu_option "2" "检测 VM IPv6 就绪度（Guest Agent）"
-        show_menu_option "3" "一键配置桥接 IPv6 透传 / SLAAC"
-        show_menu_option "4" "一键配置桥接 NAT6"
-        show_menu_option "5" "测试 IPv6 连通性"
-        show_menu_option "0" "返回"
-        show_menu_footer
-        read -p "请选择操作 [0-5]: " choice
-        case "$choice" in
-            1) ipv6_helper_detect_host_readiness ;;
-            2) ipv6_helper_detect_vm_readiness ;;
-            3) ipv6_helper_configure_passthrough ;;
-            4) ipv6_helper_configure_nat6 ;;
-            5) ipv6_helper_test_connectivity ;;
-            0) return ;;
-            *) log_error "无效选择" ;;
-        esac
-        pause_function
-    done
+    run_menu "IPv6 助手" ipv6_helper_menu_render ipv6_helper_menu_dispatch "0-5"
+}
+
+ipv6_helper_menu_render() {
+    host_network_show_risk_banner
+    show_menu_option "1" "检测宿主机 IPv6 就绪度"
+    show_menu_option "2" "检测 VM IPv6 就绪度（Guest Agent）"
+    show_menu_option "3" "一键配置桥接 IPv6 透传 / SLAAC"
+    show_menu_option "4" "一键配置桥接 NAT6"
+    show_menu_option "5" "测试 IPv6 连通性"
+}
+
+ipv6_helper_menu_dispatch() {
+    case "$1" in
+        1) ipv6_helper_detect_host_readiness ;;
+        2) ipv6_helper_detect_vm_readiness ;;
+        3) ipv6_helper_configure_passthrough ;;
+        4) ipv6_helper_configure_nat6 ;;
+        5) ipv6_helper_test_connectivity ;;
+        *) return 1 ;;
+    esac
+    return 0
 }

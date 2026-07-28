@@ -18,115 +18,178 @@ iommu_is_enabled() {
     return 1
 }
 
-# 从 udev 路径中解析 PCI BDF（格式：0000:00:00.0）
+# 检测本机已存在的直通/虚拟化配置来源（只读），每行输出一个已配置方案名
+gpu_detect_active_stacks() {
+    local grub_cmdline=""
+    if [[ -f /etc/default/grub ]]; then
+        grub_cmdline="$(grep '^GRUB_CMDLINE_LINUX_DEFAULT=' /etc/default/grub 2>/dev/null || true)"
+    fi
+
+    grep -qs "PVE-TOOLS BEGIN IOMMU_BASE_MODULES" /etc/modules && echo "一键硬件直通基础配置 (IOMMU)"
+    grep -qs "PVE-TOOLS BEGIN NVIDIA_VFIO_MODULES" /etc/modules && echo "NVIDIA 宿主机直通预配置"
+    grep -qs "PVE-TOOLS BEGIN AMD_VFIO_MODULES" /etc/modules && echo "AMD 宿主机直通预配置"
+    grep -qs "PVE-TOOLS BEGIN INTEL_SRIOV_MODULES" /etc/modules && echo "Intel 核显 SR-IOV"
+    grep -qs "PVE-TOOLS BEGIN INTEL_GVTG_MODULES" /etc/modules && echo "Intel 核显 GVT-g"
+    grep -qs "PVE-TOOLS BEGIN INTEL_LEGACY_BLACKLIST" /etc/modprobe.d/pve-blacklist.conf && echo "Intel 核显直通黑名单 (修改版 QEMU 方案)"
+    grep -qs "PVE-TOOLS BEGIN HARDWARE_PASSTHROUGH" /etc/modprobe.d/blacklist.conf && echo "一键直通可选驱动屏蔽 (i915/snd_hda)"
+
+    # 兼容旧版本裸写入（无 marker）：按 GRUB 特征参数兜底识别
+    if [[ "$grub_cmdline" == *"i915.enable_gvt"* ]] && ! grep -qs "PVE-TOOLS BEGIN INTEL_GVTG_MODULES" /etc/modules; then
+        echo "Intel 核显 GVT-g (旧版本写入的 GRUB 参数)"
+    fi
+    if [[ "$grub_cmdline" == *"i915.max_vfs"* ]] && ! grep -qs "PVE-TOOLS BEGIN INTEL_SRIOV_MODULES" /etc/modules; then
+        echo "Intel 核显 SR-IOV (旧版本写入的 GRUB 参数)"
+    fi
+    return 0
+}
+
+# 在进入任一直通方案配置前提示已存在的其他方案，避免多方案叠加冲突
+gpu_warn_active_stacks() {
+    local found
+    found="$(gpu_detect_active_stacks)"
+    if [[ -n "$found" ]]; then
+        echo
+        log_warn "检测到本机已存在以下直通/虚拟化配置："
+        while IFS= read -r line; do
+            echo -e "    ${YELLOW}- ${line}${NC}"
+        done <<< "$found"
+        log_warn "多套方案同时修改 GRUB/内核模块可能互相冲突；如需切换方案，建议先用对应菜单清理旧配置。"
+        echo
+    fi
+    return 0
+}
+
 enable_pass() {
+    local grub_changed blacklist_content
     echo
     log_step "开启硬件直通..."
-    if [ `dmesg | grep -e DMAR -e IOMMU|wc -l` = 0 ];then
+    if ! dmesg 2>/dev/null | grep -q -e DMAR -e IOMMU; then
         log_error "您的硬件不支持直通！不如检查一下主板的BIOS设置？"
         pause_function
         return
     fi
-    if [ `cat /proc/cpuinfo|grep Intel|wc -l` = 0 ];then
-        iommu="amd_iommu=on"
-    else
+    if grep -q Intel /proc/cpuinfo; then
         iommu="intel_iommu=on"
+    else
+        iommu="amd_iommu=on"
     fi
-    if ! grep -qw "$(echo "$iommu" | cut -d'=' -f1)" /etc/default/grub; then
+
+    gpu_warn_active_stacks
+
+    if ! confirm_high_risk_action \
+        "开启 IOMMU 硬件直通基础配置" \
+        "会修改 GRUB 内核参数并向 /etc/modules 写入 vfio 模块，需重启生效" \
+        "配置错误可能导致宿主机启动异常；与已有显卡直通方案叠加时请确认参数不冲突" \
+        "脚本会自动备份 /etc/default/grub 与 /etc/modules，可通过 GRUB 备份恢复功能回滚" \
+        "IOMMU-ON"; then
+        return 1
+    fi
+
+    grub_changed=0
+    if ! grub_has_param "$iommu"; then
         if grub_add_param "$iommu"; then
-            update-grub
+            grub_changed=1
         else
             log_error "GRUB 参数添加失败，无法继续配置硬件直通"
             return 1
         fi
-        if [ `grep "vfio" /etc/modules|wc -l` = 0 ];then
-            cat <<-EOF >> /etc/modules
-vfio
+    else
+        log_info "GRUB 中已存在 IOMMU 参数，跳过内核参数修改。"
+    fi
+
+    # GRUB 已配置过时也要补齐 vfio 模块，避免"以为配了其实没配"
+    # marker 配置块写入（apply_block 内部自动备份并保证幂等）
+    if ! grep -q "vfio" /etc/modules 2>/dev/null; then
+        apply_block "/etc/modules" "IOMMU_BASE_MODULES" "vfio
 vfio_iommu_type1
 vfio_pci
 vfio_virqfd
-kvmgt
-EOF
-        fi
-        
-        # 使用安全的配置块管理
+kvmgt"
+        log_success "已写入 vfio 内核模块到 /etc/modules"
+    else
+        log_info "/etc/modules 中已存在 vfio 模块，跳过。"
+    fi
+
+    # 屏蔽核显/声卡驱动仅适用于"把核显直通给虚拟机"的场景；
+    # 宿主机还需要本地显示输出时开启会导致控制台黑屏，因此默认不开启。
+    # 设备级 vfio-pci ids 绑定由各显卡专用直通菜单按实际硬件写入，此处不再写死。
+    echo -e "${YELLOW}是否同时屏蔽宿主机核显与核显音频驱动 (i915/snd_hda_*)？${NC}"
+    echo -e "${RED}仅在准备把核显直通给虚拟机时才需要；开启后宿主机本地屏幕将黑屏，只能通过 SSH/Web 管理。${NC}"
+    if confirm_action "屏蔽 i915 与核显音频驱动（一般不需要）"; then
         blacklist_content="blacklist snd_hda_intel
 blacklist snd_hda_codec_hdmi
 blacklist i915"
         apply_block "/etc/modprobe.d/blacklist.conf" "HARDWARE_PASSTHROUGH" "$blacklist_content"
-
-        # 使用安全的配置块管理
-        vfio_content="options vfio-pci ids=8086:3185"
-        apply_block "/etc/modprobe.d/vfio.conf" "HARDWARE_PASSTHROUGH" "$vfio_content"
-        
-        log_success "开启设置后需要重启系统，请准备就绪后重启宿主机"
-        log_tips "重启后才可以应用对内核引导的修改哦！命令是 reboot"
     else
-        log_warn "您已经配置过!"
+        log_info "已跳过驱动屏蔽。如需针对具体显卡配置，请使用对应显卡的直通菜单。"
     fi
+
+    if [[ "$grub_changed" -eq 1 ]]; then
+        update-grub
+    fi
+    log_success "开启设置后需要重启系统，请准备就绪后重启宿主机"
+    log_tips "重启后才可以应用对内核引导的修改哦！命令是 reboot"
 }
 
 # 关闭硬件直通
 disable_pass() {
     echo
     log_step "关闭硬件直通..."
-    if [ `dmesg | grep -e DMAR -e IOMMU|wc -l` = 0 ];then
+    if ! dmesg 2>/dev/null | grep -q -e DMAR -e IOMMU; then
         log_error "您的硬件不支持直通！"
         log_tips "不如检查一下主板的BIOS设置？"
         pause_function
         return
     fi
-    if [ `cat /proc/cpuinfo|grep Intel|wc -l` = 0 ];then
-        iommu="amd_iommu=on"
-    else
+    if grep -q Intel /proc/cpuinfo; then
         iommu="intel_iommu=on"
-    fi
-    if [ `grep $iommu /etc/default/grub|wc -l` = 0 ];then
-        log_warn "您还没有配置过该项"
     else
-        grub_remove_param "$iommu"
-        backup_file "/etc/modules"
-        sed -i '/vfio/d' /etc/modules
-        # 使用安全的配置块删除，而不是直接删除整个文件
-        remove_block "/etc/modprobe.d/blacklist.conf" "HARDWARE_PASSTHROUGH"
-        remove_block "/etc/modprobe.d/vfio.conf" "HARDWARE_PASSTHROUGH"
-        update-grub
-        log_success "关闭设置后需要重启系统，请准备就绪后重启宿主机。"
-        log_tips "重启后才可以应用对内核引导的修改哦！命令是 reboot"
+        iommu="amd_iommu=on"
     fi
+    if ! grub_has_param "$iommu"; then
+        log_warn "您还没有配置过该项"
+        return
+    fi
+
+    if ! confirm_high_risk_action \
+        "关闭 IOMMU 硬件直通基础配置" \
+        "会移除 GRUB 中的 IOMMU 参数并删除 /etc/modules 中所有 vfio 行" \
+        "依赖 IOMMU 的其他直通方案 (核显 SR-IOV / NVIDIA / AMD / 磁盘控制器直通) 将在重启后全部失效" \
+        "如仍有虚拟机挂载直通设备，请先在对应菜单解除直通再关闭本配置" \
+        "IOMMU-OFF"; then
+        return 1
+    fi
+
+    grub_remove_param "$iommu"
+    backup_file "/etc/modules"
+    # 先移除本工具的 marker 配置块，再精确清理历史版本写入的裸模块行（含 kvmgt，不误删其它行）
+    remove_block "/etc/modules" "IOMMU_BASE_MODULES"
+    sed -i -E '/^(vfio|vfio_iommu_type1|vfio_pci|vfio_virqfd|kvmgt)[[:space:]]*$/d' /etc/modules
+    # 使用安全的配置块删除，而不是直接删除整个文件（vfio.conf 为历史版本可能写入的位置）
+    remove_block "/etc/modprobe.d/blacklist.conf" "HARDWARE_PASSTHROUGH"
+    remove_block "/etc/modprobe.d/vfio.conf" "HARDWARE_PASSTHROUGH"
+    update-grub
+    log_success "关闭设置后需要重启系统，请准备就绪后重启宿主机。"
+    log_tips "重启后才可以应用对内核引导的修改哦！命令是 reboot"
 }
 
 # 硬件直通菜单
 hw_passth() {
-    while :; do
-        clear
-        show_menu_header "配置硬件直通"
-        show_menu_option "1" "开启硬件直通"
-        show_menu_option "2" "关闭硬件直通"
-        echo "${UI_DIVIDER}"
-        show_menu_option "0" "返回"
-        show_menu_footer
-        read -p "请选择: [ ]" -n 1 hwmenuid
-        echo  # New line after input
-        hwmenuid=${hwmenuid:-0}
-        case "${hwmenuid}" in
-            1)
-                enable_pass
-                pause_function
-                ;;
-            2)
-                disable_pass
-                pause_function
-                ;;
-            0)
-                break
-                ;;
-            *)
-                log_error "无效选项!"
-                pause_function
-                ;;
-        esac
-    done
+    run_menu "配置硬件直通" hw_passth_render hw_passth_dispatch "0-2"
+}
+
+hw_passth_render() {
+    show_menu_option "1" "开启硬件直通"
+    show_menu_option "2" "关闭硬件直通"
+}
+
+hw_passth_dispatch() {
+    case "$1" in
+        1) enable_pass ;;
+        2) disable_pass ;;
+        *) return 1 ;;
+    esac
+    return 0
 }
 #--------------磁盘/控制器直通----------------
 

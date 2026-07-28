@@ -624,53 +624,48 @@ it87_uninstall() {
 # ---------- 主菜单 ----------
 
 it87_manager_menu() {
-    while true; do
-        clear
-        show_menu_header "IT87 Driver 管理器"
+    run_menu "IT87 Driver 管理器" it87_manager_menu_render it87_manager_menu_dispatch "0-7"
+}
 
-        local status version chip
-        status=$(it87_detect_status)
-        version=$(it87_detect_version)
-        chip=$(it87_get_force_id)
+it87_manager_menu_render() {
+    local status version chip
+    status=$(it87_detect_status)
+    version=$(it87_detect_version)
+    chip=$(it87_get_force_id)
 
-        echo -e "  当前状态 ： ${CYAN}${status}${NC}"
-        echo -e "  当前版本 ： ${CYAN}${version}${NC}"
-        if [[ -n "$chip" ]]; then
-            echo -e "  芯片型号 ： ${CYAN}force_id=${chip}${NC}"
-        else
-            echo -e "  芯片型号 ： ${ORANGE}未设置${NC}"
-        fi
-        echo "$UI_DIVIDER"
-        show_menu_option "1" "安装 (DKMS 编译)"
-        show_menu_option "2" "安装 (直接编译, DKMS 备选)"
-        echo "$UI_DIVIDER"
-        show_menu_option "3" "选择芯片型号 (force_id)"
-        show_menu_option "4" "启用开机自启"
-        show_menu_option "5" "禁用开机自启"
-        show_menu_option "6" "查看传感器信息"
-        echo "$UI_DIVIDER"
-        show_menu_option "7" "卸载"
-        echo "$UI_DIVIDER"
-        echo "  安装后需要重启或 modprobe it87 加载驱动。"
-        echo "  传感器数据通过 sensors 命令查看。"
-        echo "  项目仓库: ${IT87_REPO_URL:-https://github.com/shauno8/it87.git}"
-        echo "$UI_DIVIDER"
-        show_menu_option "0" "返回"
-        show_menu_footer
+    echo -e "  当前状态 ： ${CYAN}${status}${NC}"
+    echo -e "  当前版本 ： ${CYAN}${version}${NC}"
+    if [[ -n "$chip" ]]; then
+        echo -e "  芯片型号 ： ${CYAN}force_id=${chip}${NC}"
+    else
+        echo -e "  芯片型号 ： ${ORANGE}未设置${NC}"
+    fi
+    echo "$UI_DIVIDER"
+    show_menu_option "1" "安装 (DKMS 编译)"
+    show_menu_option "2" "安装 (直接编译, DKMS 备选)"
+    echo "$UI_DIVIDER"
+    show_menu_option "3" "选择芯片型号 (force_id)"
+    show_menu_option "4" "启用开机自启"
+    show_menu_option "5" "禁用开机自启"
+    show_menu_option "6" "查看传感器信息"
+    echo "$UI_DIVIDER"
+    show_menu_option "7" "卸载"
+    echo "$UI_DIVIDER"
+    echo "  安装后需要重启或 modprobe it87 加载驱动。"
+    echo "  传感器数据通过 sensors 命令查看。"
+    echo "  项目仓库: ${IT87_REPO_URL:-https://github.com/shauno8/it87.git}"
+}
 
-        local choice
-        read -r -p "请选择操作 [0-7]: " choice
-        case "$choice" in
-            1) it87_install_dkms ;;
-            2) it87_install_direct ;;
-            3) it87_force_id_menu ;;
-            4) it87_enable_autostart ;;
-            5) it87_disable_autostart ;;
-            6) it87_show_sensors ;;
-            7) it87_uninstall ;;
-            0) return ;;
-            *) log_error "无效选择" ;;
-        esac
-        pause_function
-    done
+it87_manager_menu_dispatch() {
+    case "$1" in
+        1) it87_install_dkms ;;
+        2) it87_install_direct ;;
+        3) it87_force_id_menu ;;
+        4) it87_enable_autostart ;;
+        5) it87_disable_autostart ;;
+        6) it87_show_sensors ;;
+        7) it87_uninstall ;;
+        *) return 1 ;;
+    esac
+    return 0
 }

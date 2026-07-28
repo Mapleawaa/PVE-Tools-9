@@ -335,46 +335,48 @@ host_firewall_toggle_enable() {
         log_warn "PVE 客体防火墙还依赖对应网卡开启 firewall=1；如未开启，请同步检查网卡配置。"
     fi
 }
+host_firewall_toggle_node() {
+    local node_name rc
+    node_name="$(host_firewall_select_node_name)"
+    rc=$?
+    [[ "$rc" -eq 2 ]] && return 0
+    [[ -n "$node_name" ]] && host_firewall_toggle_enable node "$node_name" "节点 $node_name"
+}
+host_firewall_toggle_vm() {
+    local vmid rc
+    vmid="$(host_firewall_select_guest vm)"
+    rc=$?
+    [[ "$rc" -eq 2 ]] && return 0
+    [[ -n "$vmid" ]] && host_firewall_toggle_enable vm "$vmid" "VM $vmid"
+}
+host_firewall_toggle_ct() {
+    local ctid rc
+    ctid="$(host_firewall_select_guest ct)"
+    rc=$?
+    [[ "$rc" -eq 2 ]] && return 0
+    [[ -n "$ctid" ]] && host_firewall_toggle_enable ct "$ctid" "CT $ctid"
+}
 host_firewall_toggle_menu() {
-    while true; do
-        clear
-        show_menu_header "PVE 防火墙开关"
-        host_network_show_risk_banner
-        show_menu_option "1" "数据中心级别开关"
-        show_menu_option "2" "节点级别开关"
-        show_menu_option "3" "VM 级别开关"
-        show_menu_option "4" "CT 级别开关"
-        show_menu_option "0" "返回"
-        show_menu_footer
-        read -p "请选择操作 [0-4]: " choice
-        case "$choice" in
-            1) host_firewall_toggle_enable datacenter cluster "数据中心" ;;
-            2)
-                local node_name rc
-                node_name="$(host_firewall_select_node_name)"
-                rc=$?
-                [[ "$rc" -eq 2 ]] && continue
-                [[ -n "$node_name" ]] && host_firewall_toggle_enable node "$node_name" "节点 $node_name"
-                ;;
-            3)
-                local vmid rc
-                vmid="$(host_firewall_select_guest vm)"
-                rc=$?
-                [[ "$rc" -eq 2 ]] && continue
-                [[ -n "$vmid" ]] && host_firewall_toggle_enable vm "$vmid" "VM $vmid"
-                ;;
-            4)
-                local ctid rc
-                ctid="$(host_firewall_select_guest ct)"
-                rc=$?
-                [[ "$rc" -eq 2 ]] && continue
-                [[ -n "$ctid" ]] && host_firewall_toggle_enable ct "$ctid" "CT $ctid"
-                ;;
-            0) return ;;
-            *) log_error "无效选择" ;;
-        esac
-        pause_function
-    done
+    run_menu "PVE 防火墙开关" host_firewall_toggle_menu_render host_firewall_toggle_menu_dispatch "0-4"
+}
+
+host_firewall_toggle_menu_render() {
+    host_network_show_risk_banner
+    show_menu_option "1" "数据中心级别开关"
+    show_menu_option "2" "节点级别开关"
+    show_menu_option "3" "VM 级别开关"
+    show_menu_option "4" "CT 级别开关"
+}
+
+host_firewall_toggle_menu_dispatch() {
+    case "$1" in
+        1) host_firewall_toggle_enable datacenter cluster "数据中心" ;;
+        2) host_firewall_toggle_node ;;
+        3) host_firewall_toggle_vm ;;
+        4) host_firewall_toggle_ct ;;
+        *) return 1 ;;
+    esac
+    return 0
 }
 host_firewall_list_security_groups() {
     clear
@@ -613,31 +615,30 @@ host_firewall_import_ruleset() {
     display_success "规则集已导入" "$path"
 }
 host_firewall_menu() {
-    while true; do
-        clear
-        show_menu_header "PVE 防火墙管理"
-        host_network_show_risk_banner
-        show_menu_option "1" "数据中心 / 节点 / VM / CT 防火墙开关"
-        show_menu_option "2" "查看目标规则集"
-        show_menu_option "3" "列出安全组规则"
-        show_menu_option "4" "新增安全组规则"
-        show_menu_option "5" "删除安全组规则"
-        show_menu_option "6" "导出规则集（JSON / CLI）"
-        show_menu_option "7" "导入规则集（JSON / CLI）"
-        show_menu_option "0" "返回"
-        show_menu_footer
-        read -p "请选择操作 [0-7]: " choice
-        case "$choice" in
-            1) host_firewall_toggle_menu ;;
-            2) host_firewall_show_target_rules ;;
-            3) host_firewall_list_security_groups ;;
-            4) host_firewall_add_security_group_rule ;;
-            5) host_firewall_delete_security_group_rule ;;
-            6) host_firewall_export_ruleset ;;
-            7) host_firewall_import_ruleset ;;
-            0) return ;;
-            *) log_error "无效选择" ;;
-        esac
-        pause_function
-    done
+    run_menu "PVE 防火墙管理" host_firewall_menu_render host_firewall_menu_dispatch "0-7"
+}
+
+host_firewall_menu_render() {
+    host_network_show_risk_banner
+    show_menu_option "1" "数据中心 / 节点 / VM / CT 防火墙开关"
+    show_menu_option "2" "查看目标规则集"
+    show_menu_option "3" "列出安全组规则"
+    show_menu_option "4" "新增安全组规则"
+    show_menu_option "5" "删除安全组规则"
+    show_menu_option "6" "导出规则集（JSON / CLI）"
+    show_menu_option "7" "导入规则集（JSON / CLI）"
+}
+
+host_firewall_menu_dispatch() {
+    case "$1" in
+        1) host_firewall_toggle_menu ;;
+        2) host_firewall_show_target_rules ;;
+        3) host_firewall_list_security_groups ;;
+        4) host_firewall_add_security_group_rule ;;
+        5) host_firewall_delete_security_group_rule ;;
+        6) host_firewall_export_ruleset ;;
+        7) host_firewall_import_ruleset ;;
+        *) return 1 ;;
+    esac
+    return 0
 }

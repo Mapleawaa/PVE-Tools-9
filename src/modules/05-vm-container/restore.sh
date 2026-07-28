@@ -13,23 +13,29 @@ vm_select_backup_archive() {
         return 0
     fi
 
+    local count manual_idx
+    count="$(echo "$archives" | awk 'NF{c++} END{print c+0}')"
+    manual_idx=$((count + 1))
+
     {
         echo -e "${CYAN}已发现备份文件：${NC}"
         echo "$archives" | awk -F'|' '{printf "  [%d] %-10s %-16s %s\n", NR, $2, $3, $1}'
+        printf '  [%d] 手动输入备份文件路径\n' "$manual_idx"
         echo -e "${UI_DIVIDER}"
     } >&2
 
     local pick line path
-    read -p "请选择备份序号 (0 手动输入): " pick
+    read -p "请选择备份序号 (0 返回): " pick
     pick="${pick:-0}"
-    if [[ "$pick" == "0" ]]; then
+    [[ "$pick" == "0" ]] && return 2
+    [[ "$pick" =~ ^[0-9]+$ ]] || return 1
+    if [[ "$pick" -eq "$manual_idx" ]]; then
         local manual
         read -p "请输入备份文件完整路径: " manual
         [[ -n "$manual" && -f "$manual" ]] || return 1
         echo "$manual"
         return 0
     fi
-    [[ "$pick" =~ ^[0-9]+$ ]] || return 1
     line="$(echo "$archives" | awk -F'|' -v n="$pick" 'NR==n{print $0}')"
     path="$(echo "$line" | awk -F'|' '{print $1}')"
     [[ -n "$path" && -f "$path" ]] || return 1
@@ -91,27 +97,24 @@ vm_restore_from_backup() {
     display_success "恢复完成" "新 VMID: $new_vmid"
 }
 vm_backup_restore_menu() {
-    while true; do
-        clear
-        show_menu_header "VM 备份与恢复"
-        vm_show_data_risk_banner
-        show_menu_option "1" "创建 VM 备份（vzdump）"
-        show_menu_option "2" "从备份恢复为新 VM"
-        show_menu_option "3" "定时备份任务管理"
-        show_menu_option "4" "备份文件跨机恢复引导"
-        show_menu_option "0" "返回"
-        show_menu_footer
+    run_menu "VM 备份与恢复" vm_backup_restore_menu_render vm_backup_restore_menu_dispatch "0-4"
+}
 
-        local choice
-        read -p "请选择操作 [0-4]: " choice
-        case "$choice" in
-            1) vm_backup_create ;;
-            2) vm_restore_from_backup ;;
-            3) vm_schedule_backup_menu ;;
-            4) vm_backup_transfer_guide ;;
-            0) return ;;
-            *) log_error "无效选择" ;;
-        esac
-        pause_function
-    done
+vm_backup_restore_menu_render() {
+    vm_show_data_risk_banner
+    show_menu_option "1" "创建 VM 备份（vzdump）"
+    show_menu_option "2" "从备份恢复为新 VM"
+    show_menu_option "3" "定时备份任务管理"
+    show_menu_option "4" "备份文件跨机恢复引导"
+}
+
+vm_backup_restore_menu_dispatch() {
+    case "$1" in
+        1) vm_backup_create ;;
+        2) vm_restore_from_backup ;;
+        3) vm_schedule_backup_menu ;;
+        4) vm_backup_transfer_guide ;;
+        *) return 1 ;;
+    esac
+    return 0
 }

@@ -28,7 +28,11 @@ change_sources() {
     log_info "  PVE:       $pve_mirror"
     log_info "  Ceph:      $ceph_mirror"
     log_info "  CT 模板:   $ct_mirror"
-    
+
+    if ! confirm_action "按以上配置重写 APT 源文件（debian/ceph/pve-no-subscription 等）"; then
+        return 0
+    fi
+
     # 1. 更换 Debian 软件源 (DEB822 格式)
     log_info "正在配置 Debian 镜像源..."
     backup_file "/etc/apt/sources.list.d/debian.sources"

@@ -1,7 +1,6 @@
 # Ignore dependencies
 node_modules/
 **/node_modules/
-bun.lockb
 
 # Ignore build outputs
 dist/
@@ -9,10 +8,6 @@ dist/
 build/
 out/
 .temp/
-.vitepress/dist/
-.vitepress/cache/
-**/.vitepress/dist/
-**/.vitepress/cache/
 
 # Ignore system files
 .DS_Store
@@ -37,12 +32,3 @@ report.[0-9]*.[0-9]*.[0-9]*.[0-9]*.json
 # Python
 __pycache__/
 *.pyc
-
-# BMad Method V6
-_bmad/
-_bmad-output/
-
-test.txt
-
-# ignore docs
-Docs/

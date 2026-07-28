@@ -18,6 +18,11 @@ jobs:
             exit 1
           fi
           
+      - name: Shellcheck (lib and modules, error level)
+        run: |
+          # 全量源码 error 级静态检查（入口与构建产物维持 error+warning 严格档）
+          find lib src/modules -name '*.sh' -print0 | xargs -0 shellcheck --severity=error -f gcc
+
       - name: Shell syntax check
         run: |
           bash -n PVE-Tools.sh
@@ -34,6 +39,13 @@ jobs:
             exit 1
           fi
 
+      - name: Build output consistency check
+        run: |
+          # 断言 lib/ 与 src/modules/ 中定义的每个函数都进入了构建产物（双向一致）
+          diff <(grep -rhoE '^[a-zA-Z_][a-zA-Z0-9_]*\(\)' lib src/modules --include='*.sh' | sort -u) \
+               <(grep -hoE '^[a-zA-Z_][a-zA-Z0-9_]*\(\)' dist/PVE-Tools.sh | sort -u) \
+            || { echo "构建产物与源码的函数集合不一致，见上方 diff（< 仅源码有 / > 仅产物有）"; exit 1; }
+
       - name: Version consistency check
         run: |
           SCRIPT_VERSION=$(grep "CURRENT_VERSION=" lib/config.sh | cut -d'"' -f2)
@@ -42,12 +54,34 @@ jobs:
             echo "Version inconsistency: script($SCRIPT_VERSION) != version file($VERSION_FILE_VERSION)"
             exit 1
           fi
+
+      - name: UPDATE changelog freshness check
+        run: |
+          # UPDATE 是 check_update 展示给线上用户的更新日志，首行必须包含当前版本号，防止再次脱节
+          VERSION_FILE_VERSION=$(cat VERSION)
+          if ! head -1 UPDATE | grep -qF "$VERSION_FILE_VERSION"; then
+            echo "UPDATE 首行未包含当前版本 $VERSION_FILE_VERSION —— 更新日志已脱节，请同步 UPDATE 文件"
+            exit 1
+          fi
           
       - name: Security scan
         run: |
-          # 检查是否有潜在的安全问题
-          if grep -q "eval\|source" PVE-Tools.sh; then
-            echo "Potential security issues found: eval or source commands detected"
-          else
-            echo "No security issues detected"
+          # 对全量构建产物扫描真实危险模式，命中即失败
+          # （旧版对入口 grep eval/source 永远命中且从不失败，属于空转检查）
+          status=0
+          if grep -nE '(^|[^a-zA-Z_.])eval([^a-zA-Z_]|$)' dist/PVE-Tools.sh; then
+            echo "检测到 eval 使用：本项目约定禁止 eval，请改写后再合并"
+            status=1
           fi
+          if grep -nE 'rm -rf +\$' dist/PVE-Tools.sh; then
+            echo "检测到未加引号且以变量开头的 rm -rf 路径：变量为空或含空格时行为不可控，请加引号与前置校验"
+            status=1
+          fi
+          if grep -nE '^[[:space:]]*(source|\.)[[:space:]]' dist/PVE-Tools.sh; then
+            echo "构建产物中不应存在 source 语句：dist 是自包含单文件，出现 source 说明拼接进了开发态加载代码"
+            status=1
+          fi
+          if [ "$status" -eq 0 ]; then
+            echo "Security scan passed"
+          fi
+          exit $status

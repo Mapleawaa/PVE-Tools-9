@@ -4,54 +4,52 @@
 
 ## 模块职责
 
-管理项目的持续集成/持续部署流水线和社区 Issue 模板。三条工作流覆盖 PR 验证、正式发布和测试版发布。
+管理项目的持续集成/持续部署流水线和社区 Issue 模板。三条工作流覆盖 PR 验证、正式发布和测试版发布。发布物为 `dist/PVE-Tools.sh` 单文件 + `SHA256SUMS.txt`（不使用 shc 编译二进制）。
 
 ## 入口与启动
 
 | 项目 | 说明 |
 |---|---|
-| 触发方式 | GitHub Actions，由 push/pull_request 事件触发 |
+| 触发方式 | GitHub Actions，由 push（tag）/pull_request 事件触发 |
 | 运行环境 | `ubuntu-latest` |
-| 权限 | `contents: write`（Release 工作流需要） |
+| 权限 | `contents: write`（两个 Release 工作流需要） |
 
 ## 工作流清单
 
+### pr-validation.yml -- PR 验证工作流
+
+**触发条件**: PR 到 `main` 或 `beta` 分支
+
+| 检查 | 说明 |
+|---|---|
+| Shellcheck（入口） | `shellcheck -f gcc PVE-Tools.sh`，error/warning 均失败 |
+| Shellcheck（全源码） | `find lib src/modules -name '*.sh' \| xargs shellcheck --severity=error`，error 级卡死 |
+| 语法检查 | `bash -n` 入口/dev.sh，`bash build.sh` 后 `bash -n dist` |
+| Shellcheck（产物） | dist 的 error/warning 均失败 |
+| 构建一致性 | 源码与 dist 的函数集合双向 diff，不一致即失败 |
+| 版本一致性 | `CURRENT_VERSION`（lib/config.sh）== `VERSION` 文件 |
+| UPDATE 新鲜度 | `UPDATE` 首行必须包含当前版本号（防更新日志脱节） |
+| 安全扫描 | dist 中禁 `eval`、未加引号变量开头的 `rm -rf`、`source` 语句，命中即失败 |
+
 ### release.yml -- 正式发布工作流
 
-**触发条件**: 推送版本标签 (`v*.*.*`, `*.*.*`, `v*.*.*-stable`, `*.*.*-stable`)
+**触发条件**: 推送 `v*.*.*` / `*.*.*` / `*-stable` 标签；**排除** `-beta*` / `-alpha*` / `-rc*`（预发布标签只归 beta-release.yml，避免双流水线竞争同一 tag）
 
 **步骤**:
-1. `actions/checkout@v4`（fetch-depth: 0 以获取完整历史）
-2. 从 tag 提取版本号
-3. **`bash build.sh`** -- 将 lib/ + src/modules/ 组装为 `dist/PVE-Tools.sh`
-4. 安装 `shc`（via neurobin/ppa）
-5. `shc -f dist/PVE-Tools.sh -o pve-tools` -- 编译为二进制
-6. 生成 release notes（基于 git 提交历史）
-7. `softprops/action-gh-release@v2` 创建 GitHub Release，上传 `pve-tools` + `dist/PVE-Tools.sh`
+1. checkout（fetch-depth: 0）-> 从 tag 提取版本号
+2. `bash build.sh` 构建 dist
+3. **发布前校验**（打 tag 直发不绕过质量闸门）：`bash -n dist`、`shellcheck --severity=error dist`、函数集合一致性 diff、版本三方一致（tag == config == VERSION）
+4. 生成 `SHA256SUMS.txt`
+5. 基于 git 提交历史生成 release notes
+6. `softprops/action-gh-release@v2` 创建 Release，上传 `dist/PVE-Tools.sh` + `dist/SHA256SUMS.txt`
 
-**构建产物**:
-- `pve-tools` -- 编译后的二进制文件
-- `dist/PVE-Tools.sh` -- 拼接后的单文件脚本
+**注意**: 远程安装链路依赖 `releases/latest/download/PVE-Tools.sh`，正式发版后新用户方能获取最新版。
 
 ### beta-release.yml -- 测试版发布工作流
 
-**触发条件**: 推送 beta/alpha 标签
+**触发条件**: 推送 `-beta*` / `-alpha*` 标签
 
-功能与 release.yml 类似，但标记为 prerelease。
-
-### pr-validation.yml -- PR 验证工作流
-
-**触发条件**: PR 合并到 `main` 或 `beta` 分支
-
-**检查项**:
-
-| 检查 | 命令 | 说明 |
-|---|---|---|
-| Shellcheck | `shellcheck -f gcc PVE-Tools.sh` | 静态分析，有 error/warning 则失败 |
-| 语法检查 | `bash -n PVE-Tools.sh`、`bash -n dev.sh`、`bash -n dist/PVE-Tools.sh` | 先运行 `bash build.sh` 构建再检查 |
-| 构建验证 | `bash build.sh` | 验证构建不报错 |
-| 版本一致性 | 比较 `lib/config.sh` 中的 `CURRENT_VERSION` 与 `VERSION` 文件 | 不一致则失败 |
-| 安全扫描 | grep 检测 `eval`/`source` 使用 | 发现则告警 |
+与 release.yml 类似但 `prerelease: true`；同样执行构建质量校验（语法/shellcheck/函数一致性），版本号断言放宽（beta 标签允许与 config 版本不同步）。
 
 ## Issue 模板
 
@@ -71,42 +69,29 @@
 
 ## 关键依赖与配置
 
-- **GitHub Actions**: 免费额度，`ubuntu-latest` runner
-- **shc**: 来自 `ppa:neurobin/ppa`，用于 Bash 编译
-- **softprops/action-gh-release@v2**: 第三方 GitHub Action，用于创建 Release
-- **shellcheck**: Ubuntu 自带或通过 apt 安装
-
-## 测试与质量
-
-CI/CD 本身即为项目的测试与质量保障体系：
-- 每次 PR 自动执行静态分析、语法检查、版本一致性校验、安全扫描
-- Release 前自动构建并验证构建产物
+- **GitHub Actions**: `ubuntu-latest` runner（自带 shellcheck）
+- **softprops/action-gh-release@v2**: 创建 Release 与上传资产
 
 ## 常见问题 (FAQ)
 
-**Q: 为什么 Release 要用 shc 编译？**
-shc 将 Bash 脚本编译为二进制文件，提供基础的源码保护，同时便于分发。构建产物 `dist/PVE-Tools.sh` 同时发布以保持 `bash <(curl ...)` 兼容性。
+**Q: 发版时需要同步哪些版本号？**
+三处：`lib/config.sh` 的 `CURRENT_VERSION`、`VERSION` 文件、`UPDATE` 首行条目，且正式发布 tag 必须与之一致——任何一处不同步都会被 CI 拦下。
 
-**Q: PR 验证中 build.sh 会失败怎么办？**
-检查 lib/ 和 src/modules/ 中的文件是否存在、语法是否正确。`bash -n` 仅检查语法不执行代码。
+**Q: PR 验证中 build.sh 失败怎么办？**
+检查 lib/ 与 src/modules/ 文件是否齐全、语法是否正确；新增 lib 文件需同步 build.sh / dev.sh / PVE-Tools.sh 三处加载列表。
 
 **Q: 如何添加新的 Issue 模板？**
-在 `ISSUE_TEMPLATE/` 目录添加 `.md` 文件并更新 `config.yml` 即可，GitHub 会自动识别。
+在 `ISSUE_TEMPLATE/` 目录添加 `.md` 文件并更新 `config.yml`。
 
 ## 相关文件清单
 
 ```
 .github/
   workflows/
-    release.yml                    # 正式发布工作流
-    beta-release.yml               # 测试版发布工作流
-    pr-validation.yml              # PR 验证工作流
-  ISSUE_TEMPLATE/
-    fast-bugs-report.md            # 快速 Bug 报告模板
-    feature-request.md             # 功能请求模板
-    plugin-submit.md               # 插件提交模板
-    report-bugs.md                 # 详细 Bug 报告模板
-    config.yml                     # Issue 模板配置
+    release.yml                    # 正式发布（含发布前校验与 SHA256SUMS）
+    beta-release.yml               # 测试版发布（含构建校验）
+    pr-validation.yml              # PR 验证（8 项检查）
+  ISSUE_TEMPLATE/                  # Issue 模板 5 件
   FUNDING.yml                      # 赞助配置
 ```
 
@@ -114,4 +99,5 @@ shc 将 Bash 脚本编译为二进制文件，提供基础的源码保护，同�
 
 | 日期 | 变更 |
 |---|---|
-| 2026-07-08 | 初始化 .github 模块 CLAUDE.md。PR 验证已适配模块化（build.sh/build -n dist）。Release 已添加 build.sh 步骤。 |
+| 2026-07-26 | 按现实重写：移除 shc 描述；补充发布前校验/SHA256SUMS/UPDATE 新鲜度/安全扫描细节；记录正式与预发布标签互斥规则 |
+| 2026-07-08 | 初始化 .github 模块 CLAUDE.md |

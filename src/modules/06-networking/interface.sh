@@ -3,6 +3,11 @@
 # Copyright (C) 2026 Ciriu Networks
 
 host_network_show_risk_banner() {
+    # 每会话仅完整展示一次，避免每次重绘菜单都整屏刷同一段风险横幅
+    if [[ "${HOST_NET_RISK_BANNER_SHOWN:-0}" -eq 1 ]]; then
+        return 0
+    fi
+    HOST_NET_RISK_BANNER_SHOWN=1
     echo -e "${RED}${UI_DIVIDER}${NC}"
     echo -e "${RED}高风险提示：以下功能会直接改写宿主机网络、防火墙和 IPv6 行为。${NC}"
     echo -e "${YELLOW}请仅在控制台或带外管理可用、已确认维护窗口、已准备回滚方案时继续。${NC}"

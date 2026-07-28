@@ -29,6 +29,19 @@ jobs:
       - name: Build single script from modules
         run: bash build.sh
 
+      - name: Validate build output before release
+        run: |
+          # beta 同样不跳过构建质量校验（版本号断言放宽，beta 标签允许与 config 不同步）
+          bash -n dist/PVE-Tools.sh
+          shellcheck --severity=error -f gcc dist/PVE-Tools.sh
+          diff <(grep -rhoE '^[a-zA-Z_][a-zA-Z0-9_]*\(\)' lib src/modules --include='*.sh' | sort -u) \
+               <(grep -hoE '^[a-zA-Z_][a-zA-Z0-9_]*\(\)' dist/PVE-Tools.sh | sort -u) \
+            || { echo "构建产物与源码函数集合不一致，中止发布"; exit 1; }
+
+      - name: Generate checksums
+        run: |
+          cd dist && sha256sum PVE-Tools.sh > SHA256SUMS.txt && cat SHA256SUMS.txt
+
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
@@ -47,6 +60,7 @@ jobs:
             ```
           files: |
             dist/PVE-Tools.sh
+            dist/SHA256SUMS.txt
           draft: false
           prerelease: true
         env:
