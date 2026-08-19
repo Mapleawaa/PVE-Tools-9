@@ -83,7 +83,7 @@
 | `check_debug_mode()` | 解析 `--i-know-what-i-do` 和 `--debug` 参数 |
 | `check_pve_version()` | PVE 版本检测（非 PVE9 环境需确认风险，拦截高危自动化） |
 | `block_non_pve9_destructive()` | 非 PVE9 环境拦截换源/升级等破坏性操作 |
-| `show_menu()` | 主菜单（10 个功能入口 + 一言 Tips） |
+| `show_menu()` | 主菜单（11 个功能入口 + 一言 Tips） |
 | `main()` | **脚本主入口**：trap INT（Ctrl+C 中断当前输入回上级而非杀进程）-> 权限/许可/调试/PVE 版本/网络检查 -> 更新检查 -> 主循环（read 带 EOF 守卫优雅退出；子菜单返回不重复 pause） |
 
 ## 关键依赖与配置

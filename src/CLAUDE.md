@@ -4,7 +4,7 @@
 
 ## 模块职责
 
-承载 PVE Tools Pro 全部业务逻辑，按主菜单编号拆分为 10 个子模块。每个子模块的 `init.sh` 为菜单入口函数，其余文件按功能领域进一步拆分。所有脚本由 `PVE-Tools.sh` 或 `dev.sh` 在 lib/ 加载完成后统一 source。
+承载 PVE Tools Pro 全部业务逻辑，按主菜单编号拆分为 11 个子模块。每个子模块的 `init.sh` 为菜单入口函数，其余文件按功能领域进一步拆分。所有脚本由 `PVE-Tools.sh` 或 `dev.sh` 在 lib/ 加载完成后统一 source。
 
 ## 入口与启动
 
@@ -28,6 +28,7 @@
 | 8 | `08-tools-about/` | 诊断工具与项目信息 | 3 | 低 |
 | 9 | `09-security/` | 安全中心 | 4 | 中等 |
 | 10 | `10-third-party/` | 第三方工具 | 5 | 低 |
+| 11 | `11-help/` | 获取帮助 | 1 | 低 |
 
 ---
 
@@ -214,6 +215,18 @@
 
 ---
 
+## 11-help -- 获取帮助
+
+**菜单入口**: `help_center_menu()` 定义于 `init.sh`
+
+| 文件 | 核心函数 | 功能 |
+|---|---|---|
+| `init.sh` | `help_center_menu()`, `help_show_qq_group()`, `help_show_telegram_group()`, `help_show_paid_consult()` | 二级菜单 + 联系/付费咨询/社区信息展示 |
+
+**依赖**: 仅依赖 `lib/`（`show_menu_header` / `UI_DIVIDER` 展示组件）。
+
+---
+
 ## 关键依赖与配置
 
 - **lib/ 先决条件**: 所有模块均依赖 `lib/config.sh`（全局变量）和 `lib/core.sh`（日志/UI/备份函数）
@@ -221,7 +234,7 @@
   - `04-gpu-passthrough`: nvidia.sh 的辅助函数被 amd-*.sh 复用；iommu.sh 被多个子模块复用
   - `05-vm-container`: storage-helper.sh 被 7 个同模块文件复用
   - `06-networking`: interface.sh 被 6 个同模块文件复用
-- **无跨模块依赖**: 模块 01/02/03/07/08/09/10 仅依赖 lib/，不存在模块间引用
+- **无跨模块依赖**: 模块 01/02/03/07/08/09/10/11 仅依赖 lib/，不存在模块间引用
 
 ## 测试与质量
 
@@ -258,6 +271,7 @@ src/modules/
   08-tools-about/           (3 文件) -- 诊断工具与项目信息
   09-security/              (3 文件) -- 安全中心
   10-third-party/           (4 文件) -- 第三方工具
+  11-help/                  (1 文件) -- 获取帮助
 ```
 
 ## 变更记录 (Changelog)

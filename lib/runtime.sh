@@ -137,15 +137,14 @@ show_menu() {
     show_menu_option "8" "诊断工具与项目信息 ${CYAN}( 系统信息 / 救砖 / 脚本管理 )${NC}"
     show_menu_option "9" "安全中心 ${CYAN}( 风险检查 / SSH加固 / CVE修补 )${NC}"
     show_menu_option "10" "第三方工具 ${CYAN}( CoolerControl / IT87驱动 / 社区脚本 )${NC}"
+    show_menu_option "11" "获取帮助 ${CYAN}( 联系作者 / 付费咨询 / 社区 )${NC}"
     echo "$UI_DIVIDER"
     show_menu_option "0" "${RED}退出脚本${NC}"
     show_menu_footer
     echo
     echo -e "  ${YELLOW}Tips: ${SESSION_TIP:-一言获取失败，本次会话不再重试。}${NC}"
-    echo -e "本项目正在收集用户意见，如您愿意，请前往填写问卷，这能帮到整个项目！"
-    echo -e "-> https://wj.qq.com/s2/27286538/9d9d/"
     echo
-    echo -ne "  ${PRIMARY}请输入您的选择 [0-10]: ${NC}"
+    echo -ne "  ${PRIMARY}请输入您的选择 [0-11]: ${NC}"
 }
 # 应急救砖工具箱菜单
 main() {
@@ -212,6 +211,9 @@ main() {
             10)
                 third_party_tools_menu
                 ;;
+            11)
+                help_center_menu
+                ;;
             0)
                 echo "感谢使用,谢谢喵"
                 echo "再见！"
@@ -219,7 +221,7 @@ main() {
                 ;;
             *)
                 log_error "哎呀，这个选项不存在呢"
-                log_warn "请输入 0-10 之间的数字"
+                log_warn "请输入 0-11 之间的数字"
                 ;;
         esac
 

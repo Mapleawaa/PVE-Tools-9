@@ -12,7 +12,7 @@ PVE Tools Pro 是一个面向 Proxmox VE 9.x 的交互式 Bash 运维工具集�
 
 - **入口层**: `PVE-Tools.sh`（约 330 行）-- 本地开发时按固定顺序 source lib/ 与 src/modules/（各模块 init.sh 显式优先）；远程 curl 运行时从 GitHub Releases（`releases/latest/download/PVE-Tools.sh`）下载构建产物执行，带重试/限速/校验/原子落盘守护。
 - **基础设施层**: `lib/` -- 全局变量(config.sh)、日志/UI/确认/备份/GRUB(core.sh)、菜单交互框架(menu.sh)、网络检测/镜像选择(network.sh)、运行时守卫与主循环(runtime.sh)。
-- **功能模块层**: `src/modules/` -- 10 个子目录对应主菜单 1-10 项，每个子目录内按功能拆分文件（init.sh 为菜单入口）。
+- **功能模块层**: `src/modules/` -- 11 个子目录对应主菜单 1-11 项，每个子目录内按功能拆分文件（init.sh 为菜单入口）。
 - **构建系统**: `build.sh` 按顺序拼接 lib/*.sh + src/modules/**/*.sh 为 `dist/PVE-Tools.sh`（gitignore，CI 构建）；`dev.sh` 直接 source 全部源码供开发调试。
 - **辅助工具集**: `Tools/` 集成来自 tteck 社区的 13 个独立维护脚本（不参与构建，供用户手动执行）。
 - **插件市场**: `Modules/` 提供第三方脚本与二进制资产；`Modules/VGPU/*.so` 是 vGPU Unlock 功能的下载资产，不可删改。
@@ -47,6 +47,7 @@ graph TD
     SRC --> M08["08-tools-about<br/>诊断工具与项目信息"]
     SRC --> M09["09-security<br/>安全中心"]
     SRC --> M10["10-third-party<br/>第三方工具"]
+    SRC --> M11["11-help<br/>获取帮助"]
 
     GHA --> W1["workflows/<br/>release/beta/PR"]
 
@@ -64,7 +65,7 @@ graph TD
 |---|---|---|---|---|
 | `/` (根) | Bash | 入口脚本：本地 source / 远程下载 Releases 单文件 | `PVE-Tools.sh` (~330行) | `README.md` |
 | `lib/` | Bash | 基础设施层：全局变量、日志、UI、菜单框架、网络、运行时 | `config.sh`, `core.sh`, `menu.sh`, `network.sh`, `runtime.sh` | [lib/CLAUDE.md](./lib/CLAUDE.md) |
-| `src/modules/` | Bash | 功能模块层：10 个子模块，对应主菜单 1-10 | 各 `*/init.sh` | [src/CLAUDE.md](./src/CLAUDE.md) |
+| `src/modules/` | Bash | 功能模块层：11 个子模块，对应主菜单 1-11 | 各 `*/init.sh` | [src/CLAUDE.md](./src/CLAUDE.md) |
 | `Tools/` | Bash | 第三方系统维护脚本集（13个，不参与构建） | 各 `.sh` 文件 | [Tools/CLAUDE.md](./Tools/CLAUDE.md) |
 | `Modules/` | Bash/二进制 | 插件市场与分发资产（VGPU .so 为下载资产） | `install-zsh.sh`, `VGPU/*.so` | [Modules/CLAUDE.md](./Modules/CLAUDE.md) |
 | `Docs/` | Markdown | 补充文档与《重构计划》设计稿 | `future-guide.md`, `重构计划-PVE-Tools模块化拆分.md` | -- |
@@ -214,6 +215,7 @@ foo_menu_dispatch() {      # case 处理选项；未识别 return 1；末尾必�
 
 | 日期 | 变更 | 来源 |
 |---|---|---|
+| 2026-08-19 | 硬件直通一键配置 (IOMMU) 新增可选增强参数：iommu=pt 与 pcie_acs_override=downstream,multifunction（强制拆分 IOMMU 组，解决 GPU 与系统盘同组时 vfio-pci 误接管系统盘问题）；关闭流程同步移除 | GitHub Issue |
 | 2026-07-26 | 交互层框架化：新增 lib/menu.sh，全部菜单迁移 run_menu；确认体系两档成文；GPU 直通 marker 统一与互斥检测；GRUB 参数函数数组化；文档按现实重写（修正入口行数/远程模式/shc 等失真）；仓库卫生清理；CI 护栏补全 | 交互层收口整理 |
 | 2026-07-08 | 项目模块化重构完成：单文件拆分为 lib/ + src/modules/（10 子模块）。新增 build.sh/dev.sh。Web/ 目录移除。 | claude-init 架构师 |
 | 2026-04-28 | 初始化 CLAUDE.md 体系 | claude-init 架构师 |
