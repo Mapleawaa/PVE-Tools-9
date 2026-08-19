@@ -1,3 +1,9 @@
+v11.1.0
+- 新增「获取帮助」板块（主菜单 11）：QQ 水群 / Telegram 聊天社区 / 作者付费咨询与赞助入口
+- 硬件直通一键配置 (IOMMU) 新增可选增强参数：iommu=pt 与 pcie_acs_override=downstream,multifunction（强制拆分 IOMMU 组，解决 GPU 与系统盘同组时 vfio-pci 误接管系统盘问题）
+- 修复温度监控在无 NVMe 硬盘时误报 nvme0 的问题（glob 无匹配陷阱）
+- 修正 MAC 绑定接口名校验的错误提示文案
+
 v11.0.0
 - 交互层框架化：新增 lib/menu.sh，全部菜单迁移 run_menu，统一 EOF/Ctrl+C 守卫与 pause 节奏
 - 确认体系两档成文：轻档 confirm_action / 重档 confirm_high_risk_action（指定确认词）

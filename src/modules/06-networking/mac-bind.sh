@@ -368,7 +368,7 @@ host_network_create_mac_binding() {
     read -r -p "请输入固定接口名称（如 lan0、pve-eth0）: " fixed_name
     [[ -n "$fixed_name" ]] || { display_error "接口名称不能为空"; return 1; }
     host_network_validate_systemd_link_name "$fixed_name" || {
-        display_error "接口名称不合法: $fixed_name" "名称需为 1-15 位，只允许字母、数字、_、.、-，且不能是纯数字或保留名。"
+        display_error "接口名称不合法: $fixed_name" "名称需为 1-15 位，只允许字母、数字、下划线、点、连字符。且不能是纯数字或保留名。"
         return 1
     }
 
