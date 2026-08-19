@@ -327,8 +327,9 @@ EOF
     log_info "检测系统中的 NVME 硬盘"
     nvi=0
     for nvme in /dev/nvme[0-9]; do
-        # glob 无匹配时 bash 会返回字面模式字符串，需校验真实块设备后跳过（参考下方 SATA 检测）
-        [ -b "$nvme" ] || continue
+        # 控制器节点为字符设备（如 /dev/nvme0，major 243），命名空间才是块设备（/dev/nvme0n1，不匹配本模式）；
+        # 字符设备校验同时兼容 glob 无匹配场景（字面模式字符串非字符设备，自然跳过）
+        [ -c "$nvme" ] || continue
         chmod +s /usr/sbin/smartctl 2>/dev/null
 
         cat >> $tmpf << EOF
