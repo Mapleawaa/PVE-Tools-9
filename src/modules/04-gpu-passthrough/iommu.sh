@@ -112,14 +112,28 @@ kvmgt"
 
     # 可选增强：部分主板的 PCIe 拆分会将 GPU 与系统盘/NVMe 分到同一 IOMMU 组，
     # GPU 直通时 vfio-pci 会误接管系统盘控制器导致开机崩溃；
-    # 常规单显卡直通不受影响，因此默认询问后由用户决定是否开启。
+    # 常规单显卡直通不受影响，因此确认后由用户决定是否开启。
     echo -e "${YELLOW}是否同时启用直通增强参数 iommu=pt 与 pcie_acs_override=downstream,multifunction？${NC}"
-    echo -e "${RED}仅在 GPU 与系统盘/NVMe 同属一个 IOMMU 组、GPU 直通时 vfio-pci 误接管系统盘导致开机崩溃的情况下建议开启；会强制拆分 IOMMU 组并开启直通模式。${NC}"
-    if confirm_action "写入直通增强参数 iommu=pt 与 pcie_acs_override（一般不需要）"; then
-        grub_add_param "iommu=pt"
-        grub_add_param "pcie_acs_override=downstream,multifunction"
-        # 即使基础 IOMMU 参数已存在（grub_changed=0），本次新写入也必须触发 update-grub
-        grub_changed=1
+    echo -e "${RED}仅在 GPU 与系统盘/NVMe 同属一个 IOMMU 组、GPU 直通时 vfio-pci 误接管系统盘导致开机崩溃的情况下建议开启；会强制拆分 IOMMU 组并开启直通模式，参数配置错误可能导致开机失败。${NC}"
+    if confirm_high_risk_action \
+        "写入直通增强参数 iommu=pt 与 pcie_acs_override=downstream,multifunction" \
+        "会修改 GRUB 内核参数并强制拆分 IOMMU 组、开启直通模式，需重启生效" \
+        "参数配置错误可能导致宿主机开机失败或 IOMMU 组隔离异常；非必要场景不建议开启" \
+        "脚本会自动备份 /etc/default/grub，可通过 GRUB 备份恢复功能回滚" \
+        "IOMMU-ENHANCE"; then
+        if grub_add_param "iommu=pt"; then
+            if ! grub_add_param "pcie_acs_override=downstream,multifunction"; then
+                # 回滚本次已成功写入的参数，避免留下半套配置
+                grub_remove_param "iommu=pt"
+                log_error "直通增强参数写入失败，已回滚本次写入，未应用更改"
+                return 1
+            fi
+            # 即使基础 IOMMU 参数已存在（grub_changed=0），本次新写入也必须触发 update-grub
+            grub_changed=1
+        else
+            log_error "直通增强参数 iommu=pt 写入失败，未应用更改"
+            return 1
+        fi
     else
         log_info "已跳过直通增强参数。若后续遇到 IOMMU 分组问题，可重新运行本菜单开启。"
     fi
@@ -174,10 +188,11 @@ disable_pass() {
         return 1
     fi
 
-    grub_remove_param "$iommu"
-    # 同步移除可选直通增强参数（按 key 精确匹配，未配置过时无副作用）
-    grub_remove_param "iommu=pt"
-    grub_remove_param "pcie_acs_override"
+    # 任一移除失败即中止，避免静默留下残留参数（未配置过的参数移除无副作用）
+    if ! grub_remove_param "$iommu" || ! grub_remove_param "iommu=pt" || ! grub_remove_param "pcie_acs_override"; then
+        log_error "GRUB 参数移除失败，请检查 /etc/default/grub 后重试"
+        return 1
+    fi
     backup_file "/etc/modules"
     # 先移除本工具的 marker 配置块，再精确清理历史版本写入的裸模块行（含 kvmgt，不误删其它行）
     remove_block "/etc/modules" "IOMMU_BASE_MODULES"

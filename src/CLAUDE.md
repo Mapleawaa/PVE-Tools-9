@@ -221,7 +221,8 @@
 
 | 文件 | 核心函数 | 功能 |
 |---|---|---|
-| `init.sh` | `help_center_menu()`, `help_show_qq_group()`, `help_show_telegram_group()`, `help_show_paid_consult()` | 二级菜单 + 联系/付费咨询/社区信息展示 |
+| `init.sh` | `help_center_menu()` | 二级菜单 |
+| `info.sh` | `help_show_qq_group()`, `help_show_telegram_group()`, `help_show_paid_consult()` | 联系/付费咨询/社区信息展示 |
 
 **依赖**: 仅依赖 `lib/`（`show_menu_header` / `UI_DIVIDER` 展示组件）。
 
@@ -271,7 +272,7 @@ src/modules/
   08-tools-about/           (3 文件) -- 诊断工具与项目信息
   09-security/              (3 文件) -- 安全中心
   10-third-party/           (4 文件) -- 第三方工具
-  11-help/                  (1 文件) -- 获取帮助
+  11-help/                  (2 文件) -- 获取帮助
 ```
 
 ## 变更记录 (Changelog)
